@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#123e35"><title>C조 · 코트사이드 전략보드</title><link rel="stylesheet" href="styles.css"><script defer src="data.js"></script><script defer src="validation.js"></script><script defer src="app.js"></script><script defer src="ratings.js"></script></head>
+<body>
+<header><div class="header-inner"><a class="brand" href="./">COURTSIDE <span>C조 전략보드</span></a><button id="share" class="outline">현재 선택 공유 ↗</button></div></header>
+<main>
+<section class="hero"><div><p class="eyebrow">TEAM C / MATCH DAY</p><h1>한 경기씩, 함께 준비하기.</h1><p>출전표를 확인하고, 공개된 상대 정보로 대응 포인트를 준비하세요.</p></div><div class="hero-stat"><strong>20</strong><span>복식 경기 · 8명 출전</span></div></section>
+<div class="rule-strip"><span>전원 5경기</span><span>동시간 중복 출전 없음</span><span>러브끼리 조합 불가</span><span>총 게임 합 우선</span></div>
+<section class="strategy-panel"><div class="section-heading"><h2>01 <span>전략 선택</span></h2><span id="validation" role="status"></span></div><div id="strategies" class="strategy-grid" aria-label="전략 선택"></div><p id="strategy-description" class="muted"></p></section>
+<div class="workspace">
+<section class="schedule-panel"><div class="section-heading"><h2>02 <span>경기 출전표</span></h2><span class="muted">C1–C20</span></div><div id="filters" class="filters" aria-label="상대팀 필터"></div><div id="matches" class="match-grid" aria-label="경기 선택"></div><details class="counts"><summary>선수별 출전 횟수 확인</summary><div id="counts"></div></details></section>
+<section class="detail-panel" aria-label="선택 경기 상세"><div id="match-detail"></div><div class="divider"></div><h3>상대 2인 조합</h3><p class="muted small">출전표는 고정됩니다. 상대 공개 후 대응 준비에 사용하세요.</p><div class="select-grid"><label>상대 선수 1<select id="opponent1"><option value="">선택하세요</option></select></label><label>상대 선수 2<select id="opponent2"><option value="">선택하세요</option></select></label></div><div id="opponent-detail"></div><div id="tactics" aria-live="polite"></div></section>
+</div>
+<section id="ratings-panel" class="ratings-panel"><div class="section-heading"><h2>03 <span>선수별 5각형</span></h2><span class="badge">직접 입력</span></div><p class="muted rating-help">선수와 비교할 선수를 골라 서브·스트로크·발리·코트커버·체력을 1~5로 입력하세요. 선호 포지션과 플레이 성향도 선택할 수 있습니다. 모든 점수는 미입력으로 시작하며, 출전표는 바뀌지 않습니다.</p><div class="rating-selectors"><label>입력할 선수<select id="rating-player"></select></label><label>비교할 선수<select id="rating-compare"></select></label></div><div class="rating-workspace"><div><div id="rating-inputs" class="rating-inputs"></div><div class="rating-preference-inputs"><label>선호 포지션<select id="rating-position"></select></label><label>플레이 성향<select id="rating-style"></select></label></div><button id="rating-reset" class="rating-reset">선택 선수의 점수·선호 초기화</button><p id="rating-save-status" class="muted small" role="status"></p></div><div id="rating-chart"></div></div></section><details class="rules">
+<summary>제출 규정과 경기 운영 메모</summary>
+<ul>
+<li>총 20경기, 매 경기 복식 2명 출전. 동시간 2경기에는 서로 다른 4명을 함께 제출합니다.</li>
+<li>출전 선수는 경기 시작 10분 전까지 제출하고 양팀 제출 후 공개합니다. 제출 후에는 원칙적으로 선수 변경이 불가합니다.</li>
+<li>러브급 선수 2명끼리는 한 조로 출전할 수 없습니다.</li>
+<li>5:5가 되면 타이브레이크 없이 종료하고 양팀 모두 5점을 누적합니다.</li>
+<li>팀 순위는 전체 게임 득점 합 → 승리 경기 수 → 팀원 총 나이 합 순으로 결정합니다.</li>
+<li>경기 종료 후 승리팀이 노트북의 대진표에 최종 스코어를 기록합니다. 5:5 무승부는 양팀 중 한 팀이 확인 후 기록합니다.</li>
+<li>경기 시작 시간은 진행 상황에 따라 변동될 수 있습니다.</li>
+<li>표시 정보는 제공된 전력분석 시트와 신장 정보 기준입니다. 정보가 없는 선수는 초반 플레이로 확인하세요.</li>
+</ul>
+<p><a href="rules.pdf" target="_blank" rel="noopener">대회 공식 규정 PDF 보기 ↗</a></p>
+</details>
+<footer>TEAM C · COURTSIDE BOARD <span>공개 정보로 준비하고, 코트에서 확인하세요.</span></footer>
+<p id="share-status" role="status" class="small"></p><div id="share-fallback" hidden><label>공유 링크<input id="share-url" readonly></label></div>
+<noscript>이 전략보드에는 JavaScript가 필요합니다. JavaScript를 허용하는 브라우저에서 열어주세요.</noscript>
+</main></body></html>

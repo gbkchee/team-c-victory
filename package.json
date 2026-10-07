@@ -1,0 +1,13 @@
+{
+  "name": "c-team-strategy",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "test": "node verify.cjs",
+    "build": "node build.cjs",
+    "start": "python3 -m http.server 8000"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
