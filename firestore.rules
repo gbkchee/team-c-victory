@@ -29,7 +29,7 @@ service cloud.firestore {
     }
 
     match /playerProfiles/{playerId} {
-      allow read: if signedIn() && validPlayerId(playerId);
+      allow read: if signedIn();
       allow create, update: if signedIn()
         && validPlayerId(playerId)
         && request.resource.data.keys().hasOnly(['profile', 'updatedAt'])
@@ -39,7 +39,7 @@ service cloud.firestore {
     }
 
     match /playerTraits/{playerId} {
-      allow read: if signedIn() && validPlayerId(playerId);
+      allow read: if signedIn();
       allow create, update: if signedIn()
         && validPlayerId(playerId)
         && request.resource.data.keys().hasOnly(['items', 'updatedAt'])

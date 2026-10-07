@@ -17,8 +17,17 @@ window.PLAYER_PROFILE_CLOUD=state;
 
 let started=false,ready=false,migrating=false;
 let profileDocs=new Map(),traitDocs=new Map(),suggestionDocs=new Map();
-const notifyStatus=status=>{
+const notifyStatus=(status,error)=>{
  state.status=status;
+ state.errorCode=error?.code||'';
+ state.message=status==='ready'?'팀원과 실시간으로 공유 중입니다.':status==='connecting'?'팀 공유 저장소에 연결 중입니다.':(
+  state.errorCode==='auth/operation-not-allowed'?'Firebase Authentication에서 익명 로그인을 켜 주세요.':
+  state.errorCode==='auth/unauthorized-domain'?'Firebase Authentication의 승인된 도메인에 현재 웹사이트 주소를 추가해 주세요.':
+  state.errorCode==='permission-denied'?'Firestore 규칙을 최신 firestore.rules 내용으로 게시했는지 확인해 주세요.':
+  state.errorCode==='auth/invalid-api-key'?'Firebase 웹 앱 설정값을 확인해 주세요.':
+  state.errorCode==='unavailable'?'Firebase에 연결할 수 없습니다. 네트워크를 확인하고 다시 시도해 주세요.':
+  `Firebase 연결 실패 (${state.errorCode||'원인 코드 없음'}). 브라우저 개발자 도구 Console에서 상세 오류를 확인해 주세요.`
+ );
  window.dispatchEvent(new Event('playerprofilecloudstatuschange'));
 };
 const snapshotsReady={profiles:false,traits:false,suggestions:false};
@@ -83,22 +92,22 @@ function start(){
   onSnapshot(profileCollection,snapshot=>{
    profileDocs=new Map(snapshot.docs.map(item=>[item.id,item.data()]));snapshotsReady.profiles=true;
    if(Object.values(snapshotsReady).every(Boolean)&&!migrating){
-    migrating=true;migrateLocalProfiles().catch(error=>{console.error('Firebase profile migration failed',error);notifyStatus('error');});
+    migrating=true;migrateLocalProfiles().catch(error=>{console.error('Firebase profile migration failed',error);notifyStatus('error',error);});
    }else publishProfiles();
-  },error=>{console.error('Firestore profiles listener failed',error);notifyStatus('error');});
+  },error=>{console.error('Firestore profiles listener failed',error);notifyStatus('error',error);});
   onSnapshot(traitsCollection,snapshot=>{
    traitDocs=new Map(snapshot.docs.map(item=>[item.id,item.data()]));snapshotsReady.traits=true;
    if(Object.values(snapshotsReady).every(Boolean)&&!migrating){
-    migrating=true;migrateLocalProfiles().catch(error=>{console.error('Firebase profile migration failed',error);notifyStatus('error');});
+    migrating=true;migrateLocalProfiles().catch(error=>{console.error('Firebase profile migration failed',error);notifyStatus('error',error);});
    }else publishProfiles();
-  },error=>{console.error('Firestore traits listener failed',error);notifyStatus('error');});
+  },error=>{console.error('Firestore traits listener failed',error);notifyStatus('error',error);});
   onSnapshot(suggestionCollection,snapshot=>{
    suggestionDocs=new Map(snapshot.docs.map(item=>[item.id,item.data()]));snapshotsReady.suggestions=true;
    if(Object.values(snapshotsReady).every(Boolean)&&!migrating){
-    migrating=true;migrateLocalProfiles().catch(error=>{console.error('Firebase profile migration failed',error);notifyStatus('error');});
+    migrating=true;migrateLocalProfiles().catch(error=>{console.error('Firebase profile migration failed',error);notifyStatus('error',error);});
    }else publishSuggestions();
-  },error=>{console.error('Firestore suggestions listener failed',error);notifyStatus('error');});
- }).catch(error=>{console.error('Firebase anonymous sign-in failed',error);notifyStatus('error');});
+  },error=>{console.error('Firestore suggestions listener failed',error);notifyStatus('error',error);});
+ }).catch(error=>{console.error('Firebase anonymous sign-in failed',error);notifyStatus('error',error);});
 }
 state.saveProfile=async(id,raw)=>{
  if(!ready)return;
@@ -118,7 +127,7 @@ state.saveProfile=async(id,raw)=>{
     await setDoc(doc(suggestionCollection,suggestionKey),{text,createdAt:serverTimestamp()});
    }
   }
- }catch(error){console.error('Firestore profile save failed',error);notifyStatus('error');}
+ }catch(error){console.error('Firestore profile save failed',error);notifyStatus('error',error);}
 };
 window.addEventListener('playerprofileschange',event=>{
  if(event.detail?.cloudRefresh||state.status!=='ready')return;

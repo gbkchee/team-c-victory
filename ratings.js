@@ -111,7 +111,7 @@ if(typeof document!=='undefined')(() => {
   const cloud=window.PLAYER_PROFILE_CLOUD;
   const status=cloud?.status==='ready'?'팀원과 실시간으로 공유 중'
    :cloud?.status==='connecting'?'팀 공유 저장소 연결 중 · 이 브라우저에도 임시 저장'
-   :cloud?.status==='error'?'팀 공유 저장소 연결 실패 · 이 브라우저에 임시 저장'
+   :cloud?.status==='error'?(cloud.message||'팀 공유 저장소 연결 실패 · 이 브라우저에 임시 저장')
    :saveAvailable?'팀 공유 저장소에 연결 중입니다.':'저장할 수 없어 현재 창에서만 유지됩니다.';
   $('profile-save-status').textContent=status;
   const menuStatus=$('cloud-status');if(menuStatus)menuStatus.textContent=status;
