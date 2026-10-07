@@ -231,7 +231,7 @@ if(typeof document!=='undefined')(() => {
  });
  window.addEventListener('hashchange',()=>{
   const params=new URLSearchParams(window.location.hash.slice(1));
-  if(root.open&&(params.get('page')==='strategy'||(!params.has('page')&&params.has('strategy'))))root.close();
+  if(root.open&&(['strategy','analysis'].includes(params.get('page'))||(!params.has('page')&&params.has('strategy'))))root.close();
  });
  $('profile-reset').addEventListener('click',()=>{delete profiles[current];persist();render();});
  savedStatus();renderRoster();

@@ -7,6 +7,7 @@
 <div class="page-tabs" role="tablist" aria-label="페이지 선택">
 <button id="tab-players" class="page-tab" type="button" role="tab" data-page="players" aria-controls="page-players" aria-selected="true">선수 정보</button>
 <button id="tab-strategy" class="page-tab" type="button" role="tab" data-page="strategy" aria-controls="page-strategy" aria-selected="false" tabindex="-1">C조 전략</button>
+<button id="tab-analysis" class="page-tab" type="button" role="tab" data-page="analysis" aria-controls="page-analysis" aria-selected="false" tabindex="-1">상대 페어 분석</button>
 </div>
 <section id="page-players" class="page-panel" role="tabpanel" aria-labelledby="tab-players">
 <div class="section-heading roster-heading"><h2><span>조별 선수 리스트</span></h2><span class="badge">총 31명</span></div>
@@ -28,11 +29,26 @@
 </section>
 <section id="page-strategy" class="page-panel" role="tabpanel" aria-labelledby="tab-strategy" hidden>
 <div class="rule-strip"><span>전원 5경기</span><span>동시간 중복 출전 없음</span><span>러브끼리 조합 불가</span><span>총 게임 합 우선</span></div>
-<section class="strategy-panel"><div class="section-heading"><h2>01 <span>전략 선택</span></h2><span id="validation" role="status"></span></div><div id="strategies" class="strategy-grid" aria-label="전략 선택"></div><p id="strategy-description" class="muted"></p></section>
-<div class="workspace">
-<section class="schedule-panel"><div class="section-heading"><h2>02 <span>경기 출전표</span></h2><span class="muted">C1–C20</span></div><div id="filters" class="filters" aria-label="상대팀 필터"></div><div id="matches" class="match-grid" aria-label="경기 선택"></div><details class="counts"><summary>선수별 출전 횟수 확인</summary><div id="counts"></div></details></section>
-<section class="detail-panel" aria-label="선택 경기 상세"><div id="match-detail"></div><div class="divider"></div><h3>상대 2인 조합</h3><p class="muted small">출전표는 고정됩니다. 상대 공개 후 대응 준비에 사용하세요.</p><div class="select-grid"><label>상대 선수 1<select id="opponent1"><option value="">선택하세요</option></select></label><label>상대 선수 2<select id="opponent2"><option value="">선택하세요</option></select></label></div><div id="opponent-detail"></div><div id="tactics" aria-live="polite"></div></section>
+<section class="strategy-panel">
+<div class="section-heading"><h2>01 <span>전략 선택</span></h2><span id="validation" role="status"></span></div>
+<div id="strategies" class="strategy-grid" aria-label="전략 선택"></div>
+<p class="muted small">현재는 미리 구성된 출전표입니다. 선수 입력에 따른 자동 편성은 아직 연결되지 않았습니다.</p>
+<div id="balance-variants-block" class="balance-variants-block">
+<div class="pair-summary-heading"><h3>밸런스형 페어 제안</h3><span class="badge">3안 비교</span></div>
+<div id="balance-variants" class="balance-variants" aria-label="밸런스형 1안·2안·3안 선택"></div>
+<p class="muted small">모든 안은 전원 5경기·동시간 중복 없음·러브끼리 페어 금지 조건을 지킵니다. 함께 편하게 경기할 구성을 골라 주세요.</p>
 </div>
+<p id="strategy-description" class="muted"></p>
+<div class="pair-summary-heading"><h3>페어 구성</h3><span id="pair-summary-count" class="badge"></span></div>
+<div id="strategy-pairs" class="strategy-pairs" aria-label="선택 전략의 페어 구성" aria-live="polite"></div>
+</section>
+<section class="schedule-panel">
+<div class="section-heading"><h2>02 <span>경기 출전표</span></h2><span class="muted">C1–C20</span></div>
+<p class="muted small">C조 출전을 시간·코트별로 표시합니다. 시간은 진행에 따라 변동될 수 있으며, 페어를 누르면 상대 분석으로 이동합니다.</p>
+<div id="filters" class="filters" aria-label="상대 조 필터"></div>
+<div id="matches" class="schedule-matrix-wrap" aria-label="시간대별 1~4코트 출전 페어와 상대"></div>
+<details class="counts"><summary>선수별 출전 횟수 확인</summary><div id="counts"></div></details>
+</section>
 <details class="rules">
 <summary>제출 규정과 경기 운영 메모</summary>
 <ul>
@@ -47,6 +63,23 @@
 </ul>
 <p><a href="rules.pdf" target="_blank" rel="noopener">대회 공식 규정 PDF 보기 ↗</a></p>
 </details>
+</section>
+<section id="page-analysis" class="page-panel" role="tabpanel" aria-labelledby="tab-analysis" hidden>
+<section class="analysis-selection-panel">
+<div class="section-heading"><h2><span>상대 페어 분석</span></h2><span class="badge">C조 vs A·B·D조</span></div>
+<p class="muted">우리 페어와 상대 조·페어를 선택하면 경기 운영과 공략을 바로 확인할 수 있습니다.</p>
+<div class="analysis-selection-grid">
+<fieldset class="analysis-field"><legend>우리 페어</legend>
+<div class="select-grid"><label>C조 선수 1<select id="our-player1"><option value="">선택하세요</option></select></label><label>C조 선수 2<select id="our-player2"><option value="">선택하세요</option></select></label></div>
+</fieldset>
+<fieldset class="analysis-field"><legend>상대 페어</legend>
+<label>상대 조<select id="analysis-team"><option value="">조를 선택하세요</option><option value="A">A조</option><option value="B">B조</option><option value="D">D조</option></select></label>
+<div class="select-grid"><label>상대 선수 1<select id="opponent1" disabled><option value="">조를 먼저 선택하세요</option></select></label><label>상대 선수 2<select id="opponent2" disabled><option value="">조를 먼저 선택하세요</option></select></label></div>
+</fieldset>
+</div>
+<p class="muted small">같은 선수의 중복 선택과 러브끼리 페어는 선택할 수 없습니다. 분석 선택은 경기 출전표를 바꾸지 않습니다.</p>
+</section>
+<div id="analysis-result" aria-live="polite"></div>
 </section>
 <footer>TEAM C · COURTSIDE BOARD <span>공개 정보로 준비하고, 코트에서 확인하세요.</span></footer>
 <p id="share-status" role="status" class="small"></p><div id="share-fallback" hidden><label>공유 링크<input id="share-url" readonly></label></div>
