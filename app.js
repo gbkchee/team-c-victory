@@ -30,6 +30,7 @@ function button(text,active,action,cls){const b=el('button',cls,text);b.type='bu
 function restoreSelection(){[state.p1,state.p2]=selections.get(key())||['',''];}
 function playerCard(name,team){
  const p=data.teams[team][name], card=el('div','player');card.append(el('strong','',name));
+ card.append(el('span','badge player-tier',{forty:'포티',thirty:'써티',love:'러브'}[p.tier]||'등급 미확인'));
  card.append(el('p','strength',`강점 · ${p.strong.join(', ')||'정보 없음'}`));
  card.append(el('p','weakness',`약점 · ${p.weak.join(', ')||'정보 없음'}`));
  if(p.note)card.append(el('p','',p.note));return card;

@@ -765,7 +765,8 @@ window.BOARD_DATA = {
           "멘탈",
           "탐욕"
         ],
-        "note": ""
+        "note": "",
+        "tier": "thirty"
       },
       "쏘오리": {
         "strong": [
@@ -778,7 +779,8 @@ window.BOARD_DATA = {
           "전위 위치 선정",
           "몸이 늦게 풀림"
         ],
-        "note": ""
+        "note": "",
+        "tier": "thirty"
       },
       "우디": {
         "strong": [
@@ -789,7 +791,8 @@ window.BOARD_DATA = {
           "로브",
           "콜 잘 안 함"
         ],
-        "note": "신장 큼"
+        "note": "신장 큼",
+        "tier": "forty"
       },
       "꿉": {
         "strong": [
@@ -801,12 +804,14 @@ window.BOARD_DATA = {
           "콜",
           "게임 초반 긴장"
         ],
-        "note": ""
+        "note": "",
+        "tier": "love"
       },
       "기른지": {
         "strong": [],
         "weak": [],
-        "note": "신장 큼 · 시트 강·약점 정보 없음"
+        "note": "신장 큼 · 시트 강·약점 정보 없음",
+        "tier": "thirty"
       },
       "한치": {
         "strong": [
@@ -816,7 +821,8 @@ window.BOARD_DATA = {
         "weak": [
           "서브 에러"
         ],
-        "note": ""
+        "note": "",
+        "tier": "love"
       },
       "숭": {
         "strong": [
@@ -828,7 +834,8 @@ window.BOARD_DATA = {
           "코트커버",
           "포핸드 스트록"
         ],
-        "note": ""
+        "note": "",
+        "tier": "thirty"
       },
       "만두": {
         "strong": [
@@ -839,7 +846,8 @@ window.BOARD_DATA = {
           "백발리",
           "몸이 늦게 풀림(첫게임 약함)"
         ],
-        "note": ""
+        "note": "",
+        "tier": "thirty"
       }
     },
     "A": {
@@ -851,19 +859,22 @@ window.BOARD_DATA = {
         "weak": [
           "포핸드"
         ],
-        "note": ""
+        "note": "",
+        "tier": "forty"
       },
       "동글": {
         "strong": [],
         "weak": [
           "서브 에러 잦음"
         ],
-        "note": "신장 큼"
+        "note": "신장 큼",
+        "tier": "thirty"
       },
       "달래": {
         "strong": [],
         "weak": [],
-        "note": "신장 큼"
+        "note": "신장 큼",
+        "tier": "thirty"
       },
       "찐빵": {
         "strong": [
@@ -873,7 +884,8 @@ window.BOARD_DATA = {
         "weak": [
           "공에 힘 약한 편"
         ],
-        "note": ""
+        "note": "",
+        "tier": "thirty"
       },
       "묭": {
         "strong": [
@@ -882,7 +894,8 @@ window.BOARD_DATA = {
         "weak": [
           "백발리"
         ],
-        "note": ""
+        "note": "",
+        "tier": "thirty"
       },
       "룽지": {
         "strong": [
@@ -894,12 +907,14 @@ window.BOARD_DATA = {
           "서브 약함",
           "서브 에러 잦음"
         ],
-        "note": ""
+        "note": "",
+        "tier": "thirty"
       },
       "송이": {
         "strong": [],
         "weak": [],
-        "note": "시트 정보 없음"
+        "note": "시트 정보 없음",
+        "tier": "love"
       },
       "올리버": {
         "strong": [
@@ -909,7 +924,8 @@ window.BOARD_DATA = {
         "weak": [
           "백핸드"
         ],
-        "note": ""
+        "note": "",
+        "tier": "love"
       }
     },
     "B": {
@@ -921,12 +937,14 @@ window.BOARD_DATA = {
         "weak": [
           "발리"
         ],
-        "note": ""
+        "note": "",
+        "tier": "forty"
       },
       "감자": {
         "strong": [],
         "weak": [],
-        "note": "시트 정보 없음"
+        "note": "시트 정보 없음",
+        "tier": "thirty"
       },
       "망빙": {
         "strong": [
@@ -936,7 +954,8 @@ window.BOARD_DATA = {
         "weak": [
           "로브"
         ],
-        "note": ""
+        "note": "",
+        "tier": "thirty"
       },
       "둡": {
         "strong": [
@@ -949,7 +968,8 @@ window.BOARD_DATA = {
           "백핸드",
           "서브 에러 잦음"
         ],
-        "note": ""
+        "note": "",
+        "tier": "thirty"
       },
       "몽": {
         "strong": [
@@ -960,17 +980,20 @@ window.BOARD_DATA = {
           "서브 약함",
           "코트커버 약함"
         ],
-        "note": ""
+        "note": "",
+        "tier": "thirty"
       },
       "땡이": {
         "strong": [],
         "weak": [],
-        "note": "시트 정보 없음"
+        "note": "시트 정보 없음",
+        "tier": "love"
       },
       "찹": {
         "strong": [],
         "weak": [],
-        "note": "시트 정보 없음"
+        "note": "시트 정보 없음",
+        "tier": "love"
       }
     },
     "D": {
@@ -984,12 +1007,14 @@ window.BOARD_DATA = {
           "스매시 에러 잦음",
           "파트너 커버 중 에러 잦음"
         ],
-        "note": "낮고 빠르게 휘는 슬라이스 서브"
+        "note": "낮고 빠르게 휘는 슬라이스 서브",
+        "tier": "forty"
       },
       "미스트": {
         "strong": [],
         "weak": [],
-        "note": "대회 경험 잦음 · 슬라이스 위주"
+        "note": "대회 경험 잦음 · 슬라이스 위주",
+        "tier": "thirty"
       },
       "무지": {
         "strong": [
@@ -999,14 +1024,16 @@ window.BOARD_DATA = {
           "스트록 에러 잦음",
           "서브 에러 잦음"
         ],
-        "note": "신장 큼"
+        "note": "신장 큼",
+        "tier": "thirty"
       },
       "민민": {
         "strong": [],
         "weak": [
           "잘 안 뜀"
         ],
-        "note": ""
+        "note": "",
+        "tier": "thirty"
       },
       "펭귄": {
         "strong": [
@@ -1016,24 +1043,28 @@ window.BOARD_DATA = {
         "weak": [
           "스트록 에러 잦음"
         ],
-        "note": "대회 경험 풍부"
+        "note": "대회 경험 풍부",
+        "tier": "thirty"
       },
       "초코": {
         "strong": [],
         "weak": [],
-        "note": "시트 정보 없음"
+        "note": "시트 정보 없음",
+        "tier": "thirty"
       },
       "아르(시트: 야르)": {
         "strong": [],
         "weak": [
           "슬라이스 서브나 탑스핀에 약함"
         ],
-        "note": ""
+        "note": "",
+        "tier": "love"
       },
       "호동": {
         "strong": [],
         "weak": [],
-        "note": "시트 정보 없음"
+        "note": "시트 정보 없음",
+        "tier": "love"
       }
     }
   },

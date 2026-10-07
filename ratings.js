@@ -3,23 +3,41 @@
 const root=document.getElementById('ratings-panel');if(!root)return;
 const data=window.BOARD_DATA;
 const axes=['서브','스트로크','발리','코트커버','체력'];
+const levels={1:'잘 못 함',2:'자신 없음',3:'게임에서 사용',4:'게임에서 자신 있게 사용',5:'이 구역 최고 권위자'};
+const tiers={forty:'포티',thirty:'써티',love:'러브'};
+const keywordKinds={strong:'강점',weak:'약점',note:'특징'};
 const positions={'':'미선택',fore:'포',back:'백',either:'상관없음'};
 const styles={attack:'공격형',defense:'수비형',unknown:'모르겠음'};
 const roster=Object.entries(data.teams).flatMap(([team,players])=>Object.keys(players).map(name=>({id:`${team}:${name}`,team,name})));
 const allowed=new Set(roster.map(p=>p.id)),storageKey='courtside.player-pentagons.v1';
-let profiles={},saveAvailable=true,current=roster[0].id,compare='';
-function cleanProfile(p){
+let profiles={},saveAvailable=true,current=roster[0].id,compare='',team=roster[0].team;
+function initialKeywords(id){
+ const player=roster.find(p=>p.id===id);if(!player)return [];
+ const info=data.teams[player.team][player.name];
+ return [...info.strong.map(text=>({kind:'strong',text})),...info.weak.map(text=>({kind:'weak',text})),...info.note.split(' · ').filter(text=>text&&!text.includes('정보 없음')).map(text=>({kind:'note',text}))];
+}
+function cleanKeywords(raw){
+ const seen=new Set(),result=[];
+ for(const item of raw){
+  if(!item||!Object.hasOwn(keywordKinds,item.kind)||typeof item.text!=='string')continue;
+  const text=item.text.normalize('NFC').trim().replace(/\s+/g,' ').slice(0,40),key=`${item.kind}:${text}`;
+  if(!text||seen.has(key))continue;
+  seen.add(key);result.push({kind:item.kind,text});if(result.length===20)break;
+ }return result;
+}
+function cleanProfile(p,id){
  const raw=Array.isArray(p?.scores)&&p.scores.length===5?p.scores:Array(5).fill(null);
- return {scores:raw.map(v=>Number.isInteger(v)&&v>=1&&v<=5?v:null),position:Object.hasOwn(positions,p?.position)?p.position:'',style:Object.hasOwn(styles,p?.style)?p.style:'unknown'};
+ return {scores:raw.map(v=>Number.isInteger(v)&&v>=1&&v<=5?v:null),position:Object.hasOwn(positions,p?.position)?p.position:'',style:Object.hasOwn(styles,p?.style)?p.style:'unknown',keywords:cleanKeywords(Array.isArray(p?.keywords)?p.keywords:initialKeywords(id))};
 }
 try{
  const saved=JSON.parse(localStorage.getItem(storageKey)||'{}');
- if(saved&&typeof saved==='object')for(const [id,p] of Object.entries(saved))if(allowed.has(id))profiles[id]=cleanProfile(p);
+ if(saved&&typeof saved==='object')for(const [id,p] of Object.entries(saved))if(allowed.has(id))profiles[id]=cleanProfile(p,id);
 }catch{saveAvailable=false;}
 const $=id=>document.getElementById(id);
-const profile=id=>profiles[id]||cleanProfile(null);
+const profile=id=>profiles[id]||cleanProfile(null,id);
 const person=id=>roster.find(p=>p.id===id);
 const label=id=>{const p=person(id);return `${p.team}조 ${p.name}`;};
+const tier=id=>{const p=person(id);return tiers[data.teams[p.team][p.name].tier]||'등급 미확인';};
 const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n;};
 function persist(){
  try{localStorage.setItem(storageKey,JSON.stringify(profiles));saveAvailable=true;}catch{saveAvailable=false;}
@@ -29,7 +47,7 @@ function update(patch){profiles[current]={...profile(current),...patch};persist(
 function populate(select,selected,empty,exclude){
  select.replaceChildren();if(empty)select.add(new Option('비교 안 함',''));
  for(const team of ['C','A','B','D']){const group=document.createElement('optgroup');group.label=`${team}조`;
-  roster.filter(p=>p.team===team).forEach(p=>{const option=new Option(p.name,p.id);option.disabled=p.id===exclude;group.append(option);});select.append(group);
+  roster.filter(p=>p.team===team).forEach(p=>{const option=new Option(`${p.name} · ${tier(p.id)}`,p.id);option.disabled=p.id===exclude;group.append(option);});select.append(group);
  }select.value=selected;
 }
 function svgNode(tag,attrs,text){const n=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const [k,v] of Object.entries(attrs))n.setAttribute(k,v);if(text!==undefined)n.textContent=text;return n;}
@@ -45,21 +63,34 @@ function draw(){
   if(complete)svg.append(svgNode('polygon',{points:polygon(v.map(n=>n*20)),fill:color,'fill-opacity':'.15',stroke:color,'stroke-width':2.5}));
   v.forEach((n,i)=>{if(n!==null){const [x,y]=point(i,n*20);svg.append(svgNode('circle',{cx:x,cy:y,r:4,fill:color}));}});
  }
- const chart=$('rating-chart');chart.replaceChildren(svg,legend,el('p','muted small','1 = 보완 필요 · 3 = 보통 · 5 = 강점. 5개 항목을 모두 입력하면 5각형이 연결됩니다.'));
- const own=profile(current);chart.append(el('p','rating-preferences',`${label(current)} · 선호 포지션: ${positions[own.position]} · 성향: ${styles[own.style]}`));
+ const chart=$('rating-chart');chart.replaceChildren(svg,legend,el('p','muted small','5개 항목을 모두 입력하면 5각형이 연결됩니다. 미입력은 낮은 점수를 뜻하지 않습니다.'));
+ const own=profile(current);chart.append(el('p','rating-preferences',`${label(current)} · ${tier(current)} · 선호 포지션: ${positions[own.position]} · 성향: ${styles[own.style]}`));
  if(compare){const table=el('table','rating-comparison');table.append(el('caption','',`${label(current)} · ${label(compare)} 비교`));
   const head=el('thead'),hr=el('tr');['항목',person(current).name,person(compare).name].forEach(t=>{const th=el('th','',t);th.scope='col';hr.append(th);});head.append(hr);table.append(head);
   const body=el('tbody'),other=profile(compare);
-  const rows=[...axes.map((name,i)=>[name,own.scores[i]??'미입력',other.scores[i]??'미입력']),['선호 포지션',positions[own.position],positions[other.position]],['플레이 성향',styles[own.style],styles[other.style]]];
+  const rows=[['대회 등급',tier(current),tier(compare)],...axes.map((name,i)=>[name,own.scores[i]??'미입력',other.scores[i]??'미입력']),['선호 포지션',positions[own.position],positions[other.position]],['플레이 성향',styles[own.style],styles[other.style]],['키워드',own.keywords.map(k=>`${keywordKinds[k.kind]}: ${k.text}`).join(', ')||'정보 없음',other.keywords.map(k=>`${keywordKinds[k.kind]}: ${k.text}`).join(', ')||'정보 없음']];
   rows.forEach(([name,a,b])=>{const tr=el('tr'),th=el('th','',name);th.scope='row';tr.append(th,el('td','',a),el('td','',b));body.append(tr);});table.append(body);chart.append(table);
  }
 }
+function renderKeywords(){
+ const list=$('rating-keywords');list.replaceChildren();
+ profile(current).keywords.forEach((keyword,index)=>{
+  const chip=el('span',`keyword-chip keyword-${keyword.kind}`),remove=el('button','keyword-remove','×');remove.type='button';remove.setAttribute('aria-label',`${keyword.text} 키워드 삭제`);
+  remove.addEventListener('click',()=>{update({keywords:profile(current).keywords.filter((_,i)=>i!==index)});renderKeywords();$('rating-keyword-status').textContent='키워드를 삭제했습니다.';});
+  chip.append(el('span','',`${keywordKinds[keyword.kind]} · ${keyword.text}`),remove);list.append(chip);
+ });
+ if(!profile(current).keywords.length)list.append(el('p','muted small','기록된 키워드가 없습니다. 알고 있는 특징을 추가하세요.'));
+}
 function render(){
- populate($('rating-player'),current,false);populate($('rating-compare'),compare,true,current);
+ $('rating-team').value=team;
+ const playerSelect=$('rating-player');playerSelect.replaceChildren();roster.filter(p=>p.team===team).forEach(p=>playerSelect.add(new Option(`${p.name} · ${tier(p.id)}`,p.id)));playerSelect.value=current;
+ populate($('rating-compare'),compare,true,current);
+ $('rating-player-info').textContent=`${label(current)} · 대회 등급 ${tier(current)} (공식 규정 기준)`;
+ $('rating-keyword-text').value='';$('rating-keyword-status').textContent='';renderKeywords();
  const controls=$('rating-inputs');controls.replaceChildren();
  axes.forEach((name,i)=>{
   const row=el('label','rating-input',name),select=el('select');select.id=`rating-axis-${i}`;select.add(new Option('미입력',''));
-  for(let n=1;n<=5;n++)select.add(new Option(`${n}${n===1?' · 보완 필요':n===3?' · 보통':n===5?' · 강점':''}`,String(n)));
+  for(let n=1;n<=5;n++)select.add(new Option(`${n} · ${levels[n]}`,String(n)));
   select.value=profile(current).scores[i]??'';
   select.addEventListener('change',()=>{const v=[...profile(current).scores];v[i]=select.value?Number(select.value):null;update({scores:v});});row.append(select);controls.append(row);
  });
@@ -67,11 +98,20 @@ function render(){
   const select=$(id);select.replaceChildren();Object.entries(options).forEach(([v,name])=>select.add(new Option(name,v)));select.value=profile(current)[field];
  }draw();
 }
+$('rating-team').addEventListener('change',()=>{team=$('rating-team').value;current=roster.find(p=>p.team===team).id;if(compare===current)compare='';render();});
 $('rating-player').addEventListener('change',()=>{current=$('rating-player').value;if(compare===current)compare='';render();});
 $('rating-compare').addEventListener('change',()=>{compare=$('rating-compare').value;draw();});
 $('rating-position').addEventListener('change',()=>update({position:$('rating-position').value}));
 $('rating-style').addEventListener('change',()=>update({style:$('rating-style').value}));
 $('rating-reset').addEventListener('click',()=>{delete profiles[current];persist();render();});
+$('rating-keyword-form').addEventListener('submit',event=>{
+ event.preventDefault();const input=$('rating-keyword-text'),text=input.value.normalize('NFC').trim().replace(/\s+/g,' '),kind=$('rating-keyword-kind').value,keywords=profile(current).keywords,status=$('rating-keyword-status');
+ if(!text){status.textContent='키워드를 입력하세요.';return;}
+ if(text.length>40){status.textContent='키워드는 40자 이내로 입력하세요.';return;}
+ if(keywords.length>=20){status.textContent='키워드는 선수당 20개까지 입력할 수 있습니다.';return;}
+ if(keywords.some(k=>k.text===text&&k.kind===kind)){status.textContent='이미 등록한 키워드입니다.';return;}
+ update({keywords:[...keywords,{kind,text}]});renderKeywords();input.value='';status.textContent='키워드를 추가했습니다.';input.focus();
+});
 $('rating-save-status').textContent=saveAvailable?'입력값은 내 브라우저에 저장되며 공유 링크에 포함되지 않습니다.':'이 환경에서는 저장할 수 없어 현재 창에서만 유지됩니다.';
 render();
 })();

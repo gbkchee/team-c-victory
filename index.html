@@ -11,7 +11,30 @@
 <section class="schedule-panel"><div class="section-heading"><h2>02 <span>경기 출전표</span></h2><span class="muted">C1–C20</span></div><div id="filters" class="filters" aria-label="상대팀 필터"></div><div id="matches" class="match-grid" aria-label="경기 선택"></div><details class="counts"><summary>선수별 출전 횟수 확인</summary><div id="counts"></div></details></section>
 <section class="detail-panel" aria-label="선택 경기 상세"><div id="match-detail"></div><div class="divider"></div><h3>상대 2인 조합</h3><p class="muted small">출전표는 고정됩니다. 상대 공개 후 대응 준비에 사용하세요.</p><div class="select-grid"><label>상대 선수 1<select id="opponent1"><option value="">선택하세요</option></select></label><label>상대 선수 2<select id="opponent2"><option value="">선택하세요</option></select></label></div><div id="opponent-detail"></div><div id="tactics" aria-live="polite"></div></section>
 </div>
-<section id="ratings-panel" class="ratings-panel"><div class="section-heading"><h2>03 <span>선수별 5각형</span></h2><span class="badge">직접 입력</span></div><p class="muted rating-help">선수와 비교할 선수를 골라 서브·스트로크·발리·코트커버·체력을 1~5로 입력하세요. 선호 포지션과 플레이 성향도 선택할 수 있습니다. 모든 점수는 미입력으로 시작하며, 출전표는 바뀌지 않습니다.</p><div class="rating-selectors"><label>입력할 선수<select id="rating-player"></select></label><label>비교할 선수<select id="rating-compare"></select></label></div><div class="rating-workspace"><div><div id="rating-inputs" class="rating-inputs"></div><div class="rating-preference-inputs"><label>선호 포지션<select id="rating-position"></select></label><label>플레이 성향<select id="rating-style"></select></label></div><button id="rating-reset" class="rating-reset">선택 선수의 점수·선호 초기화</button><p id="rating-save-status" class="muted small" role="status"></p></div><div id="rating-chart"></div></div></section><details class="rules">
+<section id="ratings-panel" class="ratings-panel">
+<div class="section-heading"><h2>03 <span>선수 능력과 키워드</span></h2><span class="badge">직접 입력</span></div>
+<p class="muted rating-help">조를 선택하고 선수의 서브·스트로크·발리·코트커버·체력을 1~5로 입력하세요. 포티·써티·러브는 공식 규정의 배정 등급입니다. 능력 점수는 미입력으로 시작합니다. 현재 추천 출전표는 고정된 버전입니다.</p>
+<details class="rating-guide"><summary>1~5 평가 기준과 항목별 설명</summary>
+<p class="muted small">NTRP의 경기 활용도·안정성 관점을 참고한 대회용 평가입니다. 여기서 입력하는 1~5는 공식 NTRP 등급이 아닙니다. 잘 모르는 항목은 미입력으로 남겨 주세요.</p>
+<table class="rating-comparison"><thead><tr><th scope="col">점수</th><th scope="col">설명</th></tr></thead><tbody>
+<tr><th scope="row">1 · 잘 못 함</th><td>게임에서 사용하기 어렵고 기본 연결에도 도움이 필요합니다.</td></tr>
+<tr><th scope="row">2 · 자신 없음</th><td>편한 상황에서는 가능하지만 게임에서는 실수하거나 피하는 편입니다.</td></tr>
+<tr><th scope="row">3 · 게임에서 사용</th><td>일반적인 게임 상황에서 사용할 수 있습니다. 어려운 공은 흔들릴 수 있습니다.</td></tr>
+<tr><th scope="row">4 · 게임에서 자신 있게 사용</th><td>게임 중 꾸준히 활용하고, 필요할 때 의도한 플레이를 시도할 수 있습니다.</td></tr>
+<tr><th scope="row">5 · 이 구역 최고 권위자</th><td>우리 대회에서 이 항목을 가장 믿고 맡길 만한 강점으로 활용합니다.</td></tr>
+</tbody></table>
+<ul class="small"><li>서브: 서브를 넣는 안정성, 더블폴트, 코스·구질 활용을 봅니다.</li><li>스트로크: 포·백핸드 연결, 방향과 깊이, 게임 중 안정성을 봅니다. 한쪽의 강·약점은 키워드로 보충합니다.</li><li>발리: 전위에서 공을 연결하고, 코스와 마무리 기회를 활용하는 정도를 봅니다.</li><li>코트커버: 공에 반응해 이동하고, 자기 구역과 파트너의 빈 공간을 커버하는 정도를 봅니다.</li><li>체력: 한 경기부터 여러 경기까지 움직임과 집중을 유지하는 정도를 봅니다.</li></ul>
+</details>
+<div class="rating-selectors"><label>조 선택<select id="rating-team"><option value="C">C조</option><option value="A">A조</option><option value="B">B조</option><option value="D">D조</option></select></label><label>입력할 선수<select id="rating-player"></select></label><label>비교할 선수<select id="rating-compare"></select></label></div>
+<p id="rating-player-info" class="rating-preferences"></p>
+<div class="rating-workspace"><div><div id="rating-inputs" class="rating-inputs"></div>
+<div class="rating-preference-inputs"><label>선호 포지션<select id="rating-position"></select></label><label>게임 스타일<select id="rating-style"></select></label></div>
+<h3>선수 키워드</h3><p class="muted small">기존 시트의 강점·약점·특징을 먼저 표시합니다. 알고 있는 특징을 추가하거나 수정할 수 있습니다. 키워드는 40자 이내, 선수당 20개까지 입력하세요.</p>
+<div id="rating-keywords" class="rating-keywords"></div>
+<form id="rating-keyword-form" class="rating-keyword-form"><label>분류<select id="rating-keyword-kind"><option value="note">특징</option><option value="strong">강점</option><option value="weak">약점</option></select></label><label>키워드<input id="rating-keyword-text" maxlength="40" placeholder="코스 잘 봄, 슬라이스 약함, 잘 안 뜀" autocomplete="off"></label><button type="submit">추가</button></form>
+<p id="rating-keyword-status" class="muted small" role="status"></p>
+<button id="rating-reset" class="rating-reset">선택 선수의 입력 초기화 · 키워드는 시트 기록으로 복원</button><p id="rating-save-status" class="muted small" role="status"></p>
+</div><div id="rating-chart"></div></div></section><details class="rules">
 <summary>제출 규정과 경기 운영 메모</summary>
 <ul>
 <li>총 20경기, 매 경기 복식 2명 출전. 동시간 2경기에는 서로 다른 4명을 함께 제출합니다.</li>
