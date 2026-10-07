@@ -51,6 +51,7 @@
     position:cleanChoice(raw?.position,positions,''),
     style:cleanChoice(raw?.style,styles,'unknown'),
     confidentSkills:cleanChoices(raw?.confidentSkills,skills),
+    rustySkills:cleanChoices(raw?.rustySkills,skills),
     partnerRoles:roles.length>1?roles.filter(role=>role!=='either'):roles,
     restPreference:cleanChoice(raw?.restPreference,restPreferences,''),
     traits:cleanTraits(raw?.traits)
@@ -143,17 +144,24 @@ if(typeof document!=='undefined')(() => {
   group.append(choices);return group;
  }
  function renderTeamFields(){
-  $('team-profile-fields').replaceChildren(
+  const fields=$('team-profile-fields');fields.replaceChildren(
    choiceField('선호 포지션','position',positions),
    choiceField('게임 스타일','style',styles),
    choiceField('요즘 자신 있는','confidentSkills',skills,true,'복수 선택 · 요즘 편하게 하는 플레이만 골라 주세요. 비워 둬도 괜찮아요.'),
-   choiceField('파트너에게 바라는 역할','partnerRoles',partnerRoles,true,'복수 선택 · 함께 경기할 때 도움받고 싶은 역할을 골라 주세요.'),
-   choiceField('경기·휴식 선호','restPreference',restPreferences,false,'경기 당일 바꿔도 괜찮아요.',true)
+   choiceField('집 나갔어요 😭','rustySkills',skills,true,'요즘 감이 잘 안 오거나 어려운 플레이를 골라 주세요. 비워 두어도 괜찮아요.')
   );
   renderTraits();
+  const preferences=el('div','profile-fields profile-fields-group');preferences.id='team-profile-preferences';
+  preferences.append(
+   choiceField('경기·휴식 선호','restPreference',restPreferences,false,'경기 당일 바꿔도 괜찮아요.',true),
+   choiceField('파트너에게 바라는 역할','partnerRoles',partnerRoles,true,'복수 선택 · 함께 경기할 때 도움받고 싶은 역할을 골라 주세요.')
+  );
+  fields.append(preferences);
  }
- function renderTraits(){
-  const draft=$('profile-trait-text')?.value||'',section=$('team-traits');section.replaceChildren();
+function renderTraits(){
+  const draft=$('profile-trait-text')?.value||'',parent=$('team-profile-fields');
+  $('team-traits')?.remove();
+  const section=el('section','team-traits keyword-section');section.id='team-traits';section.setAttribute('aria-label','나의 플레이 특징');
   section.append(el('h3','','나의 플레이 특징'),el('p','muted small','복수 입력 · 본인의 플레이 특징을 자유롭게 알려 주세요. 특징은 40자 이내, 최대 20개까지 추가할 수 있어요.'));
   const list=el('div','rating-keywords'),traits=profile(current).traits;
   for(const [index,text] of traits.entries()){
@@ -188,6 +196,8 @@ if(typeof document!=='undefined')(() => {
    button.addEventListener('click',()=>addTrait(text,false));suggestions.append(button);
   }
   section.append(list,form,el('p','muted small','빠른 추가'),suggestions,status);
+  const preferences=parent.querySelector('.profile-fields-group');
+  parent.insertBefore(section,preferences||null);
  }
  function renderOpponentFields(){
   $('opponent-profile-fields').replaceChildren(
@@ -244,7 +254,7 @@ if(typeof document!=='undefined')(() => {
    ?'본인이 원하는 경기 방식을 알려 주세요. 선택하지 않은 항목이 있어도 괜찮아요.'
    :'실제로 본 플레이를 기록해 주세요. 잘 모르면 모르겠음으로 남겨 주세요. 키워드는 40자 이내, 선수당 총 20개까지 추가할 수 있어요.';
   $('team-profile-section').hidden=!own;$('opponent-profile-section').hidden=own;
-  $('team-profile-fields').replaceChildren();$('team-traits').replaceChildren();$('opponent-profile-fields').replaceChildren();$('opponent-keywords').replaceChildren();
+  $('team-profile-fields').replaceChildren();$('opponent-profile-fields').replaceChildren();$('opponent-keywords').replaceChildren();
   if(own)renderTeamFields();else renderOpponentFields();
   $('profile-reset').textContent=own?'선택 선수의 입력 초기화':'입력 초기화 · 키워드는 시트 기록으로 복원';
   savedStatus();
@@ -279,7 +289,7 @@ if(typeof document!=='undefined')(() => {
   const divider=el('span','roster-divider');divider.setAttribute('aria-hidden','true');
   const highlights=el('span','roster-highlights');
   const rows=player.team==='C'
-   ?[['플레이',info.confidentSkills.map(key=>skills[key]).join(', ')||'아직 선택 전','strong'],['특징',info.traits.join(', ')||'아직 입력 전','note']]
+   ?[['자신 있는',info.confidentSkills.map(key=>skills[key]).join(', ')||'미선택','strong'],['집 나갔어요 😭',info.rustySkills.map(key=>skills[key]).join(', ')||'미선택','weak'],['특징',info.traits.join(', ')||'아직 입력 전','note']]
    :[['강점',info.keywords.filter(item=>item.kind==='strong').map(item=>item.text).join(', ')||'정보 없음','strong'],['약점',info.keywords.filter(item=>item.kind==='weak').map(item=>item.text).join(', ')||'정보 없음','weak']];
   for(const [title,text,kind] of rows){
    const row=el('span','roster-highlight roster-highlight-'+kind),value=el('span','roster-highlight-value',text);

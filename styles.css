@@ -170,6 +170,7 @@ select:disabled { background: var(--bg); color: var(--muted); }
 .rating-close { flex-shrink: 0; width: 44px; height: 44px; padding: 0; border-color: transparent; border-radius: 100px; background: var(--bg); font-size: 28px; line-height: 1; }
 #profile-save-status { min-height: 20px; }
 .profile-fields { display: flex; flex-direction: column; gap: 22px; margin-top: 20px; }
+#team-profile-fields > .profile-fields-group { margin-top: 0; }
 .profile-field { min-width: 0; padding: 0; margin: 0; border: 0; }
 .profile-field legend { padding: 0; color: var(--navy); font-size: 14px; font-weight: 700; }
 .profile-field > p { margin: 5px 0 8px; }

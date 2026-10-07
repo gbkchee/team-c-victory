@@ -19,14 +19,14 @@ for(const mutate of [d=>d.strategies[0].matches.pop(),d=>d.strategies[0].matches
 const {cleanProfile}=require('./ratings.js');
 const old={ratings:{serve:5,forehand:4.5},scores:[5,4,3,2,1],position:'back',style:'defense',keywords:[{kind:'weak',text:'체력'}]};
 const migrated=cleanProfile(old,'C');
-assert.deepEqual(migrated,{position:'back',style:'defense',confidentSkills:[],partnerRoles:[],restPreference:'',traits:[]});
+assert.deepEqual(migrated,{position:'back',style:'defense',confidentSkills:[],rustySkills:[],partnerRoles:[],restPreference:'',traits:[]});
 assert.ok(!Object.hasOwn(migrated,'ratings')&&!Object.hasOwn(migrated,'keywords'));
 const edited=cleanProfile({...migrated,confidentSkills:['lob','serve','serve','invalid'],partnerRoles:['cover','either'],restPreference:'continuous'},'C');
 assert.deepEqual(edited.confidentSkills,['serve','lob']);
 assert.deepEqual(edited.partnerRoles,['cover']);
 assert.equal(edited.restPreference,'continuous');
 assert.deepEqual(cleanProfile(JSON.parse(JSON.stringify(edited)),'C'),edited);
-assert.deepEqual(cleanProfile({confidentSkills:[5],partnerRoles:['bad'],restPreference:'bad',style:'allround'},'C'),{position:'',style:'unknown',confidentSkills:[],partnerRoles:[],restPreference:'',traits:[]});
+assert.deepEqual(cleanProfile({confidentSkills:[5],rustySkills:['lob','invalid','lob'],partnerRoles:['bad'],restPreference:'bad',style:'allround'},'C'),{position:'',style:'unknown',confidentSkills:[],rustySkills:['lob'],partnerRoles:[],restPreference:'',traits:[]});
 const withTraits=cleanProfile({...edited,traits:['  왼손잡이  ','왼손잡이','파트너와   콜을 많이 함',null,5,'']},'C');
 assert.deepEqual(withTraits.traits,['왼손잡이','파트너와 콜을 많이 함']);
 assert.deepEqual(cleanProfile(JSON.parse(JSON.stringify(withTraits)),'C'),withTraits);
