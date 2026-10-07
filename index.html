@@ -1,18 +1,44 @@
 <!doctype html>
 <html lang="ko">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#023047"><title>🎾 최강씨씨씨C조!!!! 🎾</title><link rel="stylesheet" href="styles.css"><script defer src="data.js"></script><script defer src="validation.js"></script><script defer src="ratings.js"></script><script defer src="app.js"></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#003a70"><title>🎾 최강씨씨씨C조!!!! 🎾</title><link rel="stylesheet" href="styles.css"><script defer src="data.js"></script><script defer src="validation.js"></script><script defer src="ratings.js"></script><script defer src="app.js"></script></head>
 <body>
-<header><div class="header-inner"><a class="brand" href="./"><h1 class="site-title">🎾 최강씨씨씨C조!!!! 🎾</h1></a><button id="share" class="outline" hidden>현재 선택 공유 ↗</button></div></header>
-<main>
+<a class="skip-link" href="#main-content">본문으로 이동</a>
+<header class="site-header">
+<div class="header-inner">
+<nav class="club-navigation" aria-label="클럽 메뉴">
+<a class="brand" href="./" aria-label="COURT MATES 홈"><img src="assets/club-emblem.svg" width="28" height="28" alt=""><span>COURT MATES</span></a>
+<div class="site-menu-wrap">
+<button id="menu-toggle" class="icon-button" type="button" aria-label="더 보기" aria-expanded="false" aria-controls="site-menu"><img src="assets/ellipsis.svg" width="24" height="24" alt=""></button>
+<div id="site-menu" class="site-menu" hidden>
+<button id="share" type="button" hidden>현재 선택 링크 복사 ↗</button>
+<a href="rules.pdf" target="_blank" rel="noopener">대회 공식 규정 보기 ↗</a>
+<p>선수 입력은 이 브라우저에 저장돼요.</p>
+<p id="share-status" role="status" class="small"></p><div id="share-fallback" hidden><label>공유 링크<input id="share-url" readonly></label></div>
+</div>
+</div>
+</nav>
+<div class="match-introduction"><div class="welcome-copy"><p>2026년 10월 테넷 정모</p><h1 class="site-title">🎾 최강씨씨씨C조!!!! 🎾</h1></div><img class="court-illustration" src="assets/court-illustration.svg" width="88" height="106" alt=""></div>
 <div class="page-tabs" role="tablist" aria-label="페이지 선택">
 <button id="tab-players" class="page-tab" type="button" role="tab" data-page="players" aria-controls="page-players" aria-selected="true">선수 정보</button>
 <button id="tab-strategy" class="page-tab" type="button" role="tab" data-page="strategy" aria-controls="page-strategy" aria-selected="false" tabindex="-1">C조 전략</button>
 <button id="tab-analysis" class="page-tab" type="button" role="tab" data-page="analysis" aria-controls="page-analysis" aria-selected="false" tabindex="-1">상대 페어 분석</button>
 </div>
+</div>
+</header>
+<main id="main-content" tabindex="-1">
 <section id="page-players" class="page-panel" role="tabpanel" aria-labelledby="tab-players">
-<div class="section-heading roster-heading"><h2><span>조별 선수 리스트</span></h2><span class="badge">총 31명</span></div>
-<p class="muted">포티 → 써티 → 러브 순서, 같은 등급은 가나다순입니다. 선수를 누르면 팝업에서 정보를 수정할 수 있습니다.</p>
-<div id="player-roster" class="roster-grid" aria-label="A·B·C·D조 전체 선수"></div>
+<div class="roster-overview">
+<div class="roster-heading"><h2>조별 선수 목록</h2><span id="roster-total">4개 조 · 31명</span></div>
+<nav id="group-shortcuts" class="group-shortcuts" aria-label="조별 선수 목록 바로가기">
+<button type="button" data-group="C" aria-controls="roster-C" aria-pressed="true">C조 <img src="assets/crown.svg" width="15" height="15" alt="우리팀"></button>
+<button type="button" data-group="A" aria-controls="roster-A" aria-pressed="false">A조</button>
+<button type="button" data-group="B" aria-controls="roster-B" aria-pressed="false">B조</button>
+<button type="button" data-group="D" aria-controls="roster-D" aria-pressed="false">D조</button>
+</nav>
+<div class="roster-guide"><span class="content-badge">공식 선수 명단</span><p>선수 카드를 눌러 정보를 수정하세요</p></div>
+<p class="sr-only">포티 → 써티 → 러브 순서, 같은 등급은 가나다순입니다. C조는 본인의 경기 선호를, 상대 조는 관찰한 강점과 약점을 표시합니다.</p>
+</div>
+<div id="player-roster" class="roster-grid" aria-label="C·A·B·D조 전체 선수"></div>
 <dialog id="ratings-panel" class="ratings-panel" aria-labelledby="rating-player-info" aria-describedby="profile-help">
 <div class="rating-dialog-heading"><h2 id="rating-player-info" tabindex="-1"></h2><button id="rating-close" type="button" class="rating-close" aria-label="선수 정보 팝업 닫기">×</button></div>
 <p id="profile-help" class="muted"></p>
@@ -82,7 +108,6 @@
 </section>
 <div id="analysis-result" aria-live="polite"></div>
 </section>
-<footer>TEAM C · COURTSIDE BOARD <span>공개 정보로 준비하고, 코트에서 확인하세요.</span></footer>
-<p id="share-status" role="status" class="small"></p><div id="share-fallback" hidden><label>공유 링크<input id="share-url" readonly></label></div>
+<footer class="friendly-note"><img src="assets/heart-handshake.svg" width="24" height="24" alt=""><p class="friendly-title">다치지 않고 즐겁게 C조가 우승합니다 🎾👑</p><p class="friendly-description">공식 선수 명단과 대회 등급을 기준으로 합니다.<br>입력한 정보는 이 브라우저에 저장됩니다.</p><p class="friendly-tagline">OUR COURT, OUR GAME</p></footer>
 <noscript>이 전략보드에는 JavaScript가 필요합니다. JavaScript를 허용하는 브라우저에서 열어주세요.</noscript>
 </main></body></html>

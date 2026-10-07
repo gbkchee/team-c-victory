@@ -114,6 +114,7 @@ if(typeof document!=='undefined')(() => {
  function persist(){
   try{localStorage.setItem(storageKey,JSON.stringify(profiles));saveAvailable=true;}catch{saveAvailable=false;}
   savedStatus();
+  refreshRosterCard(current);
   window.dispatchEvent(new CustomEvent('playerprofileschange',{detail:{team:person(current).team,name:person(current).name}}));
  }
  function update(patch){profiles[current]=cleanProfile({...profile(current),...patch},person(current).team,initialKeywords(current));persist();}
@@ -250,16 +251,18 @@ if(typeof document!=='undefined')(() => {
  }
  function renderRoster(){
   const groups=$('player-roster');groups.replaceChildren();
-  for(const team of ['A','B','C','D']){
+  $('roster-total').textContent=Object.keys(data.teams).length+'개 조 · '+roster.length+'명';
+  for(const team of ['C','A','B','D']){
    const players=roster.filter(player=>player.team===team),section=el('section','roster-team');
+   section.id='roster-'+team;section.setAttribute('aria-labelledby','roster-heading-'+team);
    const heading=el('div','roster-team-heading'),list=el('ul','roster-players');
-   heading.append(el('h3','',team+'조'),el('span','roster-count',players.length+'명'));section.append(heading);
+   const title=el('h3','',team+'조');title.id='roster-heading-'+team;title.tabIndex=-1;
+   heading.append(title,el('span','roster-count','선수 '+players.length+'명'));section.append(heading);
    for(const player of players){
     const item=el('li'),button=el('button','roster-player');button.type='button';button.dataset.player=player.id;
     button.setAttribute('aria-pressed',String(player.id===current));button.setAttribute('aria-controls','ratings-panel');button.setAttribute('aria-haspopup','dialog');
     button.setAttribute('aria-label',label(player.id)+', '+tier(player.id)+', '+(team==='C'?'경기 선호 입력':'상대 선수 분석'));
-    const separator=el('span','roster-separator','|');separator.setAttribute('aria-hidden','true');
-    button.append(el('strong','roster-name',player.displayName),separator,tierBadge(player.id));
+    fillRosterCard(button,player.id);
     button.addEventListener('click',()=>{
      current=player.id;lastTrigger=button;render();
      groups.querySelectorAll('.roster-player').forEach(item=>item.setAttribute('aria-pressed',String(item.dataset.player===current)));
@@ -270,6 +273,32 @@ if(typeof document!=='undefined')(() => {
    section.append(list);groups.append(section);
   }
  }
+ function fillRosterCard(button,id){
+  const player=person(id),info=profile(id),identity=el('span','roster-identity');
+  identity.append(el('strong','roster-name',player.displayName),tierBadge(id));
+  const divider=el('span','roster-divider');divider.setAttribute('aria-hidden','true');
+  const highlights=el('span','roster-highlights');
+  const rows=player.team==='C'
+   ?[['플레이',info.confidentSkills.map(key=>skills[key]).join(', ')||'아직 선택 전','strong'],['특징',info.traits.join(', ')||'아직 입력 전','note']]
+   :[['강점',info.keywords.filter(item=>item.kind==='strong').map(item=>item.text).join(', ')||'정보 없음','strong'],['약점',info.keywords.filter(item=>item.kind==='weak').map(item=>item.text).join(', ')||'정보 없음','weak']];
+  for(const [title,text,kind] of rows){
+   const row=el('span','roster-highlight roster-highlight-'+kind),value=el('span','roster-highlight-value',text);
+   value.title=text;row.append(el('span','roster-highlight-label',title),value);highlights.append(row);
+  }
+  button.setAttribute('aria-description',rows.map(([title,text])=>title+' · '+text).join('. '));
+  button.replaceChildren(identity,divider,highlights);
+ }
+ function refreshRosterCard(id){
+  const card=[...$('player-roster').querySelectorAll('.roster-player')].find(button=>button.dataset.player===id);
+  if(card)fillRosterCard(card,id);
+ }
+ const shortcuts=[...$('group-shortcuts').querySelectorAll('button')];
+ for(const shortcut of shortcuts)shortcut.addEventListener('click',()=>{
+  const section=$('roster-'+shortcut.dataset.group);
+  shortcuts.forEach(button=>button.setAttribute('aria-pressed',String(button===shortcut)));
+  $('roster-heading-'+shortcut.dataset.group).focus({preventScroll:true});
+  section.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});
+ });
  $('rating-close').addEventListener('click',()=>root.close());
  root.addEventListener('close',()=>{
   document.body.classList.remove('player-dialog-open');

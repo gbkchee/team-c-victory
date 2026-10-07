@@ -61,6 +61,20 @@ if(typeof document!=='undefined')(() => {
  if(errors.length){$('validation').textContent='편성 검증 실패';$('matches').textContent=errors.join(' / ');return;}
  $('validation').textContent='3개 전략 · 밸런스 3안 검증 완료';
  const pageTabs=[...document.querySelectorAll('.page-tab')],collator=new Intl.Collator('ko'),tierOrder={forty:0,thirty:1,love:2};
+ const menuToggle=$('menu-toggle'),siteMenu=$('site-menu');
+ function closeMenu(restoreFocus=false){
+  siteMenu.hidden=true;menuToggle.setAttribute('aria-expanded','false');
+  if(restoreFocus)menuToggle.focus();
+ }
+ menuToggle.addEventListener('click',()=>{
+  siteMenu.hidden=!siteMenu.hidden;menuToggle.setAttribute('aria-expanded',String(!siteMenu.hidden));
+ });
+ document.addEventListener('click',event=>{
+  if(!siteMenu.hidden&&!siteMenu.contains(event.target)&&!menuToggle.contains(event.target))closeMenu();
+ });
+ document.addEventListener('keydown',event=>{
+  if(event.key==='Escape'&&!siteMenu.hidden){event.preventDefault();closeMenu(true);}
+ });
  const tierSymbols={forty:'4️⃣',thirty:'3️⃣',love:'🫶'},tierLabels={forty:'포티',thirty:'써티',love:'러브'};
  const displayName=name=>name.replace(/\s*\(시트:.*\)$/,'');
  let state={page:'players',strategy:'balance',balanceVariant:'balance-1',filter:'all',own1:'',own2:'',team:'',p1:'',p2:''};
@@ -94,6 +108,7 @@ if(typeof document!=='undefined')(() => {
   try{history.replaceState(null,'','#'+q);}catch{}
  }
  function renderPage(){
+  closeMenu();
   for(const tab of pageTabs){
    const active=tab.dataset.page===state.page;tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;
    $(tab.getAttribute('aria-controls')).hidden=!active;
