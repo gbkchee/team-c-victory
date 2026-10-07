@@ -79,7 +79,7 @@ if(typeof document!=='undefined')(() => {
  }))).sort((a,b)=>a.team.localeCompare(b.team)||(tierOrder[a.tier]??3)-(tierOrder[b.tier]??3)||collator.compare(a.displayName,b.displayName));
  const allowed=new Set(roster.map(player=>player.id)),storageKey='courtside.player-profiles.v3';
  const oldStorageKeys=['courtside.player-ratings.v2','courtside.player-pentagons.v1'];
- let profiles={},saveAvailable=true,current='',lastTrigger=null;
+ let profiles={},sharedTraitSuggestions=[],saveAvailable=true,current='',lastTrigger=null;
  const $=id=>document.getElementById(id),person=id=>roster.find(player=>player.id===id);
  const label=id=>{const player=person(id);return player.team+'조 '+player.displayName;};
  const tier=id=>tiers[person(id).tier]||'등급 미확인',tierSymbol=id=>tierSymbols[person(id).tier]||'❔';
@@ -108,9 +108,13 @@ if(typeof document!=='undefined')(() => {
   badge.title=tier(id);badge.setAttribute('role','img');badge.setAttribute('aria-label',tier(id));return badge;
  }
  function savedStatus(){
-  $('profile-save-status').textContent=saveAvailable
-   ?'이 브라우저에 저장됩니다. 다른 기기·팀원과의 동기화는 아직 연결되지 않았습니다.'
-   :'이 환경에서는 저장할 수 없어 현재 창에서만 유지됩니다.';
+  const cloud=window.PLAYER_PROFILE_CLOUD;
+  const status=cloud?.status==='ready'?'팀원과 실시간으로 공유 중'
+   :cloud?.status==='connecting'?'팀 공유 저장소 연결 중 · 이 브라우저에도 임시 저장'
+   :cloud?.status==='error'?'팀 공유 저장소 연결 실패 · 이 브라우저에 임시 저장'
+   :saveAvailable?'팀 공유 저장소에 연결 중입니다.':'저장할 수 없어 현재 창에서만 유지됩니다.';
+  $('profile-save-status').textContent=status;
+  const menuStatus=$('cloud-status');if(menuStatus)menuStatus.textContent=status;
  }
  function persist(){
   try{localStorage.setItem(storageKey,JSON.stringify(profiles));saveAvailable=true;}catch{saveAvailable=false;}
@@ -119,6 +123,20 @@ if(typeof document!=='undefined')(() => {
   window.dispatchEvent(new CustomEvent('playerprofileschange',{detail:{team:person(current).team,name:person(current).name}}));
  }
  function update(patch){profiles[current]=cleanProfile({...profile(current),...patch},person(current).team,initialKeywords(current));persist();}
+ window.addEventListener('playerprofilescloudchange',event=>{
+  const incoming=event.detail?.profiles;
+  if(!incoming||typeof incoming!=='object')return;
+  profiles=incoming;
+  try{localStorage.setItem(storageKey,JSON.stringify(profiles));saveAvailable=true;}catch{saveAvailable=false;}
+  savedStatus();renderRoster();
+  if(root.open)render();
+  window.dispatchEvent(new CustomEvent('playerprofileschange',{detail:{cloudRefresh:true}}));
+ });
+ window.addEventListener('playerprofilecloudstatuschange',savedStatus);
+ window.addEventListener('playertraitssuggestionschange',event=>{
+  sharedTraitSuggestions=Array.isArray(event.detail?.suggestions)?event.detail.suggestions:[];
+  if(root.open&&person(current)?.team==='C')renderTraits();
+ });
  function choiceField(title,field,options,multiple=false,help='',stack=false){
   const group=el('fieldset','profile-field'),legend=el('legend','',title),choices=el('div','profile-choices'+(stack?' profile-choices-stack':''));
   group.append(legend);if(help)group.append(el('p','muted small',help));
@@ -191,7 +209,7 @@ function renderTraits(){
   }
   form.addEventListener('submit',event=>{event.preventDefault();addTrait(input.value,true);});
   const suggestions=el('div','keyword-suggestions');suggestions.setAttribute('aria-label','나의 플레이 특징 빠른 추가');
-  for(const text of traitSuggestions){
+  for(const text of [...new Set([...traitSuggestions,...sharedTraitSuggestions])]){
    const button=el('button','keyword-suggestion','＋ '+text);button.type='button';button.disabled=traits.includes(text);
    button.addEventListener('click',()=>addTrait(text,false));suggestions.append(button);
   }
@@ -325,4 +343,6 @@ function renderTraits(){
  });
  $('profile-reset').addEventListener('click',()=>{delete profiles[current];persist();render();});
  savedStatus();renderRoster();
+ window.PLAYER_PROFILES.all=()=>JSON.parse(JSON.stringify(profiles));
+ window.dispatchEvent(new CustomEvent('playerprofilesready'));
 })();

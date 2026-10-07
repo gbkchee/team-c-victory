@@ -1,0 +1,63 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function validPlayerId(playerId) {
+      return playerId.matches('^(C|A|B|D):.{1,40}$');
+    }
+
+    function validProfile(playerId) {
+      let profile = request.resource.data.profile;
+      return profile is map && (
+        (playerId.matches('^C:.+$')
+          && profile.keys().hasOnly(['position', 'style', 'confidentSkills', 'rustySkills', 'partnerRoles', 'restPreference'])
+          && profile.position in ['', 'fore', 'back', 'either']
+          && profile.style in ['attack', 'defense', 'unknown']
+          && profile.confidentSkills is list && profile.confidentSkills.size() <= 11
+          && profile.rustySkills is list && profile.rustySkills.size() <= 11
+          && profile.partnerRoles is list && profile.partnerRoles.size() <= 6
+          && profile.restPreference in ['', 'continuous', 'rest', 'condition'])
+        || (!playerId.matches('^C:.+$')
+          && profile.keys().hasOnly(['tendency', 'style', 'keywords'])
+          && profile.tendency in ['fore', 'back', 'unknown']
+          && profile.style in ['attack', 'defense', 'allround', 'unknown']
+          && profile.keywords is list && profile.keywords.size() <= 20)
+      );
+    }
+
+    match /playerProfiles/{playerId} {
+      allow read: if signedIn() && validPlayerId(playerId);
+      allow create, update: if signedIn()
+        && validPlayerId(playerId)
+        && request.resource.data.keys().hasOnly(['profile', 'updatedAt'])
+        && request.resource.data.updatedAt == request.time
+        && validProfile(playerId);
+      allow delete: if false;
+    }
+
+    match /playerTraits/{playerId} {
+      allow read: if signedIn() && validPlayerId(playerId);
+      allow create, update: if signedIn()
+        && validPlayerId(playerId)
+        && request.resource.data.keys().hasOnly(['items', 'updatedAt'])
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.items is list
+        && request.resource.data.items.size() <= 20;
+      allow delete: if false;
+    }
+
+    match /traitSuggestions/{suggestionId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn()
+        && request.resource.data.keys().hasOnly(['text', 'createdAt'])
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 40
+        && request.resource.data.createdAt == request.time;
+      allow delete: if false;
+    }
+  }
+}

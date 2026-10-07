@@ -12,7 +12,7 @@
 <div id="site-menu" class="site-menu" hidden>
 <button id="share" type="button" hidden>현재 선택 링크 복사 ↗</button>
 <a href="rules.pdf" target="_blank" rel="noopener">대회 공식 규정 보기 ↗</a>
-<p>선수 입력은 이 브라우저에 저장돼요.</p>
+<p id="cloud-status" role="status">팀 공유 저장소에 연결 중입니다.</p>
 <p id="share-status" role="status" class="small"></p><div id="share-fallback" hidden><label>공유 링크<input id="share-url" readonly></label></div>
 </div>
 </div>
@@ -107,6 +107,6 @@
 </section>
 <div id="analysis-result" aria-live="polite"></div>
 </section>
-<footer class="friendly-note"><img src="assets/heart-handshake.svg" width="24" height="24" alt=""><p class="friendly-title">다치지 않고 즐겁게 C조가 우승합니다 🎾👑</p><p class="friendly-description">공식 선수 명단과 대회 등급을 기준으로 합니다.<br>입력한 정보는 이 브라우저에 저장됩니다.</p><p class="friendly-tagline">OUR COURT, OUR GAME</p></footer>
+<footer class="friendly-note"><img src="assets/heart-handshake.svg" width="24" height="24" alt=""><p class="friendly-title">다치지 않고 즐겁게 C조가 우승합니다 🎾👑</p><p class="friendly-description">공식 선수 명단과 대회 등급을 기준으로 합니다.<br>입력한 프로필과 플레이 특징은 팀원과 공유됩니다.</p><p class="friendly-tagline">OUR COURT, OUR GAME</p></footer>
 <noscript>이 전략보드에는 JavaScript가 필요합니다. JavaScript를 허용하는 브라우저에서 열어주세요.</noscript>
-</main></body></html>
+</main><script type="module" src="firebase-cloud.js"></script></body></html>
