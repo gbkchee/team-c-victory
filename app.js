@@ -51,7 +51,7 @@ function button(text,active,action,cls){const b=el('button',cls,text);b.type='bu
 function restoreSelection(){[state.p1,state.p2]=selections.get(key())||['',''];}
 function playerCard(name,team){
  const p=data.teams[team][name], card=el('div','player');card.append(el('strong','',name));
- const tier=el('span','badge grade-badge player-tier',{forty:'4️⃣',thirty:'3️⃣',love:'🫶'}[p.tier]||'❔'),label={forty:'포티',thirty:'써티',love:'러브'}[p.tier]||'등급 미확인';
+ const tier=el('span','grade-badge player-tier',{forty:'4️⃣',thirty:'3️⃣',love:'🫶'}[p.tier]||'❔'),label={forty:'포티',thirty:'써티',love:'러브'}[p.tier]||'등급 미확인';
  tier.title=label;tier.setAttribute('role','img');tier.setAttribute('aria-label',label);card.append(tier);
  card.append(el('p','strength',`강점 · ${p.strong.join(', ')||'정보 없음'}`));
  card.append(el('p','weakness',`약점 · ${p.weak.join(', ')||'정보 없음'}`));

@@ -87,7 +87,7 @@ if(typeof document!=='undefined')(() => {
  }catch{saveAvailable=false;}
  const profile=id=>profiles[id]||cleanProfile(null,initialKeywords(id));
  function tierBadge(id){
-  const badge=el('span','badge grade-badge',tierSymbol(id));
+  const badge=el('span','grade-badge',tierSymbol(id));
   badge.title=tier(id);badge.setAttribute('role','img');badge.setAttribute('aria-label',tier(id));return badge;
  }
  function persist(){
