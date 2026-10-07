@@ -19,7 +19,19 @@
   weak:['포핸드','백핸드','포발리','백발리','몸쪽 공','높은 공','낮은 공','로브 처리','좌우 이동'],
   note:['장신','슬라이스서브','빠른 발','네트 자주 붙음']
  };
+ const traitSuggestions=['왼손잡이','장신','슬라이스서브','킥서브','네트에 자주 붙음','베이스라인 선호','긴 랠리가 편함','파트너와 콜을 많이 함','초반에 몸이 늦게 풀림'];
  const cleanText=text=>text.normalize('NFC').trim().replace(/\s+/g,' ');
+ function cleanTraits(raw){
+  if(!Array.isArray(raw))return [];
+  const result=[];
+  for(const item of raw){
+   if(typeof item!=='string')continue;
+   const text=cleanText(item).slice(0,40);
+   if(text&&!result.includes(text))result.push(text);
+   if(result.length===20)break;
+  }
+  return result;
+ }
  function cleanKeywords(raw){
   const seen=new Set(),result=[];
   for(const item of raw){
@@ -40,7 +52,8 @@
     style:cleanChoice(raw?.style,styles,'unknown'),
     confidentSkills:cleanChoices(raw?.confidentSkills,skills),
     partnerRoles:roles.length>1?roles.filter(role=>role!=='either'):roles,
-    restPreference:cleanChoice(raw?.restPreference,restPreferences,'')
+    restPreference:cleanChoice(raw?.restPreference,restPreferences,''),
+    traits:cleanTraits(raw?.traits)
    };
   }
   return {
@@ -49,14 +62,14 @@
    keywords:cleanKeywords(Array.isArray(raw?.keywords)?raw.keywords:initialKeywords)
   };
  }
- const model={skills,positions,styles,partnerRoles,restPreferences,opponentPositions,opponentStyles,keywordKinds,keywordSuggestions,cleanText,cleanProfile};
+ const model={skills,positions,styles,partnerRoles,restPreferences,opponentPositions,opponentStyles,keywordKinds,keywordSuggestions,traitSuggestions,cleanText,cleanProfile};
  if(typeof module==='object'&&module.exports)module.exports=model;
  else window.PLAYER_PROFILE_MODEL=model;
 })();
 if(typeof document!=='undefined')(() => {
  const root=document.getElementById('ratings-panel');if(!root)return;
  const model=window.PLAYER_PROFILE_MODEL;
- const {skills,positions,styles,partnerRoles,restPreferences,opponentPositions,opponentStyles,keywordKinds,keywordSuggestions,cleanText,cleanProfile}=model;
+ const {skills,positions,styles,partnerRoles,restPreferences,opponentPositions,opponentStyles,keywordKinds,keywordSuggestions,traitSuggestions,cleanText,cleanProfile}=model;
  const data=window.BOARD_DATA;
  const tiers={forty:'포티',thirty:'써티',love:'러브'},tierSymbols={forty:'4️⃣',thirty:'3️⃣',love:'🫶'},tierOrder={forty:0,thirty:1,love:2};
  const collator=new Intl.Collator('ko'),displayName=name=>name.replace(/\s*\(시트:.*\)$/,'');
@@ -136,6 +149,44 @@ if(typeof document!=='undefined')(() => {
    choiceField('파트너에게 바라는 역할','partnerRoles',partnerRoles,true,'복수 선택 · 함께 경기할 때 도움받고 싶은 역할을 골라 주세요.'),
    choiceField('경기·휴식 선호','restPreference',restPreferences,false,'경기 당일 바꿔도 괜찮아요.',true)
   );
+  renderTraits();
+ }
+ function renderTraits(){
+  const draft=$('profile-trait-text')?.value||'',section=$('team-traits');section.replaceChildren();
+  section.append(el('h3','','나의 플레이 특징'),el('p','muted small','복수 입력 · 본인의 플레이 특징을 자유롭게 알려 주세요. 특징은 40자 이내, 최대 20개까지 추가할 수 있어요.'));
+  const list=el('div','rating-keywords'),traits=profile(current).traits;
+  for(const [index,text] of traits.entries()){
+   const chip=el('span','keyword-chip'),remove=el('button','keyword-remove','×');
+   remove.type='button';remove.setAttribute('aria-label',text+' 특징 삭제');
+   remove.addEventListener('click',()=>{
+    update({traits:profile(current).traits.filter(item=>item!==text)});renderTraits();
+    $('profile-trait-status').textContent='특징을 삭제했습니다.';
+    const buttons=$('team-traits').querySelectorAll('.keyword-remove');
+    (buttons[Math.min(index,buttons.length-1)]||$('profile-trait-text')).focus();
+   });
+   chip.append(el('span','',text),remove);list.append(chip);
+  }
+  if(!traits.length)list.append(el('p','muted small','아직 입력한 특징이 없습니다.'));
+  const form=el('form','profile-keyword-form'),label=el('label','','특징 직접 입력'),input=el('input'),add=el('button','','추가');
+  input.type='text';input.id='profile-trait-text';input.maxLength=40;input.autocomplete='off';input.value=draft;
+  input.placeholder='예: 왼손잡이, 파트너와 콜을 많이 함';label.htmlFor=input.id;label.append(input);add.type='submit';form.append(label,add);
+  const status=el('p','muted small');status.id='profile-trait-status';status.setAttribute('role','status');
+  function addTrait(text,clearDraft){
+   text=cleanText(text);const all=profile(current).traits;
+   if(!text){status.textContent='특징을 입력하세요.';return;}
+   if(text.length>40){status.textContent='특징은 40자 이내로 입력하세요.';return;}
+   if(all.includes(text)){status.textContent='이미 등록한 특징입니다.';return;}
+   if(all.length>=20){status.textContent='특징은 선수당 20개까지 입력할 수 있습니다.';return;}
+   update({traits:[...all,text]});if(clearDraft)input.value='';renderTraits();
+   $('profile-trait-status').textContent='특징을 추가했습니다.';$('profile-trait-text').focus();
+  }
+  form.addEventListener('submit',event=>{event.preventDefault();addTrait(input.value,true);});
+  const suggestions=el('div','keyword-suggestions');suggestions.setAttribute('aria-label','나의 플레이 특징 빠른 추가');
+  for(const text of traitSuggestions){
+   const button=el('button','keyword-suggestion','＋ '+text);button.type='button';button.disabled=traits.includes(text);
+   button.addEventListener('click',()=>addTrait(text,false));suggestions.append(button);
+  }
+  section.append(list,form,el('p','muted small','빠른 추가'),suggestions,status);
  }
  function renderOpponentFields(){
   $('opponent-profile-fields').replaceChildren(
@@ -192,7 +243,7 @@ if(typeof document!=='undefined')(() => {
    ?'본인이 원하는 경기 방식을 알려 주세요. 선택하지 않은 항목이 있어도 괜찮아요.'
    :'실제로 본 플레이를 기록해 주세요. 잘 모르면 모르겠음으로 남겨 주세요. 키워드는 40자 이내, 선수당 총 20개까지 추가할 수 있어요.';
   $('team-profile-section').hidden=!own;$('opponent-profile-section').hidden=own;
-  $('team-profile-fields').replaceChildren();$('opponent-profile-fields').replaceChildren();$('opponent-keywords').replaceChildren();
+  $('team-profile-fields').replaceChildren();$('team-traits').replaceChildren();$('opponent-profile-fields').replaceChildren();$('opponent-keywords').replaceChildren();
   if(own)renderTeamFields();else renderOpponentFields();
   $('profile-reset').textContent=own?'선택 선수의 입력 초기화':'입력 초기화 · 키워드는 시트 기록으로 복원';
   savedStatus();

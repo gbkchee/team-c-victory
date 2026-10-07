@@ -135,6 +135,7 @@ if(typeof document!=='undefined')(() => {
    card.append(el('p','strength','요즘 자신 있는 · '+(profile.confidentSkills.map(key=>definitions.skills[key]).join(', ')||'아직 선택 전')));
    card.append(el('p','','파트너에게 바라는 역할 · '+(profile.partnerRoles.map(key=>definitions.partnerRoles[key]).join(', ')||'아직 선택 전')));
    card.append(el('p','','경기·휴식 · '+definitions.restPreferences[profile.restPreference]));
+   card.append(el('p','','플레이 특징 · '+(profile.traits.join(', ')||'아직 입력 전')));
   }else{
    card.append(el('p','','포·백 성향 · '+definitions.opponentPositions[profile.tendency]),el('p','','게임 스타일 · '+definitions.opponentStyles[profile.style]));
    for(const [kind,title] of Object.entries(definitions.keywordKinds))card.append(el('p',kind==='strong'?'strength':kind==='weak'?'weakness':'',title+' · '+(profile.keywords.filter(item=>item.kind===kind).map(item=>item.text).join(', ')||'정보 없음')));
