@@ -4,7 +4,8 @@ const data=window.BOARD_DATA, $=id=>document.getElementById(id);
 const errors=validateBoard(data);
 if(errors.length){$('validation').textContent='편성 검증 실패';$('matches').textContent=errors.join(' / ');return;}
 $('validation').textContent='4개 전략 · 검증 완료';
-let state={strategy:'balance',match:1,filter:'all',p1:'',p2:''};
+let state={page:'players',strategy:'balance',match:1,filter:'all',p1:'',p2:''};
+const pageTabs=[...document.querySelectorAll('.page-tab')];
 const selections=new Map();
 const strategy=()=>data.strategies.find(s=>s.id===state.strategy);
 const match=()=>strategy().matches.find(m=>m.id===state.match);
@@ -14,17 +15,37 @@ function readHash(){
  const s=data.strategies.find(s=>s.id===q.get('strategy'))||data.strategies[0];
  const m=s.matches.find(m=>m.id===Number(q.get('match')))||s.matches[0];
  const filter=['A','B','D'].includes(q.get('filter'))?q.get('filter'):'all';
- state={strategy:s.id,match:m.id,filter:filter==='all'||filter===m.team?filter:'all',p1:'',p2:''};
+ const page=['players','strategy'].includes(q.get('page'))?q.get('page'):q.has('strategy')?'strategy':'players';
+ state={page,strategy:s.id,match:m.id,filter:filter==='all'||filter===m.team?filter:'all',p1:'',p2:''};
  const names=Object.keys(data.teams[m.team]);
  if(names.includes(q.get('p1')))state.p1=q.get('p1');
  if(names.includes(q.get('p2'))&&q.get('p2')!==state.p1)state.p2=q.get('p2');
  selections.set(key(),[state.p1,state.p2]);
 }
 function writeHash(){
- const q=new URLSearchParams({strategy:state.strategy,match:String(state.match),filter:state.filter});
+ const q=new URLSearchParams({page:state.page,strategy:state.strategy,match:String(state.match),filter:state.filter});
  if(state.p1)q.set('p1',state.p1);if(state.p2)q.set('p2',state.p2);
  try{history.replaceState(null,'',`#${q}`);}catch{}
 }
+function renderPage(){
+ pageTabs.forEach(tab=>{
+  const active=tab.dataset.page===state.page;tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;
+  $(tab.getAttribute('aria-controls')).hidden=!active;
+ });
+ $('share').hidden=state.page!=='strategy';
+}
+pageTabs.forEach((tab,index)=>{
+ tab.addEventListener('click',()=>{state.page=tab.dataset.page;renderPage();writeHash();});
+ tab.addEventListener('keydown',event=>{
+  let next;
+  if(event.key==='ArrowRight')next=(index+1)%pageTabs.length;
+  else if(event.key==='ArrowLeft')next=(index+pageTabs.length-1)%pageTabs.length;
+  else if(event.key==='Home')next=0;
+  else if(event.key==='End')next=pageTabs.length-1;
+  else return;
+  event.preventDefault();pageTabs[next].focus();pageTabs[next].click();
+ });
+});
 function el(tag,cls,text){const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n;}
 function button(text,active,action,cls){const b=el('button',cls,text);b.type='button';b.setAttribute('aria-pressed',String(active));b.addEventListener('click',action);return b;}
 function restoreSelection(){[state.p1,state.p2]=selections.get(key())||['',''];}
@@ -72,7 +93,7 @@ function render(){
  const m=match();$('match-detail').replaceChildren(el('span','badge',`C${m.id} · ${m.time} · vs ${m.team}조`),el('h2','detail-title',m.pair.join(' + ')),el('p','muted small',`${submissionTime(m.time)}까지 출전 선수 제출 · 양팀 제출 후 공개`));
  const cards=el('div','players');m.pair.forEach(p=>cards.append(playerCard(p,'C')));$('match-detail').append(cards,el('p','own-plan',ownPlan(m)));
  const counts=el('div','count-grid');Object.keys(data.teams.C).forEach(p=>counts.append(el('span','',`${p} · ${strategy().matches.filter(m=>m.pair.includes(p)).length}경기`)));$('counts').replaceChildren(counts);
- renderOpponents();writeHash();
+ renderOpponents();renderPage();writeHash();
 }
 for(const [id,field] of [['opponent1','p1'],['opponent2','p2']])$(id).addEventListener('change',()=>{state[field]=$(id).value;selections.set(key(),[state.p1,state.p2]);renderOpponents();writeHash();});
 window.addEventListener('hashchange',()=>{readHash();render();});

@@ -1,19 +1,21 @@
 <!doctype html>
 <html lang="ko">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#123e35"><title>C조 · 코트사이드 전략보드</title><link rel="stylesheet" href="styles.css"><script defer src="data.js"></script><script defer src="validation.js"></script><script defer src="app.js"></script><script defer src="ratings.js"></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#123e35"><title>🎾 최강씨씨씨C조!!!! 🎾</title><link rel="stylesheet" href="styles.css"><script defer src="data.js"></script><script defer src="validation.js"></script><script defer src="app.js"></script><script defer src="ratings.js"></script></head>
 <body>
-<header><div class="header-inner"><a class="brand" href="./">COURTSIDE <span>C조 전략보드</span></a><button id="share" class="outline">현재 선택 공유 ↗</button></div></header>
+<header><div class="header-inner"><a class="brand" href="./"><h1 class="site-title">🎾 최강씨씨씨C조!!!! 🎾</h1></a><button id="share" class="outline" hidden>현재 선택 공유 ↗</button></div></header>
 <main>
-<section class="hero"><div><p class="eyebrow">TEAM C / MATCH DAY</p><h1>한 경기씩, 함께 준비하기.</h1><p>출전표를 확인하고, 공개된 상대 정보로 대응 포인트를 준비하세요.</p></div><div class="hero-stat"><strong>20</strong><span>복식 경기 · 8명 출전</span></div></section>
-<div class="rule-strip"><span>전원 5경기</span><span>동시간 중복 출전 없음</span><span>러브끼리 조합 불가</span><span>총 게임 합 우선</span></div>
-<section class="strategy-panel"><div class="section-heading"><h2>01 <span>전략 선택</span></h2><span id="validation" role="status"></span></div><div id="strategies" class="strategy-grid" aria-label="전략 선택"></div><p id="strategy-description" class="muted"></p></section>
-<div class="workspace">
-<section class="schedule-panel"><div class="section-heading"><h2>02 <span>경기 출전표</span></h2><span class="muted">C1–C20</span></div><div id="filters" class="filters" aria-label="상대팀 필터"></div><div id="matches" class="match-grid" aria-label="경기 선택"></div><details class="counts"><summary>선수별 출전 횟수 확인</summary><div id="counts"></div></details></section>
-<section class="detail-panel" aria-label="선택 경기 상세"><div id="match-detail"></div><div class="divider"></div><h3>상대 2인 조합</h3><p class="muted small">출전표는 고정됩니다. 상대 공개 후 대응 준비에 사용하세요.</p><div class="select-grid"><label>상대 선수 1<select id="opponent1"><option value="">선택하세요</option></select></label><label>상대 선수 2<select id="opponent2"><option value="">선택하세요</option></select></label></div><div id="opponent-detail"></div><div id="tactics" aria-live="polite"></div></section>
+<div class="page-tabs" role="tablist" aria-label="페이지 선택">
+<button id="tab-players" class="page-tab" type="button" role="tab" data-page="players" aria-controls="page-players" aria-selected="true">선수 정보</button>
+<button id="tab-strategy" class="page-tab" type="button" role="tab" data-page="strategy" aria-controls="page-strategy" aria-selected="false" tabindex="-1">C조 전략</button>
 </div>
-<section id="ratings-panel" class="ratings-panel">
-<div class="section-heading"><h2>03 <span>선수 능력과 키워드</span></h2><span class="badge">직접 입력</span></div>
-<p class="muted rating-help">조를 선택하고 선수의 서브·스트로크·발리·코트커버·체력을 1~5로 입력하세요. 포티·써티·러브는 공식 규정의 배정 등급입니다. 능력 점수는 미입력으로 시작합니다. 현재 추천 출전표는 고정된 버전입니다.</p>
+<section id="page-players" class="page-panel" role="tabpanel" aria-labelledby="tab-players">
+<div class="section-heading roster-heading"><h2><span>조별 선수 리스트</span></h2><span class="badge">총 31명</span></div>
+<p class="muted">선수를 선택하면 능력치와 키워드를 확인하고 수정할 수 있습니다.</p>
+<div id="player-roster" class="roster-grid" aria-label="A·B·C·D조 전체 선수"></div>
+<section id="ratings-panel" class="ratings-panel" hidden>
+<div class="section-heading"><h2><span>선수 능력과 키워드</span></h2><span class="badge">직접 입력</span></div>
+<p id="rating-player-info" class="rating-preferences" tabindex="-1"></p>
+<p class="muted rating-help">서브·스트로크·발리·코트커버·체력을 1~5로 입력하세요. 포티·써티·러브는 공식 규정의 배정 등급입니다. 능력 점수는 미입력으로 시작합니다.</p>
 <details class="rating-guide"><summary>1~5 평가 기준과 항목별 설명</summary>
 <p class="muted small">NTRP의 경기 활용도·안정성 관점을 참고한 대회용 평가입니다. 여기서 입력하는 1~5는 공식 NTRP 등급이 아닙니다. 잘 모르는 항목은 미입력으로 남겨 주세요.</p>
 <table class="rating-comparison"><thead><tr><th scope="col">점수</th><th scope="col">설명</th></tr></thead><tbody>
@@ -25,8 +27,7 @@
 </tbody></table>
 <ul class="small"><li>서브: 서브를 넣는 안정성, 더블폴트, 코스·구질 활용을 봅니다.</li><li>스트로크: 포·백핸드 연결, 방향과 깊이, 게임 중 안정성을 봅니다. 한쪽의 강·약점은 키워드로 보충합니다.</li><li>발리: 전위에서 공을 연결하고, 코스와 마무리 기회를 활용하는 정도를 봅니다.</li><li>코트커버: 공에 반응해 이동하고, 자기 구역과 파트너의 빈 공간을 커버하는 정도를 봅니다.</li><li>체력: 한 경기부터 여러 경기까지 움직임과 집중을 유지하는 정도를 봅니다.</li></ul>
 </details>
-<div class="rating-selectors"><label>조 선택<select id="rating-team"><option value="C">C조</option><option value="A">A조</option><option value="B">B조</option><option value="D">D조</option></select></label><label>입력할 선수<select id="rating-player"></select></label><label>비교할 선수<select id="rating-compare"></select></label></div>
-<p id="rating-player-info" class="rating-preferences"></p>
+<div class="rating-selectors"><label>비교할 선수<select id="rating-compare"></select></label></div>
 <div class="rating-workspace"><div><div id="rating-inputs" class="rating-inputs"></div>
 <div class="rating-preference-inputs"><label>선호 포지션<select id="rating-position"></select></label><label>게임 스타일<select id="rating-style"></select></label></div>
 <h3>선수 키워드</h3><p class="muted small">기존 시트의 강점·약점·특징을 먼저 표시합니다. 알고 있는 특징을 추가하거나 수정할 수 있습니다. 키워드는 40자 이내, 선수당 20개까지 입력하세요.</p>
@@ -34,7 +35,17 @@
 <form id="rating-keyword-form" class="rating-keyword-form"><label>분류<select id="rating-keyword-kind"><option value="note">특징</option><option value="strong">강점</option><option value="weak">약점</option></select></label><label>키워드<input id="rating-keyword-text" maxlength="40" placeholder="코스 잘 봄, 슬라이스 약함, 잘 안 뜀" autocomplete="off"></label><button type="submit">추가</button></form>
 <p id="rating-keyword-status" class="muted small" role="status"></p>
 <button id="rating-reset" class="rating-reset">선택 선수의 입력 초기화 · 키워드는 시트 기록으로 복원</button><p id="rating-save-status" class="muted small" role="status"></p>
-</div><div id="rating-chart"></div></div></section><details class="rules">
+</div><div id="rating-chart"></div></div>
+</section>
+</section>
+<section id="page-strategy" class="page-panel" role="tabpanel" aria-labelledby="tab-strategy" hidden>
+<div class="rule-strip"><span>전원 5경기</span><span>동시간 중복 출전 없음</span><span>러브끼리 조합 불가</span><span>총 게임 합 우선</span></div>
+<section class="strategy-panel"><div class="section-heading"><h2>01 <span>전략 선택</span></h2><span id="validation" role="status"></span></div><div id="strategies" class="strategy-grid" aria-label="전략 선택"></div><p id="strategy-description" class="muted"></p></section>
+<div class="workspace">
+<section class="schedule-panel"><div class="section-heading"><h2>02 <span>경기 출전표</span></h2><span class="muted">C1–C20</span></div><div id="filters" class="filters" aria-label="상대팀 필터"></div><div id="matches" class="match-grid" aria-label="경기 선택"></div><details class="counts"><summary>선수별 출전 횟수 확인</summary><div id="counts"></div></details></section>
+<section class="detail-panel" aria-label="선택 경기 상세"><div id="match-detail"></div><div class="divider"></div><h3>상대 2인 조합</h3><p class="muted small">출전표는 고정됩니다. 상대 공개 후 대응 준비에 사용하세요.</p><div class="select-grid"><label>상대 선수 1<select id="opponent1"><option value="">선택하세요</option></select></label><label>상대 선수 2<select id="opponent2"><option value="">선택하세요</option></select></label></div><div id="opponent-detail"></div><div id="tactics" aria-live="polite"></div></section>
+</div>
+<details class="rules">
 <summary>제출 규정과 경기 운영 메모</summary>
 <ul>
 <li>총 20경기, 매 경기 복식 2명 출전. 동시간 2경기에는 서로 다른 4명을 함께 제출합니다.</li>
@@ -48,6 +59,7 @@
 </ul>
 <p><a href="rules.pdf" target="_blank" rel="noopener">대회 공식 규정 PDF 보기 ↗</a></p>
 </details>
+</section>
 <footer>TEAM C · COURTSIDE BOARD <span>공개 정보로 준비하고, 코트에서 확인하세요.</span></footer>
 <p id="share-status" role="status" class="small"></p><div id="share-fallback" hidden><label>공유 링크<input id="share-url" readonly></label></div>
 <noscript>이 전략보드에는 JavaScript가 필요합니다. JavaScript를 허용하는 브라우저에서 열어주세요.</noscript>

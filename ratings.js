@@ -10,7 +10,7 @@ const positions={'':'미선택',fore:'포',back:'백',either:'상관없음'};
 const styles={attack:'공격형',defense:'수비형',unknown:'모르겠음'};
 const roster=Object.entries(data.teams).flatMap(([team,players])=>Object.keys(players).map(name=>({id:`${team}:${name}`,team,name})));
 const allowed=new Set(roster.map(p=>p.id)),storageKey='courtside.player-pentagons.v1';
-let profiles={},saveAvailable=true,current=roster[0].id,compare='',team=roster[0].team;
+let profiles={},saveAvailable=true,current='',compare='';
 function initialKeywords(id){
  const player=roster.find(p=>p.id===id);if(!player)return [];
  const info=data.teams[player.team][player.name];
@@ -81,9 +81,26 @@ function renderKeywords(){
  });
  if(!profile(current).keywords.length)list.append(el('p','muted small','기록된 키워드가 없습니다. 알고 있는 특징을 추가하세요.'));
 }
+function renderRoster(){
+ const groups=$('player-roster');groups.replaceChildren();
+ for(const team of ['A','B','C','D']){
+  const players=roster.filter(p=>p.team===team),section=el('section','roster-team'),heading=el('div','roster-team-heading'),list=el('ul','roster-players');
+  heading.append(el('h3','',`${team}조`),el('span','badge',`${players.length}명`));section.append(heading);
+  players.forEach(player=>{
+   const item=el('li'),button=el('button','roster-player');button.type='button';button.dataset.player=player.id;
+   button.setAttribute('aria-pressed',String(player.id===current));button.setAttribute('aria-controls','ratings-panel');
+   button.setAttribute('aria-label',`${team}조 ${player.name}, ${tier(player.id)}, 능력치 확인 및 수정`);
+   button.append(el('strong','roster-name',player.name),el('span','badge',tier(player.id)));
+   button.addEventListener('click',()=>{
+    current=player.id;if(compare===current)compare='';root.hidden=false;render();
+    groups.querySelectorAll('.roster-player').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.player===current)));
+    $('rating-player-info').focus({preventScroll:true});
+    root.scrollIntoView({block:'start'});
+   });item.append(button);list.append(item);
+  });section.append(list);groups.append(section);
+ }
+}
 function render(){
- $('rating-team').value=team;
- const playerSelect=$('rating-player');playerSelect.replaceChildren();roster.filter(p=>p.team===team).forEach(p=>playerSelect.add(new Option(`${p.name} · ${tier(p.id)}`,p.id)));playerSelect.value=current;
  populate($('rating-compare'),compare,true,current);
  $('rating-player-info').textContent=`${label(current)} · 대회 등급 ${tier(current)} (공식 규정 기준)`;
  $('rating-keyword-text').value='';$('rating-keyword-status').textContent='';renderKeywords();
@@ -98,8 +115,6 @@ function render(){
   const select=$(id);select.replaceChildren();Object.entries(options).forEach(([v,name])=>select.add(new Option(name,v)));select.value=profile(current)[field];
  }draw();
 }
-$('rating-team').addEventListener('change',()=>{team=$('rating-team').value;current=roster.find(p=>p.team===team).id;if(compare===current)compare='';render();});
-$('rating-player').addEventListener('change',()=>{current=$('rating-player').value;if(compare===current)compare='';render();});
 $('rating-compare').addEventListener('change',()=>{compare=$('rating-compare').value;draw();});
 $('rating-position').addEventListener('change',()=>update({position:$('rating-position').value}));
 $('rating-style').addEventListener('change',()=>update({style:$('rating-style').value}));
@@ -113,5 +128,5 @@ $('rating-keyword-form').addEventListener('submit',event=>{
  update({keywords:[...keywords,{kind,text}]});renderKeywords();input.value='';status.textContent='키워드를 추가했습니다.';input.focus();
 });
 $('rating-save-status').textContent=saveAvailable?'입력값은 내 브라우저에 저장되며 공유 링크에 포함되지 않습니다.':'이 환경에서는 저장할 수 없어 현재 창에서만 유지됩니다.';
-render();
+renderRoster();
 })();
