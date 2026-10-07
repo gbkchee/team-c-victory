@@ -2,6 +2,10 @@
 
 C팀 8명의 복식 20경기를 준비하는 모바일 전략 페이지입니다.
 
+대상 저장소: https://github.com/gbkchee/team-c-victory
+
+배포 후 기본 주소: https://gbkchee.github.io/team-c-victory/
+
 - 밸런스형, 필승카드형, 체력안배형, 러브 보호형의 출전표 비교
 - 상대 A/B/D팀 선수 2명 선택 및 77개 조합의 대응 포인트 확인
 - 현재 전략·경기·상대 선택을 링크로 공유
@@ -11,6 +15,14 @@ C팀 8명의 복식 20경기를 준비하는 모바일 전략 페이지입니다
 선수별 입력값은 각자의 브라우저에만 저장됩니다. 다른 기기나 팀원과 자동으로 동기화되지 않으며 공유 링크에도 포함되지 않습니다.
 
 ## GitHub Pages 배포
+
+### 빌드된 파일을 웹사이트에서 업로드하는 경우
+
+`team-c-victory-pages.zip`을 압축 해제하고 그 안의 7개 파일을 저장소 최상위에 업로드합니다. ZIP 파일 자체나 압축 해제한 폴더를 올리는 대신 `index.html`이 저장소 최상위에 위치하도록 합니다.
+
+저장소 **Settings → Pages → Build and deployment**에서 **Source: Deploy from a branch**, **Branch: main**, **Folder: / (root)**를 선택하고 **Save**를 누릅니다. 배포 완료 후 **Visit site**로 접속합니다. 이 방식은 GitHub Actions 워크플로 파일을 직접 업로드할 필요가 없습니다.
+
+### 소스와 자동 배포 워크플로를 업로드하는 경우
 
 1. GitHub에 공개 저장소를 만들고 이 폴더의 파일을 `main` 브랜치에 업로드합니다. `.github/workflows/deploy.yml`도 포함합니다.
 2. 저장소 **Settings → Pages → Build and deployment → Source**를 **GitHub Actions**로 설정합니다.
