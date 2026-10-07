@@ -52,10 +52,16 @@ Figma 예시의 가상 이름·숫자 등급·잘못된 인원수·가상 데이
 
 ## GitHub와 산출물
 
-디자인 구현은 기존 프로젝트 a214656 커밋부터 이어집니다. 새 체크아웃의 GitHub 원격 초기 커밋 61ce4e2와 병합해 두 이력을 보존합니다. push 결과를 확인한 뒤 이 문서를 갱신합니다.
+디자인 구현 코드는 기존 커밋 a214656에서 가져왔습니다. 사용자 지정 경로의 체크아웃에서 원격 초기 커밋 61ce4e2와 병합했습니다. 새 경로의 병합 커밋은 9275a97입니다. main 브랜치에서 이력이 모두 보존됩니다.
 
-소스 ZIP: /Users/shyun.lee/Desktop/personal/TEAMC/github/team-c-victory-source.zip
+새 체크아웃에서 git push -u origin main을 시도했으나 Could not resolve host: github.com으로 실패했습니다. 코드 업로드나 Pages 배포는 완료하지 못했습니다. 일반 Mac 터미널의 네트워크 연결이 되는 환경에서 아래 명령을 실행하면 됩니다.
 
-배포 ZIP: /Users/shyun.lee/Desktop/personal/TEAMC/github/team-c-victory-pages.zip
+git -C /Users/shyun.lee/Desktop/personal/TEAMC/github/team-c-victory push -u origin main
+
+기존 소스 ZIP과 배포 ZIP은 다음 위치에 있습니다. 두 ZIP의 앱 소스와 assets/는 이 체크아웃과 동일합니다.
+
+소스 ZIP: /Users/shyun.lee/Desktop/personal/TEAMC/team-c-victory-source.zip
+
+배포 ZIP: /Users/shyun.lee/Desktop/personal/TEAMC/team-c-victory-pages.zip
 
 배포 ZIP에 든 HTML·CSS·JavaScript 파일과 assets/를 함께 배포해야 합니다.
