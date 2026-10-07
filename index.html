@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ko">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#023047"><title>🎾 최강씨씨씨C조!!!! 🎾</title><link rel="stylesheet" href="styles.css"><script defer src="data.js"></script><script defer src="validation.js"></script><script defer src="app.js"></script><script defer src="ratings.js"></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#023047"><title>🎾 최강씨씨씨C조!!!! 🎾</title><link rel="stylesheet" href="styles.css"><script defer src="data.js"></script><script defer src="validation.js"></script><script defer src="ratings.js"></script><script defer src="app.js"></script></head>
 <body>
 <header><div class="header-inner"><a class="brand" href="./"><h1 class="site-title">🎾 최강씨씨씨C조!!!! 🎾</h1></a><button id="share" class="outline" hidden>현재 선택 공유 ↗</button></div></header>
 <main>
@@ -12,30 +12,18 @@
 <div class="section-heading roster-heading"><h2><span>조별 선수 리스트</span></h2><span class="badge">총 31명</span></div>
 <p class="muted">포티 → 써티 → 러브 순서, 같은 등급은 가나다순입니다. 선수를 누르면 팝업에서 정보를 수정할 수 있습니다.</p>
 <div id="player-roster" class="roster-grid" aria-label="A·B·C·D조 전체 선수"></div>
-<dialog id="ratings-panel" class="ratings-panel" aria-labelledby="rating-player-info" aria-describedby="rating-help">
+<dialog id="ratings-panel" class="ratings-panel" aria-labelledby="rating-player-info" aria-describedby="profile-help">
 <div class="rating-dialog-heading"><h2 id="rating-player-info" tabindex="-1"></h2><button id="rating-close" type="button" class="rating-close" aria-label="선수 정보 팝업 닫기">×</button></div>
-<p id="rating-help" class="muted rating-help">11개 능력을 1~5, 0.5 간격으로 입력하세요. 포티·써티·러브는 공식 규정의 배정 등급이며, 능력 점수는 미입력으로 시작합니다.</p>
-<details class="rating-guide"><summary>1~5 평가 기준과 항목별 설명</summary>
-<p class="muted small">NTRP의 경기 활용도·안정성 관점을 참고한 대회용 평가입니다. 여기서 입력하는 1~5는 공식 NTRP 등급이 아닙니다. 잘 모르는 항목은 미입력으로 남겨 주세요.</p>
-<table class="rating-comparison"><thead><tr><th scope="col">점수</th><th scope="col">설명</th></tr></thead><tbody>
-<tr><th scope="row">1 · 잘 못 함</th><td>게임에서 사용하기 어렵고 기본 연결에도 도움이 필요합니다.</td></tr>
-<tr><th scope="row">2 · 자신 없음</th><td>편한 상황에서는 가능하지만 게임에서는 실수하거나 피하는 편입니다.</td></tr>
-<tr><th scope="row">3 · 게임에서 사용</th><td>일반적인 게임 상황에서 사용할 수 있습니다. 어려운 공은 흔들릴 수 있습니다.</td></tr>
-<tr><th scope="row">4 · 게임에서 자신 있게 사용</th><td>게임 중 꾸준히 활용하고, 필요할 때 의도한 플레이를 시도할 수 있습니다.</td></tr>
-<tr><th scope="row">5 · 이 구역 최고 권위자</th><td>우리 대회에서 이 항목을 가장 믿고 맡길 만한 강점으로 활용합니다.</td></tr>
-</tbody></table>
-<p class="muted small">1.5·2.5·3.5·4.5는 앞뒤 설명의 중간 수준입니다. 잘 모르는 항목은 미입력으로 남겨도 됩니다.</p>
-<ul id="rating-axis-help" class="small"></ul>
-</details>
-<div class="rating-selectors"><label>비교할 선수<select id="rating-compare"></select></label></div>
-<div id="rating-inputs" class="rating-inputs"></div>
-<div class="rating-preference-inputs"><label>선호 포지션<select id="rating-position"></select></label><label>게임 스타일<select id="rating-style"></select></label></div>
-<div id="rating-comparison-panel" class="rating-comparison-panel" hidden></div>
-<h3>선수 키워드</h3><p class="muted small">기존 시트의 강점·약점·특징을 먼저 표시합니다. 알고 있는 특징을 추가하거나 수정할 수 있습니다. 키워드는 40자 이내, 선수당 20개까지 입력하세요.</p>
-<div id="rating-keywords" class="rating-keywords"></div>
-<form id="rating-keyword-form" class="rating-keyword-form"><label>분류<select id="rating-keyword-kind"><option value="note">특징</option><option value="strong">강점</option><option value="weak">약점</option></select></label><label>키워드<input id="rating-keyword-text" maxlength="40" placeholder="코스 잘 봄, 슬라이스 약함, 잘 안 뜀" autocomplete="off"></label><button type="submit">추가</button></form>
-<p id="rating-keyword-status" class="muted small" role="status"></p>
-<button id="rating-reset" class="rating-reset">선택 선수의 입력 초기화 · 키워드는 시트 기록으로 복원</button><p id="rating-save-status" class="muted small" role="status"></p>
+<p id="profile-help" class="muted"></p>
+<section id="team-profile-section" hidden aria-label="C조 경기 선호">
+<div id="team-profile-fields" class="profile-fields"></div>
+</section>
+<section id="opponent-profile-section" hidden aria-label="상대 선수 관찰">
+<div id="opponent-profile-fields" class="profile-fields"></div>
+<div id="opponent-keywords" class="opponent-keywords"></div>
+</section>
+<button id="profile-reset" type="button" class="profile-reset"></button>
+<p id="profile-save-status" class="muted small" role="status"></p>
 </dialog>
 </section>
 <section id="page-strategy" class="page-panel" role="tabpanel" aria-labelledby="tab-strategy" hidden>

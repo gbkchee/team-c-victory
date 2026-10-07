@@ -50,20 +50,25 @@ function el(tag,cls,text){const n=document.createElement(tag);if(cls)n.className
 function button(text,active,action,cls){const b=el('button',cls,text);b.type='button';b.setAttribute('aria-pressed',String(active));b.addEventListener('click',action);return b;}
 function restoreSelection(){[state.p1,state.p2]=selections.get(key())||['',''];}
 function playerCard(name,team){
- const p=data.teams[team][name], card=el('div','player');card.append(el('strong','',name));
+ const p=data.teams[team][name],profile=window.PLAYER_PROFILES.get(team,name),model=window.PLAYER_PROFILE_MODEL,card=el('div','player');card.append(el('strong','',name.replace(/\s*\(시트:.*\)$/,'')));
  const tier=el('span','grade-badge player-tier',{forty:'4️⃣',thirty:'3️⃣',love:'🫶'}[p.tier]||'❔'),label={forty:'포티',thirty:'써티',love:'러브'}[p.tier]||'등급 미확인';
  tier.title=label;tier.setAttribute('role','img');tier.setAttribute('aria-label',label);card.append(tier);
- card.append(el('p','strength',`강점 · ${p.strong.join(', ')||'정보 없음'}`));
- card.append(el('p','weakness',`약점 · ${p.weak.join(', ')||'정보 없음'}`));
- if(p.note)card.append(el('p','',p.note));return card;
+ if(team==='C'){
+  card.append(el('p','',`선호 포지션 · ${model.positions[profile.position]}`),el('p','',`게임 스타일 · ${model.styles[profile.style]}`));
+  card.append(el('p','strength',`요즘 자신 있는 · ${profile.confidentSkills.map(key=>model.skills[key]).join(', ')||'아직 선택 전'}`));
+  card.append(el('p','',`파트너에게 바라는 역할 · ${profile.partnerRoles.map(key=>model.partnerRoles[key]).join(', ')||'아직 선택 전'}`));
+  card.append(el('p','',`경기·휴식 · ${model.restPreferences[profile.restPreference]}`));
+ }else{
+  card.append(el('p','',`포·백 성향 · ${model.opponentPositions[profile.tendency]}`),el('p','',`게임 스타일 · ${model.opponentStyles[profile.style]}`));
+  for(const [kind,title] of Object.entries(model.keywordKinds))card.append(el('p',kind==='strong'?'strength':kind==='weak'?'weakness':'',`${title} · ${profile.keywords.filter(item=>item.kind===kind).map(item=>item.text).join(', ')||'정보 없음'}`));
+ }return card;
 }
 function ownPlan(m){
- const notes=['중앙 공과 로브 담당, 콜을 경기 전에 정하세요.'];
- const ps=m.pair.map(n=>data.teams.C[n]);
- if(ps.some(p=>p.weak.some(w=>w.includes('체력'))))notes.push('체력 부담을 확인하며 포인트 사이 호흡과 수분을 챙기세요.');
- if(ps.some(p=>p.weak.some(w=>w.includes('늦게 풀림')||w.includes('긴장'))))notes.push('충분히 워밍업하고 초반에는 큰 목표로 리턴을 연결하세요.');
- if(ps.some(p=>p.weak.some(w=>w.includes('서브 에러'))))notes.push('서브는 무리한 속도보다 성공률을 우선하세요.');
- if(m.pair.includes('숭')&&m.pair.includes('만두'))notes.push('숭의 백핸드·백발리와 만두의 포핸드·포발리 역할을 활용하세요.');
+ const notes=['서로 원하는 파트너 역할을 확인하고, 중앙 공·로브 담당과 콜을 경기 전에 정하세요.'];
+ const ps=m.pair.map(name=>window.PLAYER_PROFILES.get('C',name));
+ if(ps.some(p=>p.restPreference==='rest'))notes.push('중간 휴식을 선호하는 선수가 있어 경기 사이 회복 시간을 함께 확인하세요.');
+ if(ps.some(p=>p.restPreference==='continuous'))notes.push('예열된 상태를 유지할 수 있도록 대기 중에도 가볍게 몸을 풀어 주세요.');
+ if(ps.some(p=>p.restPreference==='condition'))notes.push('오늘 컨디션과 휴식 필요 여부를 함께 확인하세요.');
  return notes.join(' ');
 }
 function submissionTime(time){const [h,m]=time.split(':').map(Number);const n=h*60+m-10;return `${String(Math.floor(n/60)).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`;}
@@ -77,7 +82,7 @@ function renderOpponents(){
  if(!state.p1||!state.p2){$('tactics').append(el('p','empty',`${m.team}조 선수 2명을 선택하면 조합별 대응 포인트가 표시됩니다.`));return;}
  const cards=el('div','players');cards.append(playerCard(state.p1,m.team),playerCard(state.p2,m.team));$('opponent-detail').append(cards);
  const combo=data.combos[m.team].find(c=>c.pair.includes(state.p1)&&c.pair.includes(state.p2));
- const panel=el('div','tactics');panel.append(el('h3','',`${state.p1} + ${state.p2} · 대응 포인트`));const list=el('ul');
+ const panel=el('div','tactics');panel.append(el('h3','',`${state.p1} + ${state.p2} · 대응 포인트`),el('p','muted small','기존 시트 기준의 공략 메모입니다. 새 키워드에 따른 자동 분석은 아직 연결되지 않았습니다.'));const list=el('ul');
  (combo?.points.length?combo.points:['정보 없음 · 초반 중앙 깊은 공으로 특성을 확인하세요.']).forEach(t=>list.append(el('li','',t)));panel.append(list);$('tactics').append(panel);
 }
 function render(){
@@ -98,6 +103,7 @@ function render(){
 }
 for(const [id,field] of [['opponent1','p1'],['opponent2','p2']])$(id).addEventListener('change',()=>{state[field]=$(id).value;selections.set(key(),[state.p1,state.p2]);renderOpponents();writeHash();});
 window.addEventListener('hashchange',()=>{readHash();render();});
+window.addEventListener('playerprofileschange',()=>render());
 $('share').addEventListener('click',async()=>{
  if(!/^https?:$/.test(location.protocol)){
   $('share-status').textContent='이 HTML 파일을 카카오톡 채팅방에 첨부해 공유하세요. 파일에서 선택한 상태는 받는 사람에게 전달되지 않습니다.';

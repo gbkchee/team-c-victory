@@ -380,7 +380,7 @@ window.BOARD_DATA = {
       "id": "stamina",
       "title": "체력안배형",
       "subtitle": "후반 유지",
-      "description": "시트에 체력 약점이 적힌 선수들의 연속 부담을 줄이고 체력 강점 선수와 섞는 버전.",
+      "description": "연속 출전 부담을 분산하고 경기 사이 휴식을 확보하는 기존 편성 버전.",
       "matches": [
         {
           "id": 1,
