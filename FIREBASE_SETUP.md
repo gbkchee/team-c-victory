@@ -34,7 +34,7 @@ firebase deploy --only firestore:rules --project team-c-victory
 
 Gemini API 비밀 키를 HTML·JavaScript·채팅에 넣지 않습니다. Firebase AI Logic의 설정 과정이 사용하는 Gemini 키는 Firebase 프록시가 관리합니다. App Check 공개 사이트 키는 별개이며 웹 앱에 포함할 수 있습니다.
 
-회사 보안 정책으로 키 생성이나 Google Cloud 설정이 막히면 해당 설정을 보류합니다. 현재 `appCheckSiteKey`는 비어 있어 Gemini 버튼이 비활성화됩니다. 선수 입력·공유·페어 추천·관찰 기반 기본 공략은 계속 동작합니다. 현재 작업에서는 키 생성·콘솔 설정·실제 Gemini 호출을 수행하지 않았습니다.
+reCAPTCHA 공개 사이트 키를 `gemini-config.js`에 입력했습니다. 키 생성 후에도 Firebase App Check에 같은 키를 등록하고 Firebase AI Logic을 설정해야 Gemini를 호출할 수 있습니다. 실제 Gemini 호출과 Firebase 콘솔의 설정 상태는 아직 확인하지 않았습니다. 선수 입력·공유·페어 추천·관찰 기반 기본 공략은 AI 설정과 별개로 계속 동작합니다.
 
 | 앱 설정 | 값 |
 | --- | --- |
