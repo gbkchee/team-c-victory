@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ko">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#003a70"><title>🎾 최강씨씨씨C조!!!! 🎾</title><link rel="stylesheet" href="styles.css"><script defer src="data.js"></script><script defer src="validation.js"></script><script defer src="profile-model.js"></script><script defer src="ratings.js"></script><script defer src="pairing-model.js"></script><script defer src="gemini-config.js"></script><script defer src="gemini-analysis.js"></script><script defer src="app.js"></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#023047"><title>🎾 최강씨씨씨C조!!!! 🎾</title><link rel="stylesheet" href="styles.css"><script defer src="data.js"></script><script defer src="validation.js"></script><script defer src="profile-model.js"></script><script defer src="ratings.js"></script><script defer src="pairing-model.js"></script><script defer src="gemini-config.js"></script><script defer src="gemini-analysis.js"></script><script defer src="app.js"></script></head>
 <body>
 <a class="skip-link" href="#main-content">본문으로 이동</a>
 <header id="site-header" class="site-header">
@@ -41,8 +41,10 @@
 <div id="player-roster" class="roster-grid" aria-label="C·A·B·D조 전체 선수"></div>
 <dialog id="ratings-panel" class="ratings-panel" aria-labelledby="rating-player-info" aria-describedby="profile-help">
 <div id="player-profile-editor" class="player-profile-editor">
-<div class="rating-dialog-heading"><button id="rating-back" type="button" class="rating-back" hidden>← 선수 목록</button><h2 id="rating-player-info" tabindex="-1"></h2><button id="rating-close" type="button" class="rating-close" aria-label="선수 정보 팝업 닫기">×</button></div>
+<div class="rating-dialog-heading"><div class="rating-editor-controls"><button id="rating-back" type="button" class="rating-back" hidden>← 선수 목록</button><span class="rating-editor-label">선수 정보 편집</span><span id="profile-save-indicator" class="profile-save-indicator" role="status"><img src="assets/profile-status-dot.svg" width="5" height="5" alt=""><span id="profile-save-label">연결 중</span></span><button id="rating-close" type="button" class="rating-close" aria-label="선수 정보 팝업 닫기">×</button></div><h2 id="rating-player-info" tabindex="-1"></h2></div>
+<div class="profile-editor-content">
 <p id="profile-help" class="muted"></p>
+<div id="profile-connection-error" class="profile-connection-error" hidden><p>아직 저장되지 않은 입력이 있어요.</p><p>입력 내용은 이 브라우저에 남아 있어요. 연결되면 다시 저장해 주세요.</p><button id="profile-save-retry" type="button">다시 시도</button></div>
 <section id="team-profile-section" hidden aria-label="C조 경기 선호">
 <div id="team-profile-fields" class="profile-fields"></div>
 </section>
@@ -54,6 +56,8 @@
 <button id="profile-reset" type="button" class="profile-reset"></button>
 <p id="profile-save-status" class="muted small" role="status"></p>
 </div>
+<footer class="friendly-note editor-footer"><p class="friendly-title">어차피 우승은 C조</p><p class="friendly-tagline">2026 TENET</p></footer>
+</div>
 </dialog>
 </section>
 <section id="page-strategy" class="page-panel" role="tabpanel" aria-labelledby="tab-strategy" hidden>
@@ -61,6 +65,16 @@
 <section class="strategy-panel">
 <div class="section-heading"><h2>01 <span>전략 선택</span></h2><span id="validation" role="status"></span></div>
 <div id="strategies" class="strategy-grid" aria-label="전략 선택"></div>
+<p id="recommendation-status" class="muted small" role="status"></p>
+<div id="balance-variants-block" class="balance-variants-block">
+<div class="pair-summary-heading"><h3>밸런스형 페어 제안</h3><span class="badge">3안 비교</span></div>
+<div id="balance-variants" class="balance-variants" aria-label="추천 1안·2안·3안 선택"></div>
+<p class="muted small">모든 안은 전원 5경기·동시간 중복 없음·러브끼리 페어 금지 조건을 지킵니다. 함께 편하게 경기할 구성을 골라 주세요.</p>
+</div>
+<p id="strategy-description" class="muted"></p>
+<div class="pair-summary-heading selected-pairs-heading"><h3>선택한 페어 구성</h3><span id="pair-summary-count" class="badge"></span></div>
+<div id="strategy-pairs" class="strategy-pairs" aria-label="선택 전략의 페어 구성" aria-live="polite"></div>
+<details class="pairing-settings"><summary>페어 운영·출전표 설정</summary>
 <div class="pair-summary-heading"><h3>페어 운영 방식</h3></div>
 <div id="operation-modes" class="strategy-grid" aria-label="페어 운영 방식"></div>
 <div id="fixed-pairs-editor" hidden>
@@ -69,20 +83,12 @@
 <div class="select-grid"><label>고정 선수 1<select id="fixed-player1"></select></label><label>고정 선수 2<select id="fixed-player2"></select></label></div>
 <button id="add-fixed-pair" type="button">고정 페어 추가</button>
 </div>
-<p id="recommendation-status" class="muted small" role="status"></p>
 <div id="lineup-controls" class="lineup-controls">
 <button id="view-draft" type="button">추천안 보기</button><button id="view-confirmed" type="button" disabled>팀 확정표 보기</button>
 <button id="confirm-lineup" class="primary-button" type="button" disabled>이 추천안으로 출전표 확정</button>
 </div>
 <p id="lineup-status" class="muted small" role="status"></p>
-<div id="balance-variants-block" class="balance-variants-block">
-<div class="pair-summary-heading"><h3>밸런스형 페어 제안</h3><span class="badge">3안 비교</span></div>
-<div id="balance-variants" class="balance-variants" aria-label="추천 1안·2안·3안 선택"></div>
-<p class="muted small">모든 안은 전원 5경기·동시간 중복 없음·러브끼리 페어 금지 조건을 지킵니다. 함께 편하게 경기할 구성을 골라 주세요.</p>
-</div>
-<p id="strategy-description" class="muted"></p>
-<div class="pair-summary-heading"><h3>페어 구성</h3><span id="pair-summary-count" class="badge"></span></div>
-<div id="strategy-pairs" class="strategy-pairs" aria-label="선택 전략의 페어 구성" aria-live="polite"></div>
+</details>
 </section>
 <section class="schedule-panel">
 <div class="section-heading"><h2>02 <span>경기 출전표</span></h2><span class="muted">C1–C20</span></div>
@@ -107,23 +113,20 @@
 </details>
 </section>
 <section id="page-analysis" class="page-panel" role="tabpanel" aria-labelledby="tab-analysis" hidden>
+<div class="analysis-introduction"><h2>상대 페어 분석</h2><p>상대 조와 두 선수를 선택하면<br>기본 관찰 요약이 바로 표시돼요.</p></div>
 <section class="analysis-selection-panel">
-<div class="section-heading"><h2><span>상대 페어 분석</span></h2><span class="badge">C조 vs A·B·D조</span></div>
-<p class="muted">우리 페어와 상대 조·페어를 선택해 기본 공략을 확인하세요. Gemini 연결 후에는 AI 분석도 사용할 수 있어요.</p>
-<div class="analysis-selection-grid">
-<fieldset class="analysis-field"><legend>우리 페어</legend>
-<div class="select-grid"><label>C조 선수 1<select id="our-player1"><option value="">선택하세요</option></select></label><label>C조 선수 2<select id="our-player2"><option value="">선택하세요</option></select></label></div>
-</fieldset>
+<h3>상대 페어 선택</h3>
 <fieldset class="analysis-field"><legend>상대 페어</legend>
-<label>상대 조<select id="analysis-team"><option value="">조를 선택하세요</option><option value="A">A조</option><option value="B">B조</option><option value="D">D조</option></select></label>
+<p class="muted small">상대 조</p><div id="analysis-teams" class="analysis-teams" aria-label="상대 조 선택"><button type="button" data-team="A" aria-pressed="false">A조</button><button type="button" data-team="B" aria-pressed="false">B조</button><button type="button" data-team="D" aria-pressed="false">D조</button></div>
 <div class="select-grid"><label>상대 선수 1<select id="opponent1" disabled><option value="">조를 먼저 선택하세요</option></select></label><label>상대 선수 2<select id="opponent2" disabled><option value="">조를 먼저 선택하세요</option></select></label></div>
 </fieldset>
-</div>
-<p class="muted small">같은 선수의 중복 선택과 러브끼리 페어는 선택할 수 없습니다. 분석 선택은 경기 출전표를 바꾸지 않습니다.</p>
+<p class="muted small">상대 조를 바꾸면 상대 선수 두 명이 비워져요.<br>같은 선수의 중복 선택과 러브끼리 페어는 선택할 수 없어요.</p>
+<p id="analysis-selection-status" class="analysis-selection-status" role="status"></p>
 </section>
+<section id="analysis-ai-panel" class="analysis-ai-panel"><h3>AI 상세 분석</h3><p class="muted">관찰 기록을 바탕으로 더 자세한 운영 제안을 확인해요.</p><button id="ai-analyze" class="primary-button" type="button" disabled>AI 상세 분석</button><p id="analysis-ai-status" class="muted small" role="status"></p></section>
 <div id="analysis-result" aria-live="polite"></div>
 </section>
-<footer class="friendly-note"><img src="assets/heart-handshake.svg" width="24" height="24" alt=""><p class="friendly-title">어차피 우승은 C조</p><p class="friendly-tagline">2026 TENET</p></footer>
+<footer class="friendly-note"><p class="friendly-title">어차피 우승은 C조</p><p class="friendly-tagline">2026 TENET</p></footer>
 <noscript>이 전략보드에는 JavaScript가 필요합니다. JavaScript를 허용하는 브라우저에서 열어주세요.</noscript>
 </main>
 <section id="player-detail-page" class="player-detail-page" role="main" aria-labelledby="rating-player-info" aria-describedby="profile-help" hidden></section>

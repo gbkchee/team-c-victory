@@ -52,6 +52,9 @@
  function profileVersion(players){
   return fingerprint([...players].sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0).map(player=>({id:player.id,tier:player.tier,profile:cleanProfile(player.profile,player.id.split(':')[0])})));
  }
- const model={positions,courtPreferences,styles,opponentStyles:styles,partnerRoles,restPreferences,keywordKinds,keywordSuggestions,traitSuggestions,cleanText,cleanTraits,cleanKeywords,cleanProfile,stableStringify,fingerprint,profileVersion};
+ function analysisVersion(players){
+  return fingerprint([...players].sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0).map(player=>{const profile=cleanProfile(player.profile,player.id.split(':')[0]);delete profile.legacyStrengths;return {id:player.id,tier:player.tier,profile};}));
+ }
+ const model={positions,courtPreferences,styles,opponentStyles:styles,partnerRoles,restPreferences,keywordKinds,keywordSuggestions,traitSuggestions,cleanText,cleanTraits,cleanKeywords,cleanProfile,stableStringify,fingerprint,profileVersion,analysisVersion};
  if(typeof module==='object'&&module.exports)module.exports=model;else root.PLAYER_PROFILE_MODEL=model;
 })(typeof window==='undefined'?globalThis:window);

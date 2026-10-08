@@ -118,6 +118,12 @@ if(typeof document!=='undefined')(() => {
    :cloud?.status==='error'?(cloud.message||'팀 공유 저장소 연결 실패 · 이 브라우저에 임시 저장')
    :saveAvailable?'팀 공유 저장소에 연결 중입니다.':'저장할 수 없어 현재 창에서만 유지됩니다.';
   $('profile-save-status').textContent=status;
+  const pending=cloud?.pendingCount>0,failed=cloud?.status==='error';
+  $('profile-save-label').textContent=failed?'연결 실패':cloud?.status==='ready'?(pending?'저장 중':'저장 완료'):'연결 중';
+  $('profile-save-indicator').dataset.status=failed?'error':pending?'saving':cloud?.status==='ready'?'ready':'connecting';
+  $('profile-save-indicator').querySelector('img').src=pending?'assets/profile-saving-dot.svg':'assets/profile-status-dot.svg';
+  $('profile-connection-error').hidden=!failed;
+  $('profile-save-retry').disabled=cloud?.status==='connecting';
   const menuStatus=$('cloud-status');if(menuStatus)menuStatus.textContent=status;
  }
  function persist(fields=null){
@@ -147,7 +153,9 @@ if(typeof document!=='undefined')(() => {
  });
  function choiceField(title,field,options,multiple=false,help='',stack=false){
   const group=el('fieldset','profile-field'),legend=el('legend','',title),choices=el('div','profile-choices'+(stack?' profile-choices-stack':''));
-  group.append(legend);if(help)group.append(el('p','muted small',help));
+  const steps=person(current).team==='C'?{position:'01',courtPreference:'02',style:'03',partnerRoles:'04',restPreference:'06'}:{style:'02'};
+  legend.dataset.step=steps[field];group.dataset.field=field;
+  group.append(legend,el('p','muted small',multiple?'여러 개 선택':'하나 선택'));
   const inputs=[];
   for(const [value,name] of Object.entries(options)){
    if(value==='')continue;
@@ -167,121 +175,109 @@ if(typeof document!=='undefined')(() => {
    });
    inputs.push(input);label.append(input,el('span','profile-choice-label',name));choices.append(label);
   }
-  group.append(choices);return group;
+  group.append(choices);if(help)group.append(el('p','muted small',help));return group;
  }
  function renderTeamFields(){
   const fields=$('team-profile-fields');fields.replaceChildren(
    choiceField('선호 리턴 자리','position',positions),
    choiceField('편한 플레이 위치','courtPreference',courtPreferences),
    choiceField('플레이 성향','style',styles),
-   choiceField('잘 맞는 파트너','partnerRoles',partnerRoles,true,'복수 선택 · 함께 경기할 때 편한 역할을 골라 주세요.')
+   choiceField('잘 맞는 파트너','partnerRoles',partnerRoles,true,'‘상관없음’을 고르면 다른 선택은 해제돼요.')
   );
   renderTraits();
   const preferences=el('div','profile-fields profile-fields-group');
   preferences.append(choiceField('경기·휴식 선호','restPreference',restPreferences));fields.append(preferences);
  }
-function renderTraits(){
-  const draft=$('profile-trait-text')?.value||'',parent=$('team-profile-fields');
-  $('team-traits')?.remove();
-  const section=el('section','team-traits keyword-section');section.id='team-traits';section.setAttribute('aria-label','특징');
-  section.append(el('h3','','특징'),el('p','muted small','복수 입력 · 본인의 플레이 특징을 자유롭게 알려 주세요. 특징은 40자 이내, 최대 20개까지 추가할 수 있어요.'));
-  const list=el('div','rating-keywords'),traits=profile(current).traits;
-  for(const [index,text] of traits.entries()){
+
+ function keywordEditor({title,step,items,total,own,kind,draft,suggestions,addItem,removeItem}){
+  const prefix=own?'profile-trait':'profile-keyword',suffix=own?'':'-'+kind;
+  const section=el('section','keyword-section'),heading=el('div','profile-field-heading'),name=el('h3','',title);
+  name.dataset.step=step;heading.append(name,el('span','keyword-count',own?total+'/20':items.length+'개'));
+  section.append(heading,el('p','muted small',own?'최대 20개 · 키워드당 40자':'3개 항목 합쳐 최대 20개 · 키워드당 40자'));
+  const list=el('div','rating-keywords');
+  for(const [index,text] of items.entries()){
    const chip=el('span','keyword-chip'),remove=el('button','keyword-remove','×');
-   remove.type='button';remove.setAttribute('aria-label',text+' 특징 삭제');
-   remove.addEventListener('click',()=>{
-    update({traits:profile(current).traits.filter(item=>item!==text)});renderTraits();
-    $('profile-trait-status').textContent='특징을 삭제했습니다.';
-    const buttons=$('team-traits').querySelectorAll('.keyword-remove');
-    (buttons[Math.min(index,buttons.length-1)]||$('profile-trait-text')).focus();
-   });
+   remove.type='button';remove.setAttribute('aria-label',title+' '+text+' 키워드 삭제');
+   remove.addEventListener('click',()=>{removeItem(text);const buttons=(own?$('team-traits'):section.parentNode)?.querySelectorAll('.keyword-remove')||[];(buttons[Math.min(index,buttons.length-1)]||$(prefix+'-text'+suffix))?.focus();});
    chip.append(el('span','',text),remove);list.append(chip);
   }
-  if(!traits.length)list.append(el('p','muted small','아직 입력한 특징이 없습니다.'));
-  const form=el('form','profile-keyword-form'),label=el('label','','특징 직접 입력'),input=el('input'),add=el('button','','추가');
-  input.type='text';input.id='profile-trait-text';input.maxLength=40;input.autocomplete='off';input.value=draft;
-  input.placeholder='예: 왼손잡이, 파트너와 콜을 많이 함';label.htmlFor=input.id;label.append(input);add.type='submit';form.append(label,add);
-  const status=el('p','muted small');status.id='profile-trait-status';status.setAttribute('role','status');
-  function addTrait(text,clearDraft){
-   text=cleanText(text);const all=profile(current).traits;
-   if(!text){status.textContent='특징을 입력하세요.';return;}
-   if(text.length>40){status.textContent='특징은 40자 이내로 입력하세요.';return;}
-   if(all.includes(text)){status.textContent='이미 등록한 특징입니다.';return;}
-   if(all.length>=20){status.textContent='특징은 선수당 20개까지 입력할 수 있습니다.';return;}
-   update({traits:[...all,text]});if(clearDraft)input.value='';renderTraits();
-   $('profile-trait-status').textContent='특징을 추가했습니다.';$('profile-trait-text').focus();
+  if(!items.length)list.append(el('p','keyword-empty','아직 입력한 키워드가 없습니다'));
+  const form=el('form','profile-keyword-form'),label=el('label','sr-only',title+' 직접 입력'),input=el('input'),add=el('button','','추가');
+  input.type='text';input.id=prefix+'-text'+suffix;input.autocomplete='off';input.value=draft;input.placeholder='키워드 직접 입력';input.disabled=total>=20;
+  label.htmlFor=input.id;add.type='submit';form.append(label,input,add);
+  const help=el('div','keyword-input-help'),counter=el('span','',draft.length+'/40');
+  help.append(counter,el('span','','키워드당 최대 40자'));
+  const status=el('p','keyword-input-status');status.id=prefix+'-status'+suffix;status.setAttribute('role','status');input.setAttribute('aria-describedby',status.id);
+  function refresh(){
+   const value=cleanText(input.value),overflow=value.length>40,duplicate=items.includes(value);
+   counter.textContent=input.value.length+'/40';add.disabled=!value||overflow||duplicate||total>=20;
+   input.setAttribute('aria-invalid',String(overflow||duplicate));
+   status.dataset.state=overflow||duplicate?'error':total>=20?'limit':'';
+   status.textContent=total>=20?'최대 20개까지 추가할 수 있어요. 삭제하면 다시 추가할 수 있어요.':overflow?'키워드는 40자 이내로 입력하세요.':duplicate?'이미 등록한 키워드입니다.':'';
   }
-  form.addEventListener('submit',event=>{event.preventDefault();addTrait(input.value,true);});
-  const suggestions=el('div','keyword-suggestions');suggestions.setAttribute('aria-label','특징 빠른 추가');
-  for(const text of [...new Set([...traitSuggestions,...sharedTraitSuggestions])]){
-   const button=el('button','keyword-suggestion','＋ '+text);button.type='button';button.disabled=traits.includes(text);
-   button.addEventListener('click',()=>addTrait(text,false));suggestions.append(button);
+  input._refreshState=refresh;input.addEventListener('input',refresh);
+  form.addEventListener('submit',event=>{
+   event.preventDefault();refresh();const value=cleanText(input.value);
+   if(total>=20||value.length>40||items.includes(value))return;
+   if(!value){status.textContent='키워드를 입력하세요.';return;}
+   addItem(value,true);
+  });
+  const quick=el('div','keyword-suggestions');quick.setAttribute('aria-label',title+' 빠른 추가');
+  for(const text of [...new Set(suggestions)]){
+   const selected=items.includes(text),button=el('button','keyword-suggestion',selected?'✓ '+text:'＋ '+text);button.type='button';
+   button.disabled=selected||total>=20;button.dataset.selected=String(selected);
+   button.addEventListener('click',()=>addItem(text,false));quick.append(button);
   }
-  section.append(list,form,el('p','muted small','빠른 추가'),suggestions,status);
-  const preferences=parent.querySelector('.profile-fields-group');
-  parent.insertBefore(section,preferences||null);
+  section.append(list,form,help,status,el('p','keyword-recommendation-label','추천 · 추가하기 전에는 기록되지 않아요'),quick);refresh();return section;
+ }
+ function renderTraits(){
+  const draft=$('profile-trait-text')?.value||'',parent=$('team-profile-fields');$('team-traits')?.remove();
+  const traits=profile(current).traits;
+  const section=keywordEditor({title:'특징',step:'05',items:traits,total:traits.length,own:true,draft,suggestions:[...traitSuggestions,...sharedTraitSuggestions],
+   addItem:(text,clearDraft)=>{
+    if(profile(current).traits.length>=20||profile(current).traits.includes(text))return;
+    update({traits:[...profile(current).traits,text]});if(clearDraft)$('profile-trait-text').value='';renderTraits();
+    $('profile-trait-status').textContent=profile(current).traits.length>=20?'최대 20개까지 추가할 수 있어요. 삭제하면 다시 추가할 수 있어요.':'특징을 추가했습니다.';$('profile-trait-text').focus();
+   },
+   removeItem:text=>{update({traits:profile(current).traits.filter(item=>item!==text)});renderTraits();$('profile-trait-status').textContent='특징을 삭제했습니다.';}
+  });
+  section.id='team-traits';section.setAttribute('aria-label','특징');
+  parent.insertBefore(section,parent.querySelector('.profile-fields-group')||null);
  }
  function renderOpponentFields(){
-  $('opponent-profile-fields').replaceChildren(
-   choiceField('플레이 성향','style',opponentStyles)
-  );
-  renderKeywords();
+  $('opponent-profile-fields').replaceChildren(choiceField('플레이 성향','style',opponentStyles));renderKeywords();
  }
  function renderKeywords(){
   const drafts=Object.fromEntries(Object.keys(keywordKinds).map(kind=>[kind,$('profile-keyword-text-'+kind)?.value||'']));
   const groups=$('opponent-keywords'),features=$('opponent-features');groups.replaceChildren();features.replaceChildren();
+  const total=profile(current).keywords.length,limit=el('div','opponent-keyword-limit');limit.append(el('span','','전체 키워드 · 3개 항목 합산'),el('strong','',total+'/20'));features.append(limit);
   for(const [kind,title] of Object.entries(keywordKinds)){
-   const section=el('section','keyword-section'),list=el('div','rating-keywords');
-   section.append(el('h3','',title));
-   const keywords=profile(current).keywords.filter(keyword=>keyword.kind===kind);
-   for(const keyword of keywords){
-    const chip=el('span','keyword-chip'),remove=el('button','keyword-remove','×');
-    remove.type='button';remove.setAttribute('aria-label',title+' '+keyword.text+' 키워드 삭제');
-    remove.addEventListener('click',()=>{
-     update({keywords:profile(current).keywords.filter(item=>item.kind!==kind||item.text!==keyword.text)});
-     renderKeywords();$('profile-keyword-status-'+kind).textContent='키워드를 삭제했습니다.';
-    });
-    chip.append(el('span','',keyword.text),remove);list.append(chip);
-   }
-   if(!keywords.length)list.append(el('p','muted small','아직 기록된 '+title+'이 없습니다.'));
-   const form=el('form','profile-keyword-form'),inputLabel=el('label','',title+' 키워드 추가'),input=el('input'),add=el('button','','추가');
-   input.type='text';input.id='profile-keyword-text-'+kind;input.maxLength=40;input.autocomplete='off';input.value=drafts[kind];
-   input.placeholder={pattern:'서브 후 네트 접근, 포칭 등',weak:'몸쪽 공, 높은 백핸드 등',note:'왼손잡이, 슬라이스 서브 등'}[kind];
-   inputLabel.htmlFor=input.id;inputLabel.append(input);add.type='submit';form.append(inputLabel,add);
-   const status=el('p','muted small');status.id='profile-keyword-status-'+kind;status.setAttribute('role','status');
-   function addKeyword(text){
-    text=cleanText(text);const all=profile(current).keywords;
-    if(!text){status.textContent='키워드를 입력하세요.';return;}
-    if(text.length>40){status.textContent='키워드는 40자 이내로 입력하세요.';return;}
-    if(all.length>=20){status.textContent='키워드는 선수당 총 20개까지 입력할 수 있습니다.';return;}
-    if(all.some(item=>item.kind===kind&&item.text===text)){status.textContent='이미 등록한 키워드입니다.';return;}
-    update({keywords:[...all,{kind,text}]});input.value='';renderKeywords();
-    $('profile-keyword-status-'+kind).textContent='키워드를 추가했습니다.';$('profile-keyword-text-'+kind).focus();
-   }
-   form.addEventListener('submit',event=>{event.preventDefault();addKeyword(input.value);});
-   const suggestions=el('div','keyword-suggestions');suggestions.setAttribute('aria-label',title+' 키워드 빠른 추가');
-   for(const text of [...new Set([...keywordSuggestions[kind],...(sharedKeywordSuggestions[kind]||[])])]){
-    const button=el('button','keyword-suggestion','＋ '+text);button.type='button';
-    button.disabled=keywords.some(item=>item.text===text);
-    button.addEventListener('click',()=>addKeyword(text));suggestions.append(button);
-   }
-   section.append(list,form,el('p','muted small','빠른 추가'),suggestions,status);(kind==='note'?features:groups).append(section);
+   const items=profile(current).keywords.filter(item=>item.kind===kind).map(item=>item.text);
+   const section=keywordEditor({title,step:{note:'01',pattern:'03',weak:'04'}[kind],items,total,own:false,kind,draft:drafts[kind],suggestions:[...keywordSuggestions[kind],...(sharedKeywordSuggestions[kind]||[])],
+    addItem:(text,clearDraft)=>{
+     const all=profile(current).keywords;if(all.length>=20||all.some(item=>item.kind===kind&&item.text===text))return;
+     update({keywords:[...all,{kind,text}]});if(clearDraft)$('profile-keyword-text-'+kind).value='';renderKeywords();
+     $('profile-keyword-status-'+kind).textContent=profile(current).keywords.length>=20?'최대 20개까지 추가할 수 있어요. 삭제하면 다시 추가할 수 있어요.':'키워드를 추가했습니다.';$('profile-keyword-text-'+kind).focus();
+    },
+    removeItem:text=>{update({keywords:profile(current).keywords.filter(item=>item.kind!==kind||item.text!==text)});renderKeywords();$('profile-keyword-status-'+kind).textContent='키워드를 삭제했습니다.';}
+   });(kind==='note'?features:groups).append(section);
   }
  }
  function preserveDrafts(operation){
   const drafts=[...editor.querySelectorAll('input')].filter(input=>input.type==='text').map(input=>({id:input.id,value:input.value}));
   const active=document.activeElement,focused=editor.contains(active)&&active.type==='text'?{id:active.id,start:active.selectionStart,end:active.selectionEnd}:null;
   operation();
-  for(const draft of drafts){const input=$(draft.id);if(input)input.value=draft.value;}
+  for(const draft of drafts){const input=$(draft.id);if(input){input.value=draft.value;input._refreshState?.();}}
   if(focused){const input=$(focused.id);if(input){input.focus({preventScroll:true});if(typeof focused.start==='number')input.setSelectionRange?.(focused.start,focused.end);}}
  }
  function render(keepDrafts=false){
   if(keepDrafts){preserveDrafts(()=>render());return;}
   const own=person(current).team==='C';
-  $('rating-player-info').replaceChildren(el('span','',label(current)),tierBadge(current));
+  const grade=el('span','rating-player-grade');grade.append(el('span','',tier(current)),tierBadge(current));
+  $('rating-player-info').replaceChildren(el('span','','🎾 '+label(current)),grade);
   $('profile-help').textContent=own
-   ?'본인이 원하는 경기 방식을 알려 주세요. 선택하지 않은 항목이 있어도 괜찮아요.'
-   :'실제로 본 플레이를 기록해 주세요. 잘 모르면 모르겠음으로 남겨 주세요. 키워드는 40자 이내, 선수당 총 20개까지 추가할 수 있어요.';
+   ?'모두 선택 사항이에요. 편한 경기 취향만 나눠주세요.'
+   :'모두 선택 사항이에요. 직접 본 내용만 기록해주세요.';
   $('team-profile-section').hidden=!own;$('opponent-profile-section').hidden=own;
   $('team-profile-fields').replaceChildren();$('opponent-profile-fields').replaceChildren();$('opponent-keywords').replaceChildren();$('opponent-features').replaceChildren();
   if(own)renderTeamFields();else renderOpponentFields();
@@ -317,7 +313,7 @@ function renderTraits(){
   const highlights=el('span','roster-highlights');
   const rows=player.team==='C'
    ? [['리턴 자리',positions[info.position],'strong'],['편한 위치',courtPreferences[info.courtPreference],'note'],['특징',info.traits.join(', ')||'아직 입력 전','note']]
-   :[['주로 쓰는',info.keywords.filter(item=>item.kind==='pattern').map(item=>item.text).join(', ')||'정보 없음','strong'],['어려워하는',info.keywords.filter(item=>item.kind==='weak').map(item=>item.text).join(', ')||'정보 없음','weak']];
+   :[['패턴',info.keywords.filter(item=>item.kind==='pattern').map(item=>item.text).join(', ')||'정보 없음','strong'],['상황',info.keywords.filter(item=>item.kind==='weak').map(item=>item.text).join(', ')||'정보 없음','weak']];
   for(const [title,text,kind] of rows){
    const row=el('span','roster-highlight roster-highlight-'+kind),value=el('span','roster-highlight-value',text);
    value.title=text;row.append(el('span','roster-highlight-label',title),value);highlights.append(row);
@@ -336,6 +332,7 @@ function renderTraits(){
   $('roster-heading-'+shortcut.dataset.group).focus({preventScroll:true});
   section.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});
  });
+ $('profile-save-retry').addEventListener('click',()=>window.PLAYER_PROFILE_CLOUD?.retry());
  $('rating-close').addEventListener('click',returnToRoster);
  $('rating-back').addEventListener('click',returnToRoster);
  root.addEventListener('close',()=>{

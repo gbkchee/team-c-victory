@@ -34,7 +34,7 @@ class Element extends EventTarget {
  close(){this.open=false;this.dispatchEvent({type:'close'});}
 }
 function documentFixture(){
- const document=new EventTarget();document.body=new Element('body',document);document.createElement=tag=>new Element(tag,document);document.getElementById=id=>document.body.querySelector('#'+id);document.querySelectorAll=selector=>document.body.querySelectorAll(selector);
+ const document=new EventTarget();document.body=new Element('body',document);document.createElement=tag=>new Element(tag,document);document.getElementById=id=>document.body.querySelector('#'+id);document.querySelectorAll=selector=>document.body.querySelectorAll(selector);document.querySelector=selector=>{const parts=selector.split(' ');let node=document.body;for(const part of parts)node=node.querySelector(part);return node;};
  const stack=[document.body],voidTags=new Set(['meta','link','img','input','br']);
  for(const match of read('index.html').matchAll(/<\/?([a-z][\w-]*)\b([^>]*)>|([^<]+)/gi)){
   if(match[3]){stack.at(-1)._text+=match[3].trim();continue;}
@@ -53,9 +53,9 @@ function firestoreFixture(){
  const api={
   initializeApp:()=>({}),getAuth:()=>({currentUser:{uid:'fixture-user'}}),signInAnonymously:async()=>({}),getFirestore:()=>({}),
   collection:(_,path)=>({path,collection:true}),doc:(ref,...parts)=>({path:[ref.path,...parts].filter(Boolean).join('/')}),getDocs:async ref=>snapshot(ref),serverTimestamp:()=>({seconds:Date.now()/1000}),Timestamp:{fromMillis:value=>({seconds:value/1000})},
-  onSnapshot:(ref,callback)=>{const entry={ref,callback};subscriptions.add(entry);queueMicrotask(()=>callback(snapshot(ref)));return ()=>subscriptions.delete(entry);},
+  onSnapshot:(ref,callback,onError)=>{const entry={ref,callback};subscriptions.add(entry);queueMicrotask(()=>{if(api.deniedCollection===ref.path)onError?.({code:'permission-denied'});else callback(snapshot(ref));});return ()=>subscriptions.delete(entry);},
   runTransaction:(_,callback)=>{const task=tail.then(async()=>{const writes=[];const result=await callback({get:async ref=>docSnapshot(ref.path),set:(ref,value)=>writes.push([ref.path,clone(value)])});for(const [path,value] of writes)entries.set(path,value);if(writes.length)broadcast();return result;});tail=task.catch(()=>{});return task;},
-  fixtureImport:async path=>{if(api.importError)throw api.importError;return path.endsWith('firebase-ai.js')?{getAI:()=>({}),GoogleAIBackend:class {},Schema:Object.fromEntries(['object','array','string','enumString'].map(name=>[name,value=>({type:name,...value})])),getGenerativeModel:(_,options,requestOptions)=>({generateContent:async text=>{api.generations=(api.generations||0)+1;api.lastOptions={options,requestOptions};const context=JSON.parse(text),result=api.generate?await api.generate(context):{direction:'Gemini 연결 결과',tactics:[{title:'패턴 확인',action:'초반 반응을 확인하세요.',basis:'입력된 관찰'}],roles:context.ownPlayerIds.map(playerId=>({playerId,action:'담당을 정하세요.'})),checks:['로브 담당 확인']};return {response:{text:()=>JSON.stringify(result),candidates:[{finishReason:'STOP'}]}};}})}:{initializeAppCheck:()=>({}),ReCaptchaEnterpriseProvider:class {},getToken:async()=>({token:'fixture-attestation'})};}
+  fixtureImport:async path=>{if(api.importError)throw api.importError;return path.endsWith('firebase-ai.js')?{getAI:()=>({}),GoogleAIBackend:class {},Schema:Object.fromEntries(['object','array','string','enumString'].map(name=>[name,value=>({type:name,...value})])),getGenerativeModel:(_,options,requestOptions)=>({generateContent:async text=>{api.generations=(api.generations||0)+1;api.lastOptions={options,requestOptions};const context=JSON.parse(text),result=api.generate?await api.generate(context):{summary:'Gemini 연결 결과',patterns:[{title:'관찰 패턴',action:'패턴을 확인하세요.',basis:'입력된 관찰'}],cautions:[{title:'주의할 점',action:'반복 패턴을 확인하세요.',basis:'입력된 관찰'}],tactics:[{title:'패턴 확인',action:'초반 반응을 확인하세요.',basis:'입력된 관찰'}],checks:['로브 담당 확인']};return {response:{text:()=>JSON.stringify(result),candidates:[{finishReason:'STOP'}]}};}})}:{initializeAppCheck:()=>({}),ReCaptchaEnterpriseProvider:class {},getToken:async()=>({token:'fixture-attestation'})};}
  };
  return {entries,api,broadcast};
 }
@@ -115,9 +115,9 @@ test('운영 모드, 일부 고정, 공동 확정표와 프로필 변경 후 유
 test('AI는 버튼으로만 호출하고 선택이 바뀐 뒤 늦은 결과를 표시하지 않는다',async()=>{
  let calls=0,release;const store=firestoreFixture();store.api.analyze=async()=>{calls++;return await new Promise(resolve=>{release=resolve;});};
  const one=browser(store,{hash:'#page=analysis&own1=우디&own2=숭&team=D&p1=아르(시트%3A%20야르)&p2=스노'});await one.flush();one.window.PLAYER_PROFILE_CLOUD.analyzeMatchup=request=>store.api.analyze(request);assert.equal(calls,0);assert.equal(one.$('ai-analyze').disabled,false);one.$('ai-analyze').click();assert.equal(calls,1);
- one.select('opponent2','초코');release({status:'ready',result:{direction:'늦은 이전 결과',tactics:[],roles:[],checks:[]}});await one.flush();assert.ok(!one.$('analysis-result').textContent.includes('늦은 이전 결과'));assert.equal(one.$('ai-analyze').disabled,false);
- store.api.analyze=async request=>{calls++;assert.ok(request.opponentPlayerIds.includes('D:아르(시트: 야르)'));return {status:'ready',cached:true,result:{direction:'새 선택 분석',tactics:[{title:'초반 확인',action:'로브 대처를 확인하세요.',basis:'입력 기록'}],roles:request.ownPlayerIds.map(playerId=>({playerId,action:'커버 약속'})),checks:['가능한 샷 확인']}};};
- await Promise.all(one.$('ai-analyze').click());assert.equal(calls,2);assert.ok(one.$('analysis-result').textContent.includes('새 선택 분석'));assert.ok(one.$('analysis-result').textContent.includes('팀원이 생성한 분석'));
+ one.select('opponent2','초코');release({status:'ready',result:{summary:'늦은 이전 결과',patterns:[],cautions:[],tactics:[],checks:[]}});await one.flush();assert.ok(!one.$('analysis-result').textContent.includes('늦은 이전 결과'));assert.equal(one.$('ai-analyze').disabled,false);
+ store.api.analyze=async request=>{calls++;assert.ok(request.opponentPlayerIds.includes('D:아르(시트: 야르)'));return {status:'ready',cached:true,result:{summary:'새 선택 분석',patterns:[{title:'패턴',action:'확인',basis:'관찰'}],cautions:[{title:'주의',action:'확인',basis:'관찰'}],tactics:[{title:'초반 확인',action:'로브 대처를 확인하세요.',basis:'입력 기록'}],checks:['가능한 샷 확인']}};};
+ await Promise.all(one.$('ai-analyze').click());assert.equal(calls,2);assert.ok(one.$('analysis-result').textContent.includes('새 선택 분석'));assert.ok(one.$('analysis-ai-status').textContent.includes('팀원이 생성한 분석'));
 });
 test('초기화 후 오래된 브라우저 입력을 서버에 다시 이관하지 않는다',async()=>{
  const store=firestoreFixture(),{blankDocuments}=require('./reset-test-data.cjs');
@@ -129,8 +129,8 @@ test('초기화 후 오래된 브라우저 입력을 서버에 다시 이관하�
 test('공동 AI 분석 대기를 구독하고 시간 초과 후 재시도할 수 있다',async()=>{
  const store=firestoreFixture(),key='fixture-pending';store.api.analyze=async()=>({status:'pending',analysisKey:key});
  const one=browser(store,{hash:'#page=analysis&own1=우디&own2=숭&team=A&p1=동글&p2=펩시'});await one.flush();one.window.PLAYER_PROFILE_CLOUD.analyzeMatchup=request=>store.api.analyze(request);await Promise.all(one.$('ai-analyze').click());assert.equal(one.$('ai-analyze').disabled,true);
- store.entries.set('geminiMatchupAnalyses/'+key,{status:'ready',ownPlayerIds:['C:우디','C:숭'],result:{direction:'공동 분석 완료',tactics:[{title:'초반 확인',action:'반응을 확인하세요.',basis:'입력 기록'}],roles:['C:우디','C:숭'].map(playerId=>({playerId,action:'담당을 정하세요.'})),checks:['담당 확인']}});store.broadcast();await one.flush();assert.ok(one.$('analysis-result').textContent.includes('공동 분석 완료'));assert.equal(one.$('ai-analyze').disabled,false);
- store.api.analyze=async()=>({status:'pending',analysisKey:'fixture-timeout'});await Promise.all(one.$('ai-analyze').click());await one.advance(90001);assert.ok(one.$('analysis-result').textContent.includes('다시 시도'));assert.equal(one.$('ai-analyze').disabled,false);
+ store.entries.set('geminiMatchupAnalyses/'+key,{status:'ready',opponentPlayerIds:['A:동글','A:펩시'],result:{summary:'공동 분석 완료',patterns:[{title:'패턴',action:'확인',basis:'관찰'}],cautions:[{title:'주의',action:'확인',basis:'관찰'}],tactics:[{title:'초반 확인',action:'반응을 확인하세요.',basis:'입력 기록'}],checks:['담당 확인']}});store.broadcast();await one.flush();assert.ok(one.$('analysis-result').textContent.includes('공동 분석 완료'));assert.equal(one.$('ai-analyze').disabled,false);
+ store.api.analyze=async()=>({status:'pending',analysisKey:'fixture-timeout'});await Promise.all(one.$('ai-analyze').click());await one.advance(90001);assert.ok(one.$('analysis-ai-status').textContent.includes('다시 시도'));assert.equal(one.$('ai-analyze').disabled,false);
 });
 test('연결 중 수정한 항목은 보존하고 다른 항목은 최신 서버 값으로 읽는다',async()=>{
  const store=firestoreFixture(),{blankDocuments}=require('./reset-test-data.cjs');for(const [path,value] of blankDocuments({seconds:1}))store.entries.set(path,value);
@@ -141,13 +141,13 @@ test('연결 중 수정한 항목은 보존하고 다른 항목은 최신 서버
 });
 test('키 없이 기본 공략을 표시하고 관찰 수정과 함께 갱신한다',async()=>{
  const store=firestoreFixture(),one=browser(store,{siteKey:'',hash:'#page=analysis&own1=우디&own2=숭&team=A&p1=동글&p2=펩시'});await one.flush();
- assert.equal(one.window.PLAYER_PROFILE_CLOUD.status,'ready');assert.equal(one.$('ai-analyze').disabled,true);assert.ok(one.$('analysis-result').textContent.includes('기본 공략'));assert.equal(store.api.generations,undefined);
+ assert.equal(one.window.PLAYER_PROFILE_CLOUD.status,'ready');assert.equal(one.$('ai-analyze').disabled,true);assert.ok(one.$('analysis-result').textContent.includes('기본 관찰 요약'));assert.equal(store.api.generations,undefined);
  const previousCount=store.entries.get('playerProfilesV2/A:펩시').profile.keywords.length;
  one.open('A:펩시');one.submit('profile-keyword-text-pattern','포칭 자주 함');one.submit('profile-keyword-text-weak','높은 백핸드');await one.flush();
  const result=one.$('analysis-result').textContent;assert.ok(result.includes('포칭 움직임 확인'));assert.ok(result.includes('높은 백핸드 반응 확인'));assert.ok(result.includes('펩시 · 포칭 자주 함'));assert.equal(store.api.generations,undefined);
  assert.equal(store.entries.get('playerProfilesV2/A:펩시').profile.keywords.length,previousCount+2);
  const own=['우디','숭'].map(name=>({name,profile:one.window.PLAYER_PROFILES.get('C',name)})),opponents=['동글','펩시'].map(name=>({name,profile:one.window.PLAYER_PROFILE_MODEL.cleanProfile({keywords:[{kind:'note',text:'키가 큼 왼손잡이'}]},'A')}));
- assert.equal(one.window.MATCHUP_MODEL.analyzeMatchup(own,opponents).plans[0].title,'초반 플레이부터 확인');
+ assert.equal(one.window.MATCHUP_MODEL.analyzeOpponentPair(opponents).tactics[0].title,'초반 플레이부터 확인');
 });
 test('실제 Gemini 연결 코드가 구조화 요청·공동 캐시·사용량을 연결한다',async()=>{
  const store=firestoreFixture(),one=browser(store,{hash:'#page=analysis&own1=우디&own2=숭&team=D&p1=아르(시트%3A%20야르)&p2=스노'});await one.flush();assert.equal(store.api.generations,undefined);
@@ -155,15 +155,15 @@ test('실제 Gemini 연결 코드가 구조화 요청·공동 캐시·사용량�
  assert.equal(store.api.generations,1);assert.equal(store.entries.get('geminiAiUsage/team').count,1);
  const {options,requestOptions}=store.api.lastOptions;assert.equal(options.model,'gemini-3.5-flash-lite');assert.equal(options.generationConfig.responseMimeType,'application/json');assert.equal(options.generationConfig.maxOutputTokens,2000);assert.equal(requestOptions.timeout,45000);
  const two=browser(store,{hash:'#page=analysis&own1=우디&own2=숭&team=D&p1=아르(시트%3A%20야르)&p2=스노'});await two.flush();await Promise.all(two.$('ai-analyze').click());await two.flush();
- assert.equal(store.api.generations,1);assert.equal(store.entries.get('geminiAiUsage/team').count,1);assert.ok(two.$('analysis-result').textContent.includes('팀원이 생성한 분석'));
+ assert.equal(store.api.generations,1);assert.equal(store.entries.get('geminiAiUsage/team').count,1);assert.ok(two.$('analysis-ai-status').textContent.includes('팀원이 생성한 분석'));
  // Server version checks reject stale snapshots even if the UI was delayed.
- const ids=['C:우디','C:숭','D:아르(시트: 야르)','D:스노'],players=ids.map(id=>({id,tier:one.window.BOARD_DATA.teams[id[0]][id.slice(2)].tier,profile:one.window.PLAYER_PROFILES.get(id[0],id.slice(2))}));
- const request={ownPlayerIds:ids.slice(0,2),opponentPlayerIds:ids.slice(2),expectedProfileHash:one.window.PLAYER_PROFILE_MODEL.profileVersion(players)};
- store.entries.get('playerTraits/C:우디').items.push('새 관찰');await assert.rejects(one.window.PLAYER_PROFILE_CLOUD.analyzeMatchup(request),/선수 정보가 변경/);assert.equal(store.api.generations,1);
+ const ids=['D:아르(시트: 야르)','D:스노'],players=ids.map(id=>({id,tier:one.window.BOARD_DATA.teams[id[0]][id.slice(2)].tier,profile:one.window.PLAYER_PROFILES.get(id[0],id.slice(2))}));
+ const request={opponentPlayerIds:ids,expectedProfileHash:one.window.PLAYER_PROFILE_MODEL.analysisVersion(players)};
+ store.entries.get('playerProfilesV2/D:스노').profile.keywords.push({kind:'note',text:'새 관찰'});await assert.rejects(one.window.PLAYER_PROFILE_CLOUD.analyzeMatchup(request),/선수 정보가 변경/);assert.equal(store.api.generations,1);
 });
 test('AI SDK 로딩 차단 시 기본 공략과 선수 저장은 계속 동작한다',async()=>{
  const store=firestoreFixture();store.api.importError=new Error('network blocked by policy');const one=browser(store,{hash:'#page=analysis&own1=우디&own2=숭&team=A&p1=동글&p2=펩시'});await one.flush();
- await Promise.all(one.$('ai-analyze').click());assert.ok(one.$('analysis-result').textContent.includes('AI에 연결하지 못했습니다'));assert.ok(one.$('analysis-result').textContent.includes('기본 공략'));assert.equal(store.entries.has('geminiAiUsage/team'),false);
+ await Promise.all(one.$('ai-analyze').click());assert.ok(one.$('analysis-ai-status').textContent.includes('AI에 연결하지 못했습니다'));assert.ok(one.$('analysis-result').textContent.includes('기본 관찰 요약'));assert.equal(store.entries.has('geminiAiUsage/team'),false);
  one.open('C:우디');one.choose('courtPreference','net');await one.flush();assert.equal(store.entries.get('playerProfilesV2/C:우디').profile.courtPreference,'net');assert.equal(one.window.PLAYER_PROFILE_CLOUD.status,'ready');
 });
 test('모바일 선수 상세는 별도 화면으로 열리고 뒤로 가기·앞으로 가기와 목록 위치를 유지한다',async()=>{
@@ -196,4 +196,35 @@ test('상대 특징은 첫 항목이고 기존 강점 메모를 숨기며 새 �
  for(const text of ['탑스핀','베이스라인 긴 공'])one.clickText('opponent-features','＋ '+text);await one.flush();
  const opponent=store.entries.get('playerProfilesV2/A:펩시').profile;assert.deepEqual(opponent.keywords,[{kind:'note',text:'탑스핀'},{kind:'note',text:'베이스라인 긴 공'}]);assert.deepEqual(opponent.legacyStrengths,['예전 강점 메모']);
  one.$('rating-back').click();await one.advance(0);one.open('C:우디');for(const text of ['탑스핀','베이스라인 긴 공'])one.clickText('team-traits','＋ '+text);await one.flush();assert.deepEqual(store.entries.get('playerTraits/C:우디').items,['탑스핀','베이스라인 긴 공']);
+});
+
+test('상대 두 명만 선택하고 조 변경·체크리스트·출전표 이동을 지원한다',async()=>{
+ const store=firestoreFixture(),one=browser(store,{hash:'#page=analysis'});await one.flush();
+ assert.equal(one.$('our-player1'),null);assert.ok(one.$('analysis-selection-status').textContent.includes('상대 조'));
+ one.clickText('analysis-teams','A조');one.select('opponent1','펩시');assert.ok(one.$('analysis-selection-status').textContent.includes('한 명'));
+ one.select('opponent2','동글');assert.equal(one.$('analysis-selection-status').hidden,true);
+ for(const title of ['상대 페어 한눈에 보기','예상 경기 패턴','주의할 점','공략할 상황','초반에 확인할 것'])assert.ok(one.$('analysis-result').textContent.includes(title));
+ assert.equal(one.$('ai-analyze').disabled,false);
+ const check=one.$('analysis-result').querySelector('input');check.checked=true;check.dispatchEvent({type:'change'});one.window.dispatchEvent({type:'playerprofilecloudstatuschange'});assert.equal(one.$('analysis-result').querySelector('input').checked,true);
+ one.clickText('analysis-teams','D조');assert.equal(one.$('opponent1').value,'');assert.equal(one.$('opponent2').value,'');assert.equal(one.$('analysis-result').children.length,0);
+ one.$('tab-strategy').click();await one.advance();one.$('matches').querySelector('.matrix-match').click();assert.equal(one.$('page-analysis').hidden,false);assert.equal(one.document.activeElement,one.$('opponent1'));
+});
+test('키워드 개수·글자 수·중복 안내와 전체 한도·삭제 후 복구를 제공한다',async()=>{
+ const store=firestoreFixture(),{blankDocuments}=require('./reset-test-data.cjs');for(const [path,value] of blankDocuments({seconds:1}))store.entries.set(path,value);
+ const one=browser(store,{mobile:true});await one.flush();one.open('C:우디');
+ let input=one.$('profile-trait-text');input.value='x'.repeat(41);input.dispatchEvent({type:'input'});assert.equal(input.getAttribute('aria-invalid'),'true');assert.ok(one.$('profile-trait-status').textContent.includes('40자'));
+ one.submit('profile-trait-text','탑스핀');input=one.$('profile-trait-text');input.value='탑스핀';input.dispatchEvent({type:'input'});assert.ok(one.$('profile-trait-status').textContent.includes('이미 등록'));
+ for(let i=0;i<19;i++)one.submit('profile-trait-text','특징 '+i);assert.equal(one.$('profile-trait-text').disabled,true);assert.ok(one.$('team-traits').querySelectorAll('.keyword-suggestion').every(node=>node.disabled));
+ one.$('team-traits').querySelector('.keyword-remove').click();assert.equal(one.$('profile-trait-text').disabled,false);
+ one.$('rating-back').click();await one.advance(0);one.open('A:펩시');for(let i=0;i<20;i++)one.submit('profile-keyword-text-pattern','패턴 '+i);
+ for(const kind of ['note','pattern','weak'])assert.equal(one.$('profile-keyword-text-'+kind).disabled,true);assert.ok(one.$('opponent-features').textContent.includes('20/20'));
+ one.$('opponent-keywords').querySelector('.keyword-remove').click();for(const kind of ['note','pattern','weak'])assert.equal(one.$('profile-keyword-text-'+kind).disabled,false);
+});
+test('최초 공유 연결 실패 후 재시도하며 입력값과 텍스트 초안을 보존한다',async()=>{
+ const store=firestoreFixture();store.api.deniedCollection='playerProfilesV2';
+ const one=browser(store,{mobile:true});await one.flush();assert.equal(one.window.PLAYER_PROFILE_CLOUD.status,'error');one.open('C:우디');
+ one.choose('position','back');const input=one.$('profile-trait-text');input.value='아직 추가하지 않은 특징';input.focus();input.setSelectionRange(3,3);
+ assert.equal(one.$('profile-connection-error').hidden,false);store.api.deniedCollection='';one.$('profile-save-retry').click();await one.flush();
+ assert.equal(one.window.PLAYER_PROFILE_CLOUD.status,'ready');assert.equal(store.entries.get('playerProfilesV2/C:우디').profile.position,'back');
+ assert.equal(one.$('profile-trait-text').value,'아직 추가하지 않은 특징');assert.equal(one.document.activeElement.selectionStart,3);assert.equal(one.$('profile-connection-error').hidden,true);
 });

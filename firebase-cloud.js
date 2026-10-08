@@ -11,7 +11,8 @@ const refs={profiles:collection(db,'playerProfilesV2'),traits:collection(db,'pla
 const gemini=window.GEMINI_ANALYSIS,aiConfig=window.GEMINI_CONFIG;
 const state={status:'connecting',pendingCount:0,lineup:null,lineupReady:false,aiProvider:'Gemini',aiStatus:aiConfig?.appCheckSiteKey?'ready':'setup'};
 window.PLAYER_PROFILE_CLOUD=state;
-let started=false,ready=false,migrating=false;
+let started=false,ready=false,migrating=false,connection=0;
+let profileSubscriptions=[];
 const records={profiles:new Map(),traits:new Map(),suggestions:new Map(),keywords:new Map()};
 const received=new Set(),pending=new Map(),pendingFields=new Map(),queue=new Map(),writing=new Set();
 const emit=(name,detail)=>window.dispatchEvent(new CustomEvent(name,{detail}));
@@ -102,12 +103,19 @@ state.saveProfile=(id,raw,fields=null)=>{
  const wasFull=pending.has(id)&&!pendingFields.has(id);
  if(fields&&!wasFull){const existing=pendingFields.get(id)||new Set();for(const field of fields)existing.add(field);pendingFields.set(id,existing);}else pendingFields.delete(id);
  pending.set(id,profile);queue.set(id,profile);
- notifyStatus(ready?'ready':'connecting');
+ notifyStatus(ready?'ready':state.status==='error'?'error':'connecting',state.status==='error'?{code:state.errorCode}:undefined);
  return flush(id);
 };
-state.retry=()=>{if(ready)for(const id of queue.keys())void flush(id);};
-async function migrate(){
+state.retry=()=>{
+ if(ready){for(const id of queue.keys())void flush(id);return;}
+ connection++;
+ for(const unsubscribe of profileSubscriptions)unsubscribe();
+ profileSubscriptions=[];received.clear();started=false;migrating=false;
+ notifyStatus('connecting');start();
+};
+async function migrate(activeConnection){
  const legacy=await getDocs(collection(db,'playerProfiles'));
+ if(activeConnection!==connection)return;
  const old=new Map(legacy.docs.map(item=>[item.id,item.data()])),local=window.PLAYER_PROFILES.all();
  for(const [id,localProfile] of Object.entries(local)){
   if(records.profiles.has(id))continue;
@@ -118,22 +126,27 @@ async function migrate(){
   await addSuggestions(profile,id);
  }
  const snapshots=await Promise.all(Object.values(refs).map(ref=>getDocs(ref)));
+ if(activeConnection!==connection)return;
  Object.keys(refs).forEach((key,index)=>{records[key]=new Map(snapshots[index].docs.map(item=>[item.id,item.data()]));});
  ready=true;publishProfiles();publishSuggestions();
  for(const id of queue.keys())void flush(id);
 }
 function start(){
  if(started||!window.PLAYER_PROFILES)return;started=true;
- signInAnonymously(auth).then(()=>{
-  for(const [key,ref] of Object.entries(refs))onSnapshot(ref,snapshot=>{
+ const activeConnection=++connection;
+ (auth.currentUser?Promise.resolve():signInAnonymously(auth)).then(()=>{
+  if(activeConnection!==connection)return;
+  for(const [key,ref] of Object.entries(refs))profileSubscriptions.push(onSnapshot(ref,snapshot=>{
+   if(activeConnection!==connection)return;
    records[key]=new Map(snapshot.docs.map(item=>[item.id,item.data()]));received.add(key);
-   if(received.size===Object.keys(refs).length&&!migrating){migrating=true;void migrate().catch(error=>{console.error('Profile migration failed',error);notifyStatus('error',error);});}
+   if(received.size===Object.keys(refs).length&&!migrating){migrating=true;void migrate(activeConnection).catch(error=>{if(activeConnection!==connection)return;console.error('Profile migration failed',error);notifyStatus('error',error);});}
    else if(ready){if(key==='profiles'||key==='traits')publishProfiles();else publishSuggestions();}
-  },error=>{console.error('Firestore subscription failed',error);notifyStatus('error',error);});
-  onSnapshot(doc(db,'teamLineups','C'),snapshot=>{
+  },error=>{if(activeConnection!==connection)return;console.error('Firestore subscription failed',error);notifyStatus('error',error);}));
+  profileSubscriptions.push(onSnapshot(doc(db,'teamLineups','C'),snapshot=>{
+   if(activeConnection!==connection)return;
    state.lineup=snapshot.exists()?snapshot.data():null;state.lineupReady=true;state.lineupError='';emit('teamlineupchange',{lineup:state.lineup});
-  },error=>{state.lineupError=error.code;state.lineupReady=false;emit('teamlineupchange',{error:error.code});});
- }).catch(error=>{console.error('Anonymous sign-in failed',error);notifyStatus('error',error);});
+  },error=>{if(activeConnection!==connection)return;state.lineupError=error.code;state.lineupReady=false;emit('teamlineupchange',{error:error.code});}));
+ }).catch(error=>{if(activeConnection!==connection)return;console.error('Anonymous sign-in failed',error);notifyStatus('error',error);});
 }
 state.saveLineup=async(plan,expectedRevision)=>{
  if(!ready||!state.lineupReady)throw new Error('팀 공유 저장소 연결 후 확정할 수 있습니다.');
@@ -163,9 +176,9 @@ async function prepareGemini(){
 }
 const aiStore=gemini.createFirestoreStore({db,doc,runTransaction,serverTimestamp,Timestamp,data:window.BOARD_DATA,model:window.PLAYER_PROFILE_MODEL});
 const analyzeGemini=gemini.createService({data:window.BOARD_DATA,model:window.PLAYER_PROFILE_MODEL,store:aiStore,prepare:prepareGemini,generate:async context=>{
- const generator=aiSDK.getGenerativeModel(ai,{model:gemini.modelName,systemInstruction:gemini.instructions,generationConfig:{responseMimeType:'application/json',responseSchema:gemini.responseSchema(aiSDK.Schema,context.ownPlayerIds),maxOutputTokens:2000}},{timeout:gemini.timeoutMs});
+ const generator=aiSDK.getGenerativeModel(ai,{model:gemini.modelName,systemInstruction:gemini.instructions,generationConfig:{responseMimeType:'application/json',responseSchema:gemini.responseSchema(aiSDK.Schema),maxOutputTokens:2000}},{timeout:gemini.timeoutMs});
  const output=await generator.generateContent(JSON.stringify(context));
- return gemini.parseResponse(output.response,context.ownPlayerIds);
+ return gemini.parseResponse(output.response);
 }});
 state.analyzeMatchup=async request=>{
  if(!ready)throw new gemini.AnalysisError('failed-precondition','팀 공유 저장소 연결 후 AI 분석을 사용할 수 있습니다.');
@@ -174,7 +187,7 @@ state.analyzeMatchup=async request=>{
 state.subscribeAnalysis=(key,onResult,onError)=>onSnapshot(doc(db,'geminiMatchupAnalyses',key),snapshot=>{
  if(snapshot.exists()){
   const record=snapshot.data();
-  try{onResult({...record,...(record.status==='ready'?{result:gemini.validateResult(record.result,record.ownPlayerIds)}:{})});}
+  try{onResult({...record,...(record.status==='ready'?{result:gemini.validateResult(record.result)}:{})});}
   catch(error){onError?.(gemini.normalizeError(error));}
  }
 },onError);

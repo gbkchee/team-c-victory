@@ -34,11 +34,11 @@ assert.deepEqual(cleanProfile({traits:['a',null,5,'a','  ']},'C').traits,['a']);
 const players=[{id:'C:우디',tier:'forty',profile:modern},{id:'C:숭',tier:'thirty',profile:cleanProfile(null,'C')}];
 assert.equal(profileVersion(players),profileVersion([...players].reverse()));
 assert.notEqual(profileVersion(players),profileVersion(players.map(p=>({...p,profile:{...p.profile,position:'fore'}}))));
-const {isLegalPair,analyzeMatchup}=require('./app.js');
+const {isLegalPair,analyzeOpponentPair}=require('./app.js');
 assert.equal(isLegalPair([{name:'꿉',tier:'love'},{name:'한치',tier:'love'}]),false);
 assert.equal(isLegalPair([{name:'우디',tier:'forty'},{name:'우디',tier:'forty'}]),false);
-const analysis=analyzeMatchup(players.map(p=>({name:p.id.slice(2),profile:p.profile})),[{name:'동글',profile:opponent}]);
-assert.ok(analysis.roles.some(text=>text.includes('네트')));assert.ok(analysis.checks.some(text=>text.includes('포칭')));
+const analysis=analyzeOpponentPair([{name:'동글',profile:opponent}]);
+assert.ok(analysis.cautions.some(tip=>tip.title.includes('포칭')));assert.ok(!Object.hasOwn(analysis,'roles'));
 console.log('PASS: 공식 일정·기존 편성, 새 프로필과 보존 이관, 키워드 제한·미입력 처리');
 
 const pairing=require('./pairing-model.js');

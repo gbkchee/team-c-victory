@@ -5,7 +5,7 @@
 ## 선수 입력과 추천 연결
 
 1. Firebase 콘솔 **Authentication → 로그인 방법 → 익명**을 사용 설정합니다.
-2. **Firestore Database → 규칙**에 이 저장소의 최신 `firestore.rules` 전체 내용을 게시합니다. 새 Gemini 캐시와 사용량 규칙도 포함합니다.
+2. **Firestore Database → 규칙**에 이 저장소의 최신 `firestore.rules` 전체 내용을 게시합니다. 상대 두 명만 분석하는 Gemini v2 캐시와 사용량 규칙도 포함합니다. 이번 UI 적용에서는 AI 요청·응답 형식이 변경되었으므로 새 규칙을 다시 게시해야 합니다. 선수 입력 규칙은 동일합니다.
 3. `main`을 원격에 푸시하고 GitHub Actions의 Pages 배포 성공을 확인합니다.
 4. 페이지 더 보기 메뉴에 **팀원과 실시간으로 공유 중입니다.**가 표시되는지 확인합니다.
 
