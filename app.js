@@ -14,42 +14,23 @@
   return [...pairs.values()];
  }
  function analyzeMatchup(own,opponents){
-  const plans=[],roles=[],checks=[];
-  const confident=(player,key)=>player.profile.confidentSkills.includes(key);
-  const donors=keys=>own.filter(player=>keys.some(key=>confident(player,key))).map(player=>player.name).join('·');
-  const first=own[0],second=own[1];
-  const fore=own.find(player=>player.profile.position==='fore'),back=own.find(player=>player.profile.position==='back');
-  if(fore&&back)roles.push(fore.name+'은 선호하는 포사이드, '+back.name+'은 선호하는 백사이드로 리턴 위치를 정해 보세요.');
-  else if(first.profile.position&&first.profile.position===second.profile.position&&first.profile.position!=='either')roles.push('두 선수의 사이드 선호가 같으므로 '+first.name+'·'+second.name+'의 리턴 위치를 경기 전에 함께 정해 주세요.');
-  else roles.push(first.name+'·'+second.name+'의 편한 리턴 사이드와 중앙 공·로브 담당을 먼저 정해 주세요.');
+  const roles=[],checks=[];
   for(const player of own){
-   const partner=own.find(other=>other!==player);
-   if(player.profile.partnerRoles.includes('cover')&&confident(partner,'coverage'))roles.push(player.name+'이 바라는 뒤에서 커버하는 역할은 코트커버를 선택한 '+partner.name+'과 수비 범위를 함께 정해 보세요.');
-   if(player.profile.partnerRoles.includes('attack')&&['forehandVolley','backhandVolley'].some(key=>confident(partner,key)))roles.push(player.name+'이 바라는 전위 공격은 발리를 선택한 '+partner.name+'과 함께 역할을 맞춰 보세요.');
-   if(player.profile.partnerRoles.includes('connect'))roles.push(player.name+'은 안정적인 연결을 원합니다. 연결할 공과 마무리할 공의 기준을 함께 정해 주세요.');
-   if(player.profile.partnerRoles.includes('tactics'))roles.push(player.name+'과 포인트 사이에 다음 코스·작전을 짧게 상의해 주세요.');
-   if(player.profile.partnerRoles.includes('encourage'))roles.push(player.name+'은 격려와 편한 분위기를 원합니다. 실수 뒤에도 짧은 응원 콜을 이어가 주세요.');
-   if(player.profile.restPreference==='rest')checks.push(player.name+'은 중간 휴식을 선호합니다. 경기 사이 회복 시간을 함께 확인하세요.');
-   if(player.profile.restPreference==='continuous')checks.push(player.name+'은 예열된 상태에서 연속 출전을 선호합니다. 대기 중에도 가볍게 몸을 풀어 주세요.');
-   if(player.profile.restPreference==='condition')checks.push(player.name+'의 오늘 컨디션과 휴식 필요 여부를 경기 전에 확인하세요.');
-   if(!player.profile.confidentSkills.length)checks.push(player.name+'의 요즘 편한 플레이를 경기 전에 이야기해 주세요. 비어 있는 선택은 약점을 뜻하지 않습니다.');
+   const p=player.profile;
+   if(p.courtPreference==='baseline')roles.push(player.name+'은 뒤에서 플레이하는 것을 선호합니다. 전위·후위 전환과 커버를 함께 정해 보세요.');
+   if(p.courtPreference==='net')roles.push(player.name+'은 네트 플레이를 선호합니다. 포칭과 로브 대처 약속을 함께 정해 보세요.');
+   if(p.partnerRoles.includes('tactics'))roles.push(player.name+'은 짧은 작전 상의를 편하게 느낍니다.');
+   if(p.partnerRoles.includes('encourage'))roles.push(player.name+'에게는 실수 뒤 칭찬과 응원이 도움이 됩니다.');
+   if(p.restPreference==='rest')checks.push(player.name+'은 쉬었다가 출전하기를 선호합니다.');
+   if(p.restPreference==='continuous')checks.push(player.name+'은 연속 출전을 선호합니다.');
   }
+  if(own[0].profile.position===own[1].profile.position&&['fore','back'].includes(own[0].profile.position))checks.push('두 선수의 리턴 자리 선호가 같습니다. 경기 전에 자리를 조율하세요.');
   for(const opponent of opponents){
-   const weak=opponent.profile.keywords.filter(item=>item.kind==='weak'),strong=opponent.profile.keywords.filter(item=>item.kind==='strong');
-   const add=(pattern,keys,title,text)=>{
-    const observed=weak.find(item=>pattern.test(item.text)),names=donors(keys);
-    if(observed&&names)plans.push({title,text:text(names,opponent.name),evidence:opponent.name+'의 약점 기록: '+observed.text+' · 우리 선수의 자신 있는 플레이 선택'});
-   };
-   add(/높은\s*공|로브|스매시/,['lob'],'로브로 전위 뒤 공간 확인',(names,target)=>names+'이 선택한 로브로 '+target+' 쪽의 높이·깊이를 조절해 시도해 보세요. 초반 반응을 확인하며 사용하세요.');
-   add(/낮은\s*공|발리/,['slice'],'낮은 연결로 반응 확인',(names,target)=>names+'이 선택한 슬라이스로 '+target+'에게 낮게 연결해 보세요. 무리한 각도보다 다음 공을 준비할 여유를 우선하세요.');
-   add(/코트커버|커버|이동|발\s*느/,['forehand','backhand'],'방향을 바꿔 이동 유도',(names,target)=>names+'의 편한 스트로크로 '+target+' 쪽의 좌우·전후 코스를 바꿔 보세요. 큰 목표부터 연결하세요.');
-   add(/백핸드|백발리/,['forehand','backhand','serve'],'백핸드 쪽 연결 확인',(names,target)=>names+'의 편한 서브·스트로크로 '+target+'의 백핸드 쪽을 확인해 보세요. 직접 본 반응에 따라 코스를 조절하세요.');
-   add(/포핸드|포발리/,['forehand','backhand','serve'],'포핸드 쪽 연결 확인',(names,target)=>names+'의 편한 서브·스트로크로 '+target+'의 포핸드 쪽을 확인해 보세요. 직접 본 반응에 따라 코스를 조절하세요.');
-   if(strong.length)checks.push(opponent.name+'의 강점 기록은 '+strong.map(item=>item.text).join(', ')+'입니다. 초반 연결에서 실제 구질과 움직임을 확인하세요.');
-   if(!opponent.profile.keywords.length)checks.push(opponent.name+'은 관찰 키워드가 없습니다. 초반 몇 포인트에서 편한 샷과 위치를 확인하세요.');
+   const patterns=opponent.profile.keywords.filter(item=>item.kind==='pattern');
+   if(patterns.length)checks.push(opponent.name+'의 주로 쓰는 패턴: '+patterns.map(item=>item.text).join(', '));
+   if(!opponent.profile.keywords.length)checks.push(opponent.name+'의 관찰 기록이 없습니다. 초반 플레이를 확인하세요.');
   }
-  if(!plans.length)plans.push({title:'편한 패턴부터 함께 확인',text:'확인된 상대 약점과 우리 선수의 선택이 연결되는 공략이 아직 없습니다. 편한 샷으로 안정적으로 연결하며 상대 반응을 관찰해 주세요.',evidence:'미확인 항목은 실력이나 약점으로 추정하지 않습니다.'});
-  return {plans:plans.slice(0,6),roles:[...new Set(roles)],checks:[...new Set(checks)]};
+  return {roles,checks,plans:[]};
  }
  const model={isLegalPair,summarizePairs,analyzeMatchup};
  if(typeof module==='object'&&module.exports)module.exports=model;
@@ -146,15 +127,14 @@ if(typeof document!=='undefined')(() => {
   const profile=window.PLAYER_PROFILES.get(team,name),definitions=window.PLAYER_PROFILE_MODEL,card=el('div','player');
   card.append(el('strong','',displayName(name)),tierBadge(team,name));
   if(team==='C'){
-   card.append(el('p','', '선호 포지션 · '+definitions.positions[profile.position]),el('p','','게임 스타일 · '+definitions.styles[profile.style]));
-   card.append(el('p','strength','요즘 자신 있는 · '+(profile.confidentSkills.map(key=>definitions.skills[key]).join(', ')||'아직 선택 전')));
-   card.append(el('p','weakness','집 나갔어요 😭 · '+(profile.rustySkills.map(key=>definitions.skills[key]).join(', ')||'아직 선택 전')));
-   card.append(el('p','','플레이 특징 · '+(profile.traits.join(', ')||'아직 입력 전')));
-   card.append(el('p','','경기·휴식 · '+definitions.restPreferences[profile.restPreference]));
-   card.append(el('p','','파트너에게 바라는 역할 · '+(profile.partnerRoles.map(key=>definitions.partnerRoles[key]).join(', ')||'아직 선택 전')));
+   for(const [title,text] of [
+    ['선호 리턴 자리',definitions.positions[profile.position]],['편한 플레이 위치',definitions.courtPreferences[profile.courtPreference]],
+    ['플레이 성향',definitions.styles[profile.style]],['잘 맞는 파트너',profile.partnerRoles.map(key=>definitions.partnerRoles[key]).join(', ')||'미선택'],
+    ['특징',profile.traits.join(', ')||'아직 입력 전'],['경기·휴식',definitions.restPreferences[profile.restPreference]]
+   ])card.append(el('p','',title+' · '+text));
   }else{
-   card.append(el('p','','포·백 성향 · '+definitions.opponentPositions[profile.tendency]),el('p','','게임 스타일 · '+definitions.opponentStyles[profile.style]));
-   for(const [kind,title] of Object.entries(definitions.keywordKinds))card.append(el('p',kind==='strong'?'strength':kind==='weak'?'weakness':'',title+' · '+(profile.keywords.filter(item=>item.kind===kind).map(item=>item.text).join(', ')||'정보 없음')));
+   card.append(el('p','','플레이 성향 · '+definitions.styles[profile.style]));
+   for(const [kind,title] of Object.entries(definitions.keywordKinds))card.append(el('p',kind==='weak'?'weakness':'',title+' · '+(profile.keywords.filter(item=>item.kind===kind).map(item=>item.text).join(', ')||'정보 없음')));
   }
   return card;
  }

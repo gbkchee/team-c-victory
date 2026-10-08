@@ -1,85 +1,18 @@
 'use strict';
-(() => {
- const skills={
-  serve:'서브',forehand:'포핸드',backhand:'백핸드',forehandVolley:'포발리',backhandVolley:'백발리',
-  lob:'로브',slice:'슬라이스',smash:'스매시',coverage:'코트커버',stamina:'체력',mental:'멘탈'
- };
- const positions={'':'미선택',fore:'포',back:'백',either:'상관없음'};
- const styles={attack:'공격형',defense:'수비형',unknown:'모르겠음'};
- const partnerRoles={
-  cover:'뒤에서 커버',attack:'전위에서 공격',connect:'안정적으로 연결',
-  tactics:'코스·작전 같이 정하기',encourage:'격려·분위기 잡기',either:'상관없음'
- };
- const restPreferences={'':'미선택',continuous:'연속 출전 (예열된 채 해야 함)',rest:'쉬면 좋음',condition:'당일 컨디션에 따라 다르다'};
- const opponentPositions={fore:'포잡이',back:'백잡이',unknown:'모르겠음'};
- const opponentStyles={attack:'공격형',defense:'수비형',allround:'올라운더',unknown:'모르겠음'};
- const keywordKinds={strong:'강점',weak:'약점',note:'특징'};
- const keywordSuggestions={
-  strong:['서브','포핸드','백핸드','포발리','백발리','로브','슬라이스','스매시','코트커버'],
-  weak:['포핸드','백핸드','포발리','백발리','몸쪽 공','높은 공','낮은 공','로브 처리','좌우 이동'],
-  note:['장신','슬라이스서브','빠른 발','네트 자주 붙음']
- };
- const traitSuggestions=['왼손잡이','장신','슬라이스서브','킥서브','네트에 자주 붙음','베이스라인 선호','긴 랠리가 편함','파트너와 콜을 많이 함','초반에 몸이 늦게 풀림'];
- const cleanText=text=>text.normalize('NFC').trim().replace(/\s+/g,' ');
- function cleanTraits(raw){
-  if(!Array.isArray(raw))return [];
-  const result=[];
-  for(const item of raw){
-   if(typeof item!=='string')continue;
-   const text=cleanText(item).slice(0,40);
-   if(text&&!result.includes(text))result.push(text);
-   if(result.length===20)break;
-  }
-  return result;
- }
- function cleanKeywords(raw){
-  const seen=new Set(),result=[];
-  for(const item of raw){
-   if(!item||typeof item.kind!=='string'||!Object.hasOwn(keywordKinds,item.kind)||typeof item.text!=='string')continue;
-   const text=cleanText(item.text).slice(0,40),key=item.kind+':'+text;
-   if(!text||seen.has(key))continue;
-   seen.add(key);result.push({kind:item.kind,text});if(result.length===20)break;
-  }
-  return result;
- }
- const cleanChoices=(raw,options)=>Object.keys(options).filter(key=>Array.isArray(raw)&&raw.includes(key));
- const cleanChoice=(raw,options,fallback)=>typeof raw==='string'&&Object.hasOwn(options,raw)?raw:fallback;
- function cleanProfile(raw,team,initialKeywords=[]){
-  if(team==='C'){
-   const roles=cleanChoices(raw?.partnerRoles,partnerRoles);
-   return {
-    position:cleanChoice(raw?.position,positions,''),
-    style:cleanChoice(raw?.style,styles,'unknown'),
-    confidentSkills:cleanChoices(raw?.confidentSkills,skills),
-    rustySkills:cleanChoices(raw?.rustySkills,skills),
-    partnerRoles:roles.length>1?roles.filter(role=>role!=='either'):roles,
-    restPreference:cleanChoice(raw?.restPreference,restPreferences,''),
-    traits:cleanTraits(raw?.traits)
-   };
-  }
-  return {
-   tendency:cleanChoice(raw?.tendency,opponentPositions,'unknown'),
-   style:cleanChoice(raw?.style,opponentStyles,'unknown'),
-   keywords:cleanKeywords(Array.isArray(raw?.keywords)?raw.keywords:initialKeywords)
-  };
- }
- const model={skills,positions,styles,partnerRoles,restPreferences,opponentPositions,opponentStyles,keywordKinds,keywordSuggestions,traitSuggestions,cleanText,cleanProfile};
- if(typeof module==='object'&&module.exports)module.exports=model;
- else window.PLAYER_PROFILE_MODEL=model;
-})();
+if(typeof module==='object'&&module.exports)module.exports=require('./profile-model.js');
 if(typeof document!=='undefined')(() => {
  const root=document.getElementById('ratings-panel');if(!root)return;
  const model=window.PLAYER_PROFILE_MODEL;
- const {skills,positions,styles,partnerRoles,restPreferences,opponentPositions,opponentStyles,keywordKinds,keywordSuggestions,traitSuggestions,cleanText,cleanProfile}=model;
+ const {positions,courtPreferences,styles,partnerRoles,restPreferences,opponentStyles,keywordKinds,keywordSuggestions,traitSuggestions,cleanText,cleanProfile}=model;
  const data=window.BOARD_DATA;
  const tiers={forty:'포티',thirty:'써티',love:'러브'},tierSymbols={forty:'4️⃣',thirty:'3️⃣',love:'🫶'},tierOrder={forty:0,thirty:1,love:2};
  const collator=new Intl.Collator('ko'),displayName=name=>name.replace(/\s*\(시트:.*\)$/,'');
  const roster=Object.entries(data.teams).flatMap(([team,players])=>Object.keys(players).map(name=>({
   id:team+':'+name,team,name,displayName:displayName(name),tier:players[name].tier
  }))).sort((a,b)=>a.team.localeCompare(b.team)||(tierOrder[a.tier]??3)-(tierOrder[b.tier]??3)||collator.compare(a.displayName,b.displayName));
- const allowed=new Set(roster.map(player=>player.id)),storageKey='courtside.player-profiles.v3';
- const oldStorageKeys=['courtside.player-ratings.v2','courtside.player-pentagons.v1'];
- let profiles={},sharedTraitSuggestions=[],saveAvailable=true,current='',lastTrigger=null;
+ const allowed=new Set(roster.map(player=>player.id)),storageKey='courtside.player-profiles.v4';
+ const oldStorageKeys=['courtside.player-profiles.v3','courtside.player-ratings.v2','courtside.player-pentagons.v1'];
+ let profiles={},sharedTraitSuggestions=[],sharedKeywordSuggestions={},saveAvailable=true,current='',lastTrigger=null;
  const $=id=>document.getElementById(id),person=id=>roster.find(player=>player.id===id);
  const label=id=>{const player=person(id);return player.team+'조 '+player.displayName;};
  const tier=id=>tiers[person(id).tier]||'등급 미확인',tierSymbol=id=>tierSymbols[person(id).tier]||'❔';
@@ -102,27 +35,27 @@ if(typeof document!=='undefined')(() => {
   }
  }catch{saveAvailable=false;}
  const profile=id=>profiles[id]||cleanProfile(null,person(id).team,initialKeywords(id));
- window.PLAYER_PROFILES={get:(team,name)=>allowed.has(team+':'+name)?profile(team+':'+name):cleanProfile(null,team)};
+ window.PLAYER_PROFILES={has:id=>allowed.has(id),get:(team,name)=>allowed.has(team+':'+name)?profile(team+':'+name):cleanProfile(null,team)};
  function tierBadge(id){
   const badge=el('span','grade-badge',tierSymbol(id));
   badge.title=tier(id);badge.setAttribute('role','img');badge.setAttribute('aria-label',tier(id));return badge;
  }
  function savedStatus(){
   const cloud=window.PLAYER_PROFILE_CLOUD;
-  const status=cloud?.status==='ready'?'팀원과 실시간으로 공유 중'
+  const status=cloud?.status==='ready'?(cloud.message||'팀원과 실시간으로 공유 중')
    :cloud?.status==='connecting'?'팀 공유 저장소 연결 중 · 이 브라우저에도 임시 저장'
    :cloud?.status==='error'?(cloud.message||'팀 공유 저장소 연결 실패 · 이 브라우저에 임시 저장')
    :saveAvailable?'팀 공유 저장소에 연결 중입니다.':'저장할 수 없어 현재 창에서만 유지됩니다.';
   $('profile-save-status').textContent=status;
   const menuStatus=$('cloud-status');if(menuStatus)menuStatus.textContent=status;
  }
- function persist(){
+ function persist(fields=null){
   try{localStorage.setItem(storageKey,JSON.stringify(profiles));saveAvailable=true;}catch{saveAvailable=false;}
   savedStatus();
   refreshRosterCard(current);
-  window.dispatchEvent(new CustomEvent('playerprofileschange',{detail:{team:person(current).team,name:person(current).name}}));
+  window.dispatchEvent(new CustomEvent('playerprofileschange',{detail:{team:person(current).team,name:person(current).name,fields}}));
  }
- function update(patch){profiles[current]=cleanProfile({...profile(current),...patch},person(current).team,initialKeywords(current));persist();}
+ function update(patch){profiles[current]=cleanProfile({...profile(current),...patch},person(current).team,initialKeywords(current));persist(Object.keys(patch));}
  window.addEventListener('playerprofilescloudchange',event=>{
   const incoming=event.detail?.profiles;
   if(!incoming||typeof incoming!=='object')return;
@@ -136,6 +69,10 @@ if(typeof document!=='undefined')(() => {
  window.addEventListener('playertraitssuggestionschange',event=>{
   sharedTraitSuggestions=Array.isArray(event.detail?.suggestions)?event.detail.suggestions:[];
   if(root.open&&person(current)?.team==='C')renderTraits();
+ });
+ window.addEventListener('playerkeywordsuggestionschange',event=>{
+  sharedKeywordSuggestions=event.detail?.suggestions||{};
+  if(root.open&&person(current)?.team!=='C')renderKeywords();
  });
  function choiceField(title,field,options,multiple=false,help='',stack=false){
   const group=el('fieldset','profile-field'),legend=el('legend','',title),choices=el('div','profile-choices'+(stack?' profile-choices-stack':''));
@@ -163,24 +100,20 @@ if(typeof document!=='undefined')(() => {
  }
  function renderTeamFields(){
   const fields=$('team-profile-fields');fields.replaceChildren(
-   choiceField('선호 포지션','position',positions),
-   choiceField('게임 스타일','style',styles),
-   choiceField('요즘 자신 있는','confidentSkills',skills,true,'복수 선택 · 요즘 편하게 하는 플레이만 골라 주세요. 비워 둬도 괜찮아요.'),
-   choiceField('집 나갔어요 😭','rustySkills',skills,true,'요즘 감이 잘 안 오거나 어려운 플레이를 골라 주세요. 비워 두어도 괜찮아요.')
+   choiceField('선호 리턴 자리','position',positions),
+   choiceField('편한 플레이 위치','courtPreference',courtPreferences),
+   choiceField('플레이 성향','style',styles),
+   choiceField('잘 맞는 파트너','partnerRoles',partnerRoles,true,'복수 선택 · 함께 경기할 때 편한 역할을 골라 주세요.')
   );
   renderTraits();
-  const preferences=el('div','profile-fields profile-fields-group');preferences.id='team-profile-preferences';
-  preferences.append(
-   choiceField('경기·휴식 선호','restPreference',restPreferences,false,'경기 당일 바꿔도 괜찮아요.',true),
-   choiceField('파트너에게 바라는 역할','partnerRoles',partnerRoles,true,'복수 선택 · 함께 경기할 때 도움받고 싶은 역할을 골라 주세요.')
-  );
-  fields.append(preferences);
+  const preferences=el('div','profile-fields profile-fields-group');
+  preferences.append(choiceField('경기·휴식 선호','restPreference',restPreferences));fields.append(preferences);
  }
 function renderTraits(){
   const draft=$('profile-trait-text')?.value||'',parent=$('team-profile-fields');
   $('team-traits')?.remove();
-  const section=el('section','team-traits keyword-section');section.id='team-traits';section.setAttribute('aria-label','나의 플레이 특징');
-  section.append(el('h3','','나의 플레이 특징'),el('p','muted small','복수 입력 · 본인의 플레이 특징을 자유롭게 알려 주세요. 특징은 40자 이내, 최대 20개까지 추가할 수 있어요.'));
+  const section=el('section','team-traits keyword-section');section.id='team-traits';section.setAttribute('aria-label','특징');
+  section.append(el('h3','','특징'),el('p','muted small','복수 입력 · 본인의 플레이 특징을 자유롭게 알려 주세요. 특징은 40자 이내, 최대 20개까지 추가할 수 있어요.'));
   const list=el('div','rating-keywords'),traits=profile(current).traits;
   for(const [index,text] of traits.entries()){
    const chip=el('span','keyword-chip'),remove=el('button','keyword-remove','×');
@@ -208,7 +141,7 @@ function renderTraits(){
    $('profile-trait-status').textContent='특징을 추가했습니다.';$('profile-trait-text').focus();
   }
   form.addEventListener('submit',event=>{event.preventDefault();addTrait(input.value,true);});
-  const suggestions=el('div','keyword-suggestions');suggestions.setAttribute('aria-label','나의 플레이 특징 빠른 추가');
+  const suggestions=el('div','keyword-suggestions');suggestions.setAttribute('aria-label','특징 빠른 추가');
   for(const text of [...new Set([...traitSuggestions,...sharedTraitSuggestions])]){
    const button=el('button','keyword-suggestion','＋ '+text);button.type='button';button.disabled=traits.includes(text);
    button.addEventListener('click',()=>addTrait(text,false));suggestions.append(button);
@@ -219,8 +152,7 @@ function renderTraits(){
  }
  function renderOpponentFields(){
   $('opponent-profile-fields').replaceChildren(
-   choiceField('포·백 성향','tendency',opponentPositions),
-   choiceField('게임 스타일','style',opponentStyles)
+   choiceField('플레이 성향','style',opponentStyles)
   );
   renderKeywords();
  }
@@ -243,7 +175,7 @@ function renderTraits(){
    if(!keywords.length)list.append(el('p','muted small','아직 기록된 '+title+'이 없습니다.'));
    const form=el('form','profile-keyword-form'),inputLabel=el('label','',title+' 키워드 추가'),input=el('input'),add=el('button','','추가');
    input.type='text';input.id='profile-keyword-text-'+kind;input.maxLength=40;input.autocomplete='off';input.value=drafts[kind];
-   input.placeholder={strong:'포핸드, 코스 공략 등',weak:'몸쪽 공, 높은 공 등',note:'장신, 슬라이스서브 등'}[kind];
+   input.placeholder={pattern:'서브 후 네트 접근, 포칭 등',weak:'몸쪽 공, 높은 백핸드 등',note:'왼손잡이, 슬라이스 서브 등'}[kind];
    inputLabel.htmlFor=input.id;inputLabel.append(input);add.type='submit';form.append(inputLabel,add);
    const status=el('p','muted small');status.id='profile-keyword-status-'+kind;status.setAttribute('role','status');
    function addKeyword(text){
@@ -257,13 +189,15 @@ function renderTraits(){
    }
    form.addEventListener('submit',event=>{event.preventDefault();addKeyword(input.value);});
    const suggestions=el('div','keyword-suggestions');suggestions.setAttribute('aria-label',title+' 키워드 빠른 추가');
-   for(const text of keywordSuggestions[kind]){
+   for(const text of [...new Set([...keywordSuggestions[kind],...(sharedKeywordSuggestions[kind]||[])])]){
     const button=el('button','keyword-suggestion','＋ '+text);button.type='button';
     button.disabled=keywords.some(item=>item.text===text);
     button.addEventListener('click',()=>addKeyword(text));suggestions.append(button);
    }
    section.append(list,form,el('p','muted small','빠른 추가'),suggestions,status);groups.append(section);
   }
+  const legacy=profile(current).legacyStrengths;
+  if(legacy.length){const details=el('details','analysis-source-notes');details.append(el('summary','','기존 강점 메모 (참고)'),el('p','muted small',legacy.join(' · ')));groups.append(details);}
  }
  function render(){
   const own=person(current).team==='C';
@@ -307,8 +241,8 @@ function renderTraits(){
   const divider=el('span','roster-divider');divider.setAttribute('aria-hidden','true');
   const highlights=el('span','roster-highlights');
   const rows=player.team==='C'
-   ?[['자신 있는',info.confidentSkills.map(key=>skills[key]).join(', ')||'미선택','strong'],['집 나갔어요 😭',info.rustySkills.map(key=>skills[key]).join(', ')||'미선택','weak'],['특징',info.traits.join(', ')||'아직 입력 전','note']]
-   :[['강점',info.keywords.filter(item=>item.kind==='strong').map(item=>item.text).join(', ')||'정보 없음','strong'],['약점',info.keywords.filter(item=>item.kind==='weak').map(item=>item.text).join(', ')||'정보 없음','weak']];
+   ? [['리턴 자리',positions[info.position],'strong'],['편한 위치',courtPreferences[info.courtPreference],'note'],['특징',info.traits.join(', ')||'아직 입력 전','note']]
+   :[['주로 쓰는',info.keywords.filter(item=>item.kind==='pattern').map(item=>item.text).join(', ')||'정보 없음','strong'],['어려워하는',info.keywords.filter(item=>item.kind==='weak').map(item=>item.text).join(', ')||'정보 없음','weak']];
   for(const [title,text,kind] of rows){
    const row=el('span','roster-highlight roster-highlight-'+kind),value=el('span','roster-highlight-value',text);
    value.title=text;row.append(el('span','roster-highlight-label',title),value);highlights.append(row);
@@ -343,6 +277,6 @@ function renderTraits(){
  });
  $('profile-reset').addEventListener('click',()=>{delete profiles[current];persist();render();});
  savedStatus();renderRoster();
- window.PLAYER_PROFILES.all=()=>JSON.parse(JSON.stringify(profiles));
+ window.PLAYER_PROFILES.all=()=>Object.fromEntries(roster.map(player=>[player.id,JSON.parse(JSON.stringify(profile(player.id)))]));
  window.dispatchEvent(new CustomEvent('playerprofilesready'));
 })();

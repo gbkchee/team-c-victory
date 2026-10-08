@@ -1,4 +1,5 @@
-window.BOARD_DATA = {
+(function(root){
+const data = {
   "schedule": [
     {
       "id": 1,
@@ -2466,3 +2467,6 @@ window.BOARD_DATA = {
     }
   ]
 };
+
+if(typeof module==='object'&&module.exports)module.exports=data;else root.BOARD_DATA=data;
+})(typeof window==='undefined'?globalThis:window);

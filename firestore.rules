@@ -28,6 +28,111 @@ service cloud.firestore {
       );
     }
 
+    function validTextList(items) {
+      return items is list && items.size() <= 20 && items.toSet().size() == items.size() &&
+        (items.size() <= 0 || (items[0] is string && items[0].size() > 0 && items[0].size() <= 40)) &&
+        (items.size() <= 1 || (items[1] is string && items[1].size() > 0 && items[1].size() <= 40)) &&
+        (items.size() <= 2 || (items[2] is string && items[2].size() > 0 && items[2].size() <= 40)) &&
+        (items.size() <= 3 || (items[3] is string && items[3].size() > 0 && items[3].size() <= 40)) &&
+        (items.size() <= 4 || (items[4] is string && items[4].size() > 0 && items[4].size() <= 40)) &&
+        (items.size() <= 5 || (items[5] is string && items[5].size() > 0 && items[5].size() <= 40)) &&
+        (items.size() <= 6 || (items[6] is string && items[6].size() > 0 && items[6].size() <= 40)) &&
+        (items.size() <= 7 || (items[7] is string && items[7].size() > 0 && items[7].size() <= 40)) &&
+        (items.size() <= 8 || (items[8] is string && items[8].size() > 0 && items[8].size() <= 40)) &&
+        (items.size() <= 9 || (items[9] is string && items[9].size() > 0 && items[9].size() <= 40)) &&
+        (items.size() <= 10 || (items[10] is string && items[10].size() > 0 && items[10].size() <= 40)) &&
+        (items.size() <= 11 || (items[11] is string && items[11].size() > 0 && items[11].size() <= 40)) &&
+        (items.size() <= 12 || (items[12] is string && items[12].size() > 0 && items[12].size() <= 40)) &&
+        (items.size() <= 13 || (items[13] is string && items[13].size() > 0 && items[13].size() <= 40)) &&
+        (items.size() <= 14 || (items[14] is string && items[14].size() > 0 && items[14].size() <= 40)) &&
+        (items.size() <= 15 || (items[15] is string && items[15].size() > 0 && items[15].size() <= 40)) &&
+        (items.size() <= 16 || (items[16] is string && items[16].size() > 0 && items[16].size() <= 40)) &&
+        (items.size() <= 17 || (items[17] is string && items[17].size() > 0 && items[17].size() <= 40)) &&
+        (items.size() <= 18 || (items[18] is string && items[18].size() > 0 && items[18].size() <= 40)) &&
+        (items.size() <= 19 || (items[19] is string && items[19].size() > 0 && items[19].size() <= 40));
+    }
+    function validKeyword(item) {
+      return item is map && item.keys().hasOnly(['kind', 'text'])
+        && item.kind in ['pattern', 'weak', 'note']
+        && item.text is string && item.text.size() > 0 && item.text.size() <= 40;
+    }
+    function validKeywords(items) {
+      return items is list && items.size() <= 20 &&
+        (items.size() <= 0 || validKeyword(items[0])) &&
+        (items.size() <= 1 || validKeyword(items[1])) &&
+        (items.size() <= 2 || validKeyword(items[2])) &&
+        (items.size() <= 3 || validKeyword(items[3])) &&
+        (items.size() <= 4 || validKeyword(items[4])) &&
+        (items.size() <= 5 || validKeyword(items[5])) &&
+        (items.size() <= 6 || validKeyword(items[6])) &&
+        (items.size() <= 7 || validKeyword(items[7])) &&
+        (items.size() <= 8 || validKeyword(items[8])) &&
+        (items.size() <= 9 || validKeyword(items[9])) &&
+        (items.size() <= 10 || validKeyword(items[10])) &&
+        (items.size() <= 11 || validKeyword(items[11])) &&
+        (items.size() <= 12 || validKeyword(items[12])) &&
+        (items.size() <= 13 || validKeyword(items[13])) &&
+        (items.size() <= 14 || validKeyword(items[14])) &&
+        (items.size() <= 15 || validKeyword(items[15])) &&
+        (items.size() <= 16 || validKeyword(items[16])) &&
+        (items.size() <= 17 || validKeyword(items[17])) &&
+        (items.size() <= 18 || validKeyword(items[18])) &&
+        (items.size() <= 19 || validKeyword(items[19]));
+    }
+    function validProfileV2(playerId) {
+      let p = request.resource.data.profile;
+      return p is map && p.style in ['attack', 'balance', 'defense', 'unknown'] && (
+        (playerId.matches('^C:.+$')
+          && p.keys().hasOnly(['position', 'courtPreference', 'style', 'partnerRoles', 'restPreference'])
+          && p.position in ['', 'fore', 'back', 'either']
+          && p.courtPreference in ['', 'baseline', 'net', 'either']
+          && p.partnerRoles is list && p.partnerRoles.size() <= 6
+          && p.partnerRoles.hasOnly(['cover', 'attack', 'connect', 'tactics', 'encourage', 'either'])
+          && p.partnerRoles.toSet().size() == p.partnerRoles.size()
+          && (!p.partnerRoles.hasAny(['either']) || p.partnerRoles.size() == 1)
+          && p.restPreference in ['', 'continuous', 'rest', 'flexible'])
+        || (!playerId.matches('^C:.+$')
+          && p.keys().hasOnly(['style', 'keywords', 'legacyStrengths'])
+          && validKeywords(p.keywords) && validTextList(p.legacyStrengths))
+      );
+    }
+    match /playerProfilesV2/{playerId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && validPlayerId(playerId)
+        && request.resource.data.keys().hasOnly(['profile', 'updatedAt'])
+        && request.resource.data.updatedAt == request.time && validProfileV2(playerId);
+      allow delete: if false;
+    }
+    match /keywordSuggestions/{suggestionId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['kind', 'text', 'createdAt'])
+        && request.resource.data.kind in ['pattern', 'weak', 'note']
+        && request.resource.data.text is string && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 40 && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+    match /teamLineups/{team} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && team == 'C'
+        && request.resource.data.keys().hasOnly(['id', 'title', 'description', 'matches', 'mode', 'strategy', 'fixedPairs', 'reasons', 'profileVersion', 'algorithmVersion', 'revision', 'confirmedAt', 'confirmedBy'])
+        && request.resource.data.matches is list && request.resource.data.matches.size() == 20
+        && request.resource.data.mode in ['fixed', 'free', 'partial']
+        && request.resource.data.strategy in ['balance', 'win', 'stamina']
+        && request.resource.data.fixedPairs is list && request.resource.data.fixedPairs.size() <= 4
+        && request.resource.data.profileVersion is string && request.resource.data.profileVersion.size() == 16
+        && request.resource.data.confirmedAt == request.time
+        && request.resource.data.confirmedBy == request.auth.uid
+        && request.resource.data.revision is int
+        && ((!exists(/databases/$(database)/documents/teamLineups/C) && request.resource.data.revision == 1)
+          || (exists(/databases/$(database)/documents/teamLineups/C) && request.resource.data.revision == resource.data.revision + 1));
+      allow delete: if false;
+    }
+    match /matchupAnalyses/{analysisKey} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
     match /playerProfiles/{playerId} {
       allow read: if signedIn();
       allow create, update: if signedIn()
@@ -44,8 +149,7 @@ service cloud.firestore {
         && validPlayerId(playerId)
         && request.resource.data.keys().hasOnly(['items', 'updatedAt'])
         && request.resource.data.updatedAt == request.time
-        && request.resource.data.items is list
-        && request.resource.data.items.size() <= 20;
+        && validTextList(request.resource.data.items);
       allow delete: if false;
     }
 

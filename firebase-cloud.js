@@ -1,138 +1,158 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
-import { collection, doc, getDocs, getFirestore, onSnapshot, runTransaction, serverTimestamp, setDoc } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
+import { collection, doc, getDocs, getFirestore, onSnapshot, runTransaction, serverTimestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js';
 
-const firebaseConfig={
- apiKey:'AIzaSyDM-UxfDeXw1pFVrQ7MRzeMr051sfCXLP0',
- authDomain:'team-c-victory.firebaseapp.com',
- projectId:'team-c-victory',
- storageBucket:'team-c-victory.firebasestorage.app',
- messagingSenderId:'666605203672',
- appId:'1:666605203672:web:c76d72181d352a0b5167ad'
-};
-const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
-const profileCollection=collection(db,'playerProfiles'),traitsCollection=collection(db,'playerTraits'),suggestionCollection=collection(db,'traitSuggestions');
-const state={status:'connecting'};
+const app=initializeApp({
+ apiKey:'AIzaSyDM-UxfDeXw1pFVrQ7MRzeMr051sfCXLP0',authDomain:'team-c-victory.firebaseapp.com',projectId:'team-c-victory',
+ storageBucket:'team-c-victory.firebasestorage.app',messagingSenderId:'666605203672',appId:'1:666605203672:web:c76d72181d352a0b5167ad'
+});
+const auth=getAuth(app),db=getFirestore(app),functions=getFunctions(app,'asia-northeast3');
+const refs={profiles:collection(db,'playerProfilesV2'),traits:collection(db,'playerTraits'),suggestions:collection(db,'traitSuggestions'),keywords:collection(db,'keywordSuggestions')};
+const state={status:'connecting',pendingCount:0,lineup:null,lineupReady:false};
 window.PLAYER_PROFILE_CLOUD=state;
-
 let started=false,ready=false,migrating=false;
-let profileDocs=new Map(),traitDocs=new Map(),suggestionDocs=new Map();
-const notifyStatus=(status,error)=>{
- state.status=status;
- state.errorCode=error?.code||'';
- state.message=status==='ready'?'팀원과 실시간으로 공유 중입니다.':status==='connecting'?'팀 공유 저장소에 연결 중입니다.':(
-  state.errorCode==='auth/operation-not-allowed'?'Firebase Authentication에서 익명 로그인을 켜 주세요.':
-  state.errorCode==='auth/unauthorized-domain'?'Firebase Authentication의 승인된 도메인에 현재 웹사이트 주소를 추가해 주세요.':
-  state.errorCode==='permission-denied'?'Firestore 규칙을 최신 firestore.rules 내용으로 게시했는지 확인해 주세요.':
-  state.errorCode==='auth/invalid-api-key'?'Firebase 웹 앱 설정값을 확인해 주세요.':
-  state.errorCode==='unavailable'?'Firebase에 연결할 수 없습니다. 네트워크를 확인하고 다시 시도해 주세요.':
-  `Firebase 연결 실패 (${state.errorCode||'원인 코드 없음'}). 브라우저 개발자 도구 Console에서 상세 오류를 확인해 주세요.`
- );
- window.dispatchEvent(new Event('playerprofilecloudstatuschange'));
-};
-const snapshotsReady={profiles:false,traits:false,suggestions:false};
-const idTeam=id=>id.split(':',1)[0];
-function cloudProfile(raw){const clean={...raw};delete clean.traits;return clean;}
-function suggestionId(text){
- let hash=2166136261;
- for(const character of text)hash=Math.imul(hash^character.charCodeAt(0),16777619);
- return 's_'+(hash>>>0).toString(36);
+const records={profiles:new Map(),traits:new Map(),suggestions:new Map(),keywords:new Map()};
+const received=new Set(),pending=new Map(),pendingFields=new Map(),queue=new Map(),writing=new Set();
+const emit=(name,detail)=>window.dispatchEvent(new CustomEvent(name,{detail}));
+function notifyStatus(status,error){
+ state.status=status;state.pendingCount=pending.size;state.errorCode=error?.code||'';
+ const messages={
+  'auth/operation-not-allowed':'Firebase Authentication에서 익명 로그인을 켜 주세요.',
+  'permission-denied':'Firestore 규칙을 최신 firestore.rules로 게시해 주세요.',
+  'auth/unauthorized-domain':'Firebase Authentication 승인 도메인을 확인해 주세요.',
+  'auth/invalid-api-key':'Firebase 웹 앱 설정값을 확인해 주세요.',
+  'unavailable':'네트워크 연결을 확인해 주세요. 입력은 이 브라우저에 임시 저장됩니다.'
+ };
+ state.message=status==='ready'?(pending.size?'팀 공유 저장 중 · 이 브라우저에도 임시 저장':'팀원과 실시간으로 공유 중입니다.')
+  :status==='connecting'?'팀 공유 저장소 연결 중 · 이 브라우저에도 임시 저장'
+  :messages[state.errorCode]||`팀 공유 저장 실패 (${state.errorCode||'원인 코드 없음'}) · 이 브라우저에 임시 저장`;
+ emit('playerprofilecloudstatuschange');
 }
+const teamOf=id=>id.split(':')[0];
+const cloudProfile=raw=>{const profile={...raw};delete profile.traits;return profile;};
+const equal=(a,b)=>window.PLAYER_PROFILE_MODEL.stableStringify(a)===window.PLAYER_PROFILE_MODEL.stableStringify(b);
 function publishProfiles(){
  if(!ready)return;
  const profiles=window.PLAYER_PROFILES.all();
- for(const [id,record] of profileDocs){
-  const base=profiles[id]||{};
-  const raw={...(record.profile||{}),traits:traitDocs.get(id)?.items||record.profile?.traits||[]};
-  profiles[id]=window.PLAYER_PROFILE_MODEL.cleanProfile(raw,idTeam(id),base.keywords||[]);
+ for(const [id,record] of records.profiles){
+  if(!window.PLAYER_PROFILES.has(id))continue;
+  const raw={...record.profile,traits:records.traits.get(id)?.items||[]};
+  let desired=pending.get(id);
+  if(desired&&pendingFields.get(id)){desired={...raw,...Object.fromEntries([...pendingFields.get(id)].map(key=>[key,desired[key]]))};pending.set(id,desired);if(queue.has(id))queue.set(id,desired);}
+  if(desired&&equal(cloudProfile(desired),record.profile)&&(teamOf(id)!=='C'||equal(desired.traits,raw.traits))){pending.delete(id);pendingFields.delete(id);}
+  profiles[id]=desired&&!equal(desired,raw)?desired:window.PLAYER_PROFILE_MODEL.cleanProfile(raw,teamOf(id));
  }
- for(const [id,record] of traitDocs){
-  const base=profiles[id]||window.PLAYER_PROFILE_MODEL.cleanProfile(null,idTeam(id));
-  profiles[id]=window.PLAYER_PROFILE_MODEL.cleanProfile({...base,traits:record.items||[]},idTeam(id),base.keywords||[]);
- }
- window.dispatchEvent(new CustomEvent('playerprofilescloudchange',{detail:{profiles}}));
+ for(const [id,raw] of pending)profiles[id]=raw;
+ emit('playerprofilescloudchange',{profiles});
+ notifyStatus('ready');
 }
 function publishSuggestions(){
- if(!ready)return;
- const suggestions=[...new Set([...suggestionDocs.values()].map(item=>item.text).filter(text=>typeof text==='string'))]
-  .sort((a,b)=>a.localeCompare(b,'ko'));
- window.dispatchEvent(new CustomEvent('playertraitssuggestionschange',{detail:{suggestions}}));
+ const traits=[...new Set([...records.suggestions.values()].map(item=>item.text).filter(text=>typeof text==='string'))].sort();
+ emit('playertraitssuggestionschange',{suggestions:traits});
+ const suggestions={};
+ for(const item of records.keywords.values())if(Object.hasOwn(window.PLAYER_PROFILE_MODEL.keywordKinds,item.kind)&&typeof item.text==='string'){
+  (suggestions[item.kind]??=[]).push(item.text);
+ }
+ for(const kind of Object.keys(suggestions))suggestions[kind]=[...new Set(suggestions[kind])].sort();
+ emit('playerkeywordsuggestionschange',{suggestions});
 }
-async function createIfMissing(collectionRef,id,data,timestampField='updatedAt'){
- const reference=doc(collectionRef,id);
+async function createIfMissing(ref,id,data,timestamp='updatedAt'){
  await runTransaction(db,async transaction=>{
-  const existing=await transaction.get(reference);
-  if(!existing.exists())transaction.set(reference,{...data,[timestampField]:serverTimestamp()});
+  const target=doc(ref,id),existing=await transaction.get(target);
+  if(!existing.exists())transaction.set(target,{...data,[timestamp]:serverTimestamp()});
  });
 }
-async function migrateLocalProfiles(){
- const localProfiles=window.PLAYER_PROFILES.all();
- for(const [id,raw] of Object.entries(localProfiles)){
-  const profile=cloudProfile(raw);
-  await createIfMissing(profileCollection,id,{profile});
-  if(Array.isArray(raw.traits)){
-   await createIfMissing(traitsCollection,id,{items:raw.traits});
-   for(const text of raw.traits)await createIfMissing(suggestionCollection,suggestionId(text),{text},'createdAt');
+async function addSuggestions(raw,id){
+ const model=window.PLAYER_PROFILE_MODEL;
+ const entries=teamOf(id)==='C'?raw.traits.map(text=>({ref:refs.suggestions,records:records.suggestions,text,data:{text}}))
+  :raw.keywords.map(item=>({ref:refs.keywords,records:records.keywords,text:item.text,data:item}));
+ for(const entry of entries){
+  const key='s_'+model.fingerprint(entry.data);
+  if(!entry.records.has(key)){
+   await createIfMissing(entry.ref,key,entry.data,'createdAt');
+   entry.records.set(key,entry.data);
   }
  }
- const [profilesSnapshot,traitsSnapshot,suggestionsSnapshot]=await Promise.all([
-  getDocs(profileCollection),getDocs(traitsCollection),getDocs(suggestionCollection)
- ]);
- profileDocs=new Map(profilesSnapshot.docs.map(item=>[item.id,item.data()]));
- traitDocs=new Map(traitsSnapshot.docs.map(item=>[item.id,item.data()]));
- suggestionDocs=new Map(suggestionsSnapshot.docs.map(item=>[item.id,item.data()]));
- ready=true;
- notifyStatus('ready');
- publishProfiles();publishSuggestions();
+}
+async function flush(id){
+ if(!ready||writing.has(id))return;
+ writing.add(id);
+ try{
+  while(queue.has(id)){
+   const raw=queue.get(id);queue.delete(id);
+   const batch=writeBatch(db);
+   batch.set(doc(refs.profiles,id),{profile:cloudProfile(raw),updatedAt:serverTimestamp()});
+   if(teamOf(id)==='C')batch.set(doc(refs.traits,id),{items:raw.traits,updatedAt:serverTimestamp()});
+   await batch.commit();
+   await addSuggestions(raw,id);
+  }
+ }catch(error){
+  if(pending.has(id)&&!queue.has(id))queue.set(id,pending.get(id));
+  console.error('Firestore profile save failed',error);notifyStatus('error',error);
+ }finally{writing.delete(id);}
+}
+state.saveProfile=(id,raw,fields=null)=>{
+ if(!window.PLAYER_PROFILES.has(id))return;
+ const profile=window.PLAYER_PROFILE_MODEL.cleanProfile(raw,teamOf(id));
+ if(fields){const existing=pendingFields.get(id)||new Set();for(const field of fields)existing.add(field);pendingFields.set(id,existing);}else pendingFields.delete(id);
+ pending.set(id,profile);queue.set(id,profile);
+ notifyStatus(ready?'ready':'connecting');
+ return flush(id);
+};
+state.retry=()=>{if(ready)for(const id of queue.keys())void flush(id);};
+async function migrate(){
+ const legacy=await getDocs(collection(db,'playerProfiles'));
+ const old=new Map(legacy.docs.map(item=>[item.id,item.data()])),local=window.PLAYER_PROFILES.all();
+ for(const [id,localProfile] of Object.entries(local)){
+  if(records.profiles.has(id))continue;
+  const raw=old.has(id)?{...old.get(id).profile,traits:records.traits.get(id)?.items||old.get(id).profile?.traits||[]}:localProfile;
+  const profile=window.PLAYER_PROFILE_MODEL.cleanProfile(raw,teamOf(id),localProfile.keywords||[]);
+  await createIfMissing(refs.profiles,id,{profile:cloudProfile(profile)});
+  if(teamOf(id)==='C')await createIfMissing(refs.traits,id,{items:profile.traits});
+ }
+ const snapshots=await Promise.all(Object.values(refs).map(ref=>getDocs(ref)));
+ Object.keys(refs).forEach((key,index)=>{records[key]=new Map(snapshots[index].docs.map(item=>[item.id,item.data()]));});
+ ready=true;publishProfiles();publishSuggestions();
+ for(const id of queue.keys())void flush(id);
 }
 function start(){
- if(started||!window.PLAYER_PROFILES)return;
- started=true;
+ if(started||!window.PLAYER_PROFILES)return;started=true;
  signInAnonymously(auth).then(()=>{
-  onSnapshot(profileCollection,snapshot=>{
-   profileDocs=new Map(snapshot.docs.map(item=>[item.id,item.data()]));snapshotsReady.profiles=true;
-   if(Object.values(snapshotsReady).every(Boolean)&&!migrating){
-    migrating=true;migrateLocalProfiles().catch(error=>{console.error('Firebase profile migration failed',error);notifyStatus('error',error);});
-   }else publishProfiles();
-  },error=>{console.error('Firestore profiles listener failed',error);notifyStatus('error',error);});
-  onSnapshot(traitsCollection,snapshot=>{
-   traitDocs=new Map(snapshot.docs.map(item=>[item.id,item.data()]));snapshotsReady.traits=true;
-   if(Object.values(snapshotsReady).every(Boolean)&&!migrating){
-    migrating=true;migrateLocalProfiles().catch(error=>{console.error('Firebase profile migration failed',error);notifyStatus('error',error);});
-   }else publishProfiles();
-  },error=>{console.error('Firestore traits listener failed',error);notifyStatus('error',error);});
-  onSnapshot(suggestionCollection,snapshot=>{
-   suggestionDocs=new Map(snapshot.docs.map(item=>[item.id,item.data()]));snapshotsReady.suggestions=true;
-   if(Object.values(snapshotsReady).every(Boolean)&&!migrating){
-    migrating=true;migrateLocalProfiles().catch(error=>{console.error('Firebase profile migration failed',error);notifyStatus('error',error);});
-   }else publishSuggestions();
-  },error=>{console.error('Firestore suggestions listener failed',error);notifyStatus('error',error);});
- }).catch(error=>{console.error('Firebase anonymous sign-in failed',error);notifyStatus('error',error);});
+  for(const [key,ref] of Object.entries(refs))onSnapshot(ref,snapshot=>{
+   records[key]=new Map(snapshot.docs.map(item=>[item.id,item.data()]));received.add(key);
+   if(received.size===Object.keys(refs).length&&!migrating){migrating=true;void migrate().catch(error=>{console.error('Profile migration failed',error);notifyStatus('error',error);});}
+   else if(ready){if(key==='profiles'||key==='traits')publishProfiles();else publishSuggestions();}
+  },error=>{console.error('Firestore subscription failed',error);notifyStatus('error',error);});
+  onSnapshot(doc(db,'teamLineups','C'),snapshot=>{
+   state.lineup=snapshot.exists()?snapshot.data():null;state.lineupReady=true;state.lineupError='';emit('teamlineupchange',{lineup:state.lineup});
+  },error=>{state.lineupError=error.code;state.lineupReady=false;emit('teamlineupchange',{error:error.code});});
+ }).catch(error=>{console.error('Anonymous sign-in failed',error);notifyStatus('error',error);});
 }
-state.saveProfile=async(id,raw)=>{
- if(!ready)return;
- const profile=cloudProfile(raw),oldProfile=profileDocs.get(id)?.profile;
- const traits=Array.isArray(raw.traits)?raw.traits:[];
- const oldTraits=traitDocs.get(id)?.items||[];
- try{
-  if(JSON.stringify(oldProfile)!==JSON.stringify(profile)){
-   await setDoc(doc(profileCollection,id),{profile,updatedAt:serverTimestamp()});
-  }
-  if(JSON.stringify(oldTraits)!==JSON.stringify(traits)){
-   await setDoc(doc(traitsCollection,id),{items:traits,updatedAt:serverTimestamp()});
-  }
-  for(const text of traits){
-   const suggestionKey=suggestionId(text);
-   if(!suggestionDocs.has(suggestionKey)){
-    await setDoc(doc(suggestionCollection,suggestionKey),{text,createdAt:serverTimestamp()});
-   }
-  }
- }catch(error){console.error('Firestore profile save failed',error);notifyStatus('error',error);}
+state.saveLineup=async(plan,expectedRevision)=>{
+ if(!ready||!state.lineupReady)throw new Error('팀 공유 저장소 연결 후 확정할 수 있습니다.');
+ const errors=window.PAIRING_MODEL.validatePlan(window.BOARD_DATA,plan,plan.fixedPairs||[]);
+ if(errors.length)throw new Error(errors.join(' / '));
+ const target=doc(db,'teamLineups','C');
+ await runTransaction(db,async transaction=>{
+  const current=await transaction.get(target),revision=current.exists()?current.data().revision:0;
+  if(revision!==expectedRevision)throw new Error('다른 팀원이 출전표를 확정했습니다. 최신 확정표를 확인한 뒤 다시 선택해 주세요.');
+  transaction.set(target,{...plan,revision:revision+1,confirmedAt:serverTimestamp(),confirmedBy:auth.currentUser.uid});
+ });
 };
+state.analyzeMatchup=async request=>{
+ if(!ready)throw new Error('팀 공유 저장소 연결 후 AI 분석을 사용할 수 있습니다.');
+ const response=await httpsCallable(functions,'analyzeMatchup',{timeout:65000})(request);
+ return response.data;
+};
+state.subscribeAnalysis=(key,onResult,onError)=>onSnapshot(doc(db,'matchupAnalyses',key),snapshot=>{
+ if(snapshot.exists())onResult(snapshot.data());
+},onError);
 window.addEventListener('playerprofileschange',event=>{
- if(event.detail?.cloudRefresh||state.status!=='ready')return;
- const {team,name}=event.detail||{};
- if(team&&name){const profile=window.PLAYER_PROFILES.get(team,name);void state.saveProfile(team+':'+name,profile);}
+ if(event.detail?.cloudRefresh)return;
+ const {team,name,fields}=event.detail||{};
+ if(team&&name)void state.saveProfile(team+':'+name,window.PLAYER_PROFILES.get(team,name),fields);
 });
+window.addEventListener('online',state.retry);
 window.addEventListener('playerprofilesready',start,{once:true});
 if(window.PLAYER_PROFILES)start();

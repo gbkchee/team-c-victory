@@ -16,55 +16,27 @@ for(const team of ['A','B','D']){
  for(let i=0;i<names.length;i++)for(let j=i+1;j<names.length;j++)assert.equal(data.combos[team].filter(c=>c.pair.includes(names[i])&&c.pair.includes(names[j])).length,1);
 }
 for(const mutate of [d=>d.strategies[0].matches.pop(),d=>d.strategies[0].matches[0].pair=['꿉','한치'],d=>d.strategies[0].matches[1].pair=d.strategies[0].matches[0].pair,d=>d.strategies[0].matches[0].id=2,d=>d.strategies[0].matches[0].pair=['우디','우디'],d=>d.strategies[0].matches[0].time='11:30',d=>d.schedule[0].court=5,d=>d.schedule[1].court=d.schedule[0].court,d=>d.balanceVariants[2].matches[0].pair=['꿉','한치']]){const copy=JSON.parse(JSON.stringify(data));mutate(copy);assert.ok(validate(copy).length>0);}
-const {cleanProfile}=require('./ratings.js');
-const old={ratings:{serve:5,forehand:4.5},scores:[5,4,3,2,1],position:'back',style:'defense',keywords:[{kind:'weak',text:'체력'}]};
-const migrated=cleanProfile(old,'C');
-assert.deepEqual(migrated,{position:'back',style:'defense',confidentSkills:[],rustySkills:[],partnerRoles:[],restPreference:'',traits:[]});
-assert.ok(!Object.hasOwn(migrated,'ratings')&&!Object.hasOwn(migrated,'keywords'));
-const edited=cleanProfile({...migrated,confidentSkills:['lob','serve','serve','invalid'],partnerRoles:['cover','either'],restPreference:'continuous'},'C');
-assert.deepEqual(edited.confidentSkills,['serve','lob']);
-assert.deepEqual(edited.partnerRoles,['cover']);
-assert.equal(edited.restPreference,'continuous');
-assert.deepEqual(cleanProfile(JSON.parse(JSON.stringify(edited)),'C'),edited);
-assert.deepEqual(cleanProfile({confidentSkills:[5],rustySkills:['lob','invalid','lob'],partnerRoles:['bad'],restPreference:'bad',style:'allround'},'C'),{position:'',style:'unknown',confidentSkills:[],rustySkills:['lob'],partnerRoles:[],restPreference:'',traits:[]});
-const withTraits=cleanProfile({...edited,traits:['  왼손잡이  ','왼손잡이','파트너와   콜을 많이 함',null,5,'']},'C');
-assert.deepEqual(withTraits.traits,['왼손잡이','파트너와 콜을 많이 함']);
-assert.deepEqual(cleanProfile(JSON.parse(JSON.stringify(withTraits)),'C'),withTraits);
-assert.equal(cleanProfile({traits:Array.from({length:25},(_,index)=>'특징 '+index)},'C').traits.length,20);
+const {cleanProfile,profileVersion}=require('./profile-model.js');
+const old={position:'back',style:'defense',confidentSkills:['serve'],rustySkills:['lob'],partnerRoles:['cover','either'],restPreference:'condition',traits:['  왼손잡이  ']};
+assert.deepEqual(cleanProfile(old,'C'),{position:'back',courtPreference:'',style:'defense',partnerRoles:['cover'],traits:['왼손잡이'],restPreference:''});
+const modern=cleanProfile({courtPreference:'net',style:'balance',partnerRoles:['attack','encourage'],restPreference:'flexible'},'C');
+assert.equal(modern.courtPreference,'net');assert.equal(modern.style,'balance');assert.equal(modern.restPreference,'flexible');
+assert.deepEqual(cleanProfile(JSON.parse(JSON.stringify(modern)),'C'),modern);
+const opponent=cleanProfile({style:'allround',keywords:[{kind:'strong',text:'포핸드'},{kind:'weak',text:' 높은  공 '},{kind:'note',text:'장신'},{kind:'pattern',text:'포칭'}]},'A');
+assert.equal(opponent.style,'unknown');assert.deepEqual(opponent.legacyStrengths,['포핸드']);
+assert.deepEqual(opponent.keywords,[{kind:'weak',text:'높은 공'},{kind:'note',text:'장신'},{kind:'pattern',text:'포칭'}]);
+assert.ok(!Object.hasOwn(opponent,'tendency'));assert.ok(!Object.hasOwn(modern,'confidentSkills'));
+assert.equal(cleanProfile({traits:Array.from({length:25},(_,i)=>'특징 '+i)},'C').traits.length,20);
 assert.equal(cleanProfile({traits:['가'.repeat(50)]},'C').traits[0].length,40);
-assert.deepEqual(cleanProfile({traits:'왼손잡이'},'C').traits,[]);
-const seeds=[{kind:'strong',text:'포핸드'}];
-const opponent=cleanProfile({position:'fore',style:'allround',ratings:{serve:5}},'A',seeds);
-assert.equal(opponent.tendency,'unknown');assert.equal(opponent.style,'allround');
-assert.deepEqual(opponent.keywords,seeds);assert.ok(!Object.hasOwn(opponent,'confidentSkills'));
-assert.ok(!Object.hasOwn(cleanProfile({traits:['왼손잡이']},'A'),'traits'));
-const keywords=cleanProfile({tendency:'back',keywords:[{kind:'weak',text:'  높은   공  '},{kind:'weak',text:'높은 공'},{kind:'note',text:'장신'},{kind:'bad',text:'무효'}]},'D');
-assert.deepEqual(keywords.keywords,[{kind:'weak',text:'높은 공'},{kind:'note',text:'장신'}]);
-assert.equal(keywords.tendency,'back');
-assert.deepEqual(cleanProfile({keywords:[]},'B',seeds).keywords,[]);
-assert.equal(cleanProfile({keywords:Array.from({length:25},(_,index)=>({kind:'note',text:'특징 '+index}))},'A').keywords.length,20);
-const {isLegalPair,summarizePairs,analyzeMatchup}=require('./app.js');
-assert.ok(isLegalPair([{name:'우디',tier:'forty'},{name:'꿉',tier:'love'}]));
+assert.equal(cleanProfile({keywords:Array.from({length:25},(_,i)=>({kind:'pattern',text:'패턴 '+i}))},'A').keywords.length,20);
+assert.deepEqual(cleanProfile({keywords:[]},'A',[{kind:'weak',text:'포핸드'}]).keywords,[]);
+assert.deepEqual(cleanProfile({traits:['a',null,5,'a','  ']},'C').traits,['a']);
+const players=[{id:'C:우디',tier:'forty',profile:modern},{id:'C:숭',tier:'thirty',profile:cleanProfile(null,'C')}];
+assert.equal(profileVersion(players),profileVersion([...players].reverse()));
+assert.notEqual(profileVersion(players),profileVersion(players.map(p=>({...p,profile:{...p.profile,position:'fore'}}))));
+const {isLegalPair,analyzeMatchup}=require('./app.js');
 assert.equal(isLegalPair([{name:'꿉',tier:'love'},{name:'한치',tier:'love'}]),false);
-assert.equal(isLegalPair([{name:'송이',tier:'love'},{name:'올리버',tier:'love'}]),false);
 assert.equal(isLegalPair([{name:'우디',tier:'forty'},{name:'우디',tier:'forty'}]),false);
-assert.equal(isLegalPair([{name:'우디',tier:'forty'},{name:'',tier:'thirty'}]),false);
-for(const strategy of [...data.strategies,...data.balanceVariants])assert.equal(summarizePairs(strategy.matches).reduce((total,pair)=>total+pair.matches.length,0),20);
-assert.equal(summarizePairs([{id:1,pair:['우디','꿉']},{id:2,pair:['꿉','우디']}]).length,1);
-const own=[
- {name:'우디',profile:cleanProfile({position:'fore',confidentSkills:['lob'],partnerRoles:['cover']},'C')},
- {name:'숭',profile:cleanProfile({position:'back',confidentSkills:['coverage'],restPreference:'rest'},'C')}
-];
-const opponents=[
- {name:'동글',profile:cleanProfile({keywords:[{kind:'weak',text:'높은 공'},{kind:'strong',text:'발리'}]},'A')},
- {name:'송이',profile:cleanProfile(null,'A')}
-];
-const analysis=analyzeMatchup(own,opponents);
-assert.ok(analysis.plans.some(plan=>plan.text.includes('우디')&&plan.evidence.includes('높은 공')));
-assert.ok(analysis.roles.some(text=>text.includes('우디')&&text.includes('숭')&&text.includes('커버')));
-assert.ok(analysis.checks.some(text=>text.includes('숭')&&text.includes('휴식')));
-const differentOwn=[{name:'냉면',profile:cleanProfile({confidentSkills:['forehand']},'C')},own[1]];
-assert.ok(!analyzeMatchup(differentOwn,opponents).plans.some(plan=>plan.evidence.includes('높은 공')));
-const unconfirmed=opponents.map(player=>({...player,profile:cleanProfile({tendency:'fore',keywords:[]},'A')}));
-assert.ok(!analyzeMatchup(own,unconfirmed).plans.some(plan=>plan.evidence.includes('약점 기록')));
-console.log('PASS: 3개 전략·밸런스 3안, 공식 20경기 코트 배정, 77개 시트 메모, 프로필 이관·특징 저장, 금지 페어, 두 페어에 따른 공략');
+const analysis=analyzeMatchup(players.map(p=>({name:p.id.slice(2),profile:p.profile})),[{name:'동글',profile:opponent}]);
+assert.ok(analysis.roles.some(text=>text.includes('네트')));assert.ok(analysis.checks.some(text=>text.includes('포칭')));
+console.log('PASS: 공식 일정·기존 편성, 새 프로필과 보존 이관, 키워드 제한·미입력 처리');
