@@ -1,11 +1,11 @@
 # Firebase 연결·무료 Gemini·선수 입력 초기화
 
-프로젝트는 `team-c-victory`입니다. GitHub Pages가 화면을 배포하고 Firebase 익명 인증·Cloud Firestore가 입력을 공유합니다. 상대 공략은 키 없이 기본 규칙으로 표시하며, 추가 설정 후 Firebase AI Logic의 Gemini Developer API도 사용할 수 있습니다.
+프로젝트는 `team-c-victory`입니다. GitHub Pages가 화면을 배포하고 Firebase 익명 인증·Cloud Firestore가 입력을 공유합니다. 상대 공략은 미리 조사해 저장한 [복식 자료](TACTICS_REFERENCE.md)에서 입력에 맞춰 표시하며 AI나 검색을 호출하지 않습니다. 추가 설정 후 Firebase AI Logic의 Gemini Developer API도 선택적으로 사용할 수 있습니다.
 
 ## 선수 입력과 추천 연결
 
 1. Firebase 콘솔 **Authentication → 로그인 방법 → 익명**을 사용 설정합니다.
-2. **Firestore Database → 규칙**에 이 저장소의 최신 `firestore.rules` 전체 내용을 게시합니다. 상대 두 명만 분석하는 Gemini v2 캐시와 사용량 규칙도 포함합니다. 이번 UI 적용에서는 AI 요청·응답 형식이 변경되었으므로 새 규칙을 다시 게시해야 합니다. 선수 입력 규칙은 동일합니다.
+2. **Firestore Database → 규칙**에 이 저장소의 최신 `firestore.rules` 전체 내용을 게시합니다. 새 Gemini v3 출력(요약·주의할 점·대응방안·공략할 상황)과 기존 v2의 호환 규칙도 포함합니다. 선택적 Gemini 분석을 계속 사용할 때 새 형식을 저장하려면 다시 게시해야 합니다. 선수 입력 규칙은 동일하며 사전 조사 자료 기반의 기본 분석에는 이번 규칙 변경이 필요하지 않습니다.
 3. `main`을 원격에 푸시하고 GitHub Actions의 Pages 배포 성공을 확인합니다.
 4. 페이지 더 보기 메뉴에 **팀원과 실시간으로 공유 중입니다.**가 표시되는지 확인합니다.
 
@@ -35,6 +35,8 @@ firebase deploy --only firestore:rules --project team-c-victory
 Gemini API 비밀 키를 HTML·JavaScript·채팅에 넣지 않습니다. Firebase AI Logic의 설정 과정이 사용하는 Gemini 키는 Firebase 프록시가 관리합니다. App Check 공개 사이트 키는 별개이며 웹 앱에 포함할 수 있습니다.
 
 reCAPTCHA 공개 사이트 키를 `gemini-config.js`에 입력했습니다. 키 생성 후에도 Firebase App Check에 같은 키를 등록하고 Firebase AI Logic을 설정해야 Gemini를 호출할 수 있습니다. 실제 Gemini 호출과 Firebase 콘솔의 설정 상태는 아직 확인하지 않았습니다. 선수 입력·공유·페어 추천·관찰 기반 기본 공략은 AI 설정과 별개로 계속 동작합니다.
+
+현재 공개 키는 `6Leej-QtAAAAAM0H6d3G4jwvBsfG5P7_EtrPVz4e`이며 HTML의 설정 파일 URL에 버전을 붙여 이전 파일 캐시 사용을 줄였습니다. 실제 배포된 브라우저의 개발자 도구에서 `window.GEMINI_CONFIG.appCheckSiteKey`로 읽은 값과 콘솔의 등록 키를 비교합니다. 이 작업 환경에서는 배포 주소와 Firebase 콘솔 설정을 직접 확인하지 못했습니다. `403 App attestation failed`는 앱 확인 거절이며, 이 메시지만으로 키·도메인·점수·차단 문제 중 하나를 확정할 수 없습니다. 허용 도메인은 `gbkchee.github.io`이고 프로젝트·제공자·웹 점수 키 등록을 함께 확인합니다. 권장 점수 기준 0.5는 임의로 낮추지 않습니다.
 
 App Check에서 `appCheck/initial-throttle · HTTP 400`이 표시되면 앱 확인 토큰 교환 요청이 실패한 상태입니다. 이 코드는 첫 HTTP 실패 직후에도 발생하므로 오래 기다리면 해결된다는 뜻은 아닙니다. 현재 코드는 `ReCaptchaEnterpriseProvider`를 사용하므로 App Check의 등록 제공자도 Enterprise여야 합니다. SDK는 오류 응답 본문을 전달하지 않으므로 코드만으로 거절 원인을 확정할 수 없습니다. PC 크롬의 개발자 도구 → Network에서 AI 버튼을 누르고, `exchangeRecaptchaEnterpriseToken` 요청의 Response에 있는 `error.message`를 확인합니다. 해당 메시지에 따라 등록 키·웹 키·도메인 등 실제 실패 설정을 수정한 뒤 새로고침합니다. [공식 SDK의 오류·재시도 처리](https://github.com/firebase/firebase-js-sdk/blob/main/packages/app-check/src/providers.ts)
 
@@ -85,7 +87,7 @@ Firebase 콘솔 **Firestore Database → 데이터**에서 확인합니다.
 
 C조 선호와 선수별 특징, 상대 성향·관찰·기존 강점 참고, 이전 `playerProfiles`를 초기화합니다. 기본 명단·등급·배정표·공용 추천·팀 확정표·기존 및 Gemini 캐시·일일 사용량은 보존합니다. 프로필 버전이 바뀌면 이전 분석을 현재 입력의 캐시로 사용하지 않습니다.
 
-초기화 후 31개의 빈 새 프로필과 C조 8개의 빈 특징 문서를 남깁니다. 오래된 브라우저 입력이 다시 이관되는 것을 막기 위한 처리입니다. 새 페이지를 먼저 배포하고 모든 팀원이 페이지를 닫은 상태에서 실행한 뒤 새로고침합니다.
+초기화 후 31개의 빈 새 프로필과 C조 8개의 빈 특징 문서를 남깁니다. 오래된 브라우저 입력이 다시 이관되는 것을 막기 위한 처리입니다. 새 페이지를 먼저 배포하고 모든 팀원이 공유 저장 완료를 확인한 뒤 페이지를 닫은 상태에서 실행하고 새로고침합니다. 의도적으로 버릴 미전송 입력이 있는 기기는 먼저 해당 페이지에서 `localStorage.removeItem('teamc.pending-profiles.v1')`로 미전송 기록을 지웁니다. 이미 공유된 프로필 캐시와 달리 명시적인 미전송 수정은 재연결 시 복구하기 때문입니다.
 
 이 도구는 관리자 권한으로 실행하는 로컬 작업이며 AI 연결에 필요하지 않습니다. Firebase CLI 로그인과 Admin SDK 인증은 별개입니다. 프로젝트 권한이 있는 계정으로 [Application Default Credentials](https://cloud.google.com/docs/authentication/provide-credentials-adc)를 설정합니다. 아래 방법은 서비스 계정 키 파일을 생성하지 않습니다.
 

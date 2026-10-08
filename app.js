@@ -14,41 +14,26 @@
   return [...pairs.values()];
  }
 
+ const references=typeof module==='object'&&module.exports?require('./tactics-data.js'):window.OPPONENT_TACTICS;
  function analyzeOpponentPair(opponents){
-  const patterns=[],cautions=[],tactics=[],checks=['누가 리턴하고, 누가 전위에 서는지','네트 접근과 포칭이 얼마나 자주 나오는지','로브에 누가 반응하고 어떻게 처리하는지','파트너 콜과 공을 맡는 방식'];
-  for(const player of opponents){
-   for(const keyword of player.profile.keywords){
-    const text=keyword.text.replace(/\s/g,''),basis=player.name+' · '+keyword.text;
-    if(keyword.kind==='pattern'){
-     patterns.push({title:player.name+' · '+keyword.text,action:'기록된 플레이입니다. 어떤 상황에서 얼마나 자주 사용하는지 초반에 확인해 보세요.',basis});
-     let title='기록된 패턴 확인',action='이 플레이가 나오는 코스와 시점을 확인하고, 같은 상황을 반복해서 허용하는지 살펴보세요.';
-     if(/포칭/.test(text)){title='포칭 움직임 확인';action='전위가 움직이는 시점과 비우는 공간을 확인하세요. 같은 크로스만 반복할 때 포칭하는지도 살펴보세요.';}
-     else if(/네트|전위/.test(text)){title='네트 접근 시점 확인';action='서브나 랠리 뒤 언제 앞으로 들어오는지 확인하세요. 접근 이후 전위·후위의 커버 범위도 살펴보세요.';}
-     else if(/로브/.test(text)){title='로브 패턴 확인';action='어떤 상황에서 로브를 올리는지, 높이와 깊이가 일정한지 확인하세요. 파트너가 로브 이후 어디에 서는지도 살펴보세요.';}
-     else if(/다운더라인|직선/.test(text)){title='라인 공격 확인';action='어떤 공에서 라인으로 방향을 바꾸는지 확인하세요. 라인 공격 이후 두 선수의 위치도 살펴보세요.';}
-     else if(/슬라이스/.test(text)){title='낮은 공의 전개 확인';action='슬라이스의 높이와 깊이, 이후 네트 접근 여부를 확인하세요. 회전 기록만으로 공격 성공률을 단정하지 않습니다.';}
-     if(cautions.length<5)cautions.push({title,action,basis});
-    }
-    if(keyword.kind==='weak'){
-     let title='기록된 상황 확인',action='무리 없이 만들 수 있는 상황에서 반응을 확인하세요. 한 번의 실수만으로 약점이라고 단정하지 마세요.';
-     if(/몸쪽/.test(text)){title='몸쪽 공 반응 확인';action='초반에 무리 없는 몸쪽 서브나 리턴으로 반응을 확인하세요. 성공 여부를 보고 반복할지 정하세요.';}
-     else if(/높은.*백|백.*높은/.test(text)){title='높은 백핸드 반응 확인';action='안전하게 보낼 수 있다면 높고 깊은 공으로 백핸드 쪽 반응을 확인하세요. 기록과 실제 반응이 같은지 먼저 보세요.';}
-     else if(/낮은.*발리|발리.*낮은/.test(text)){title='낮은 발리 반응 확인';action='상대가 네트에 있을 때 가능한 범위에서 낮은 공을 연결해 보세요. 무리한 속도보다 높이와 깊이를 먼저 확인하세요.';}
-     else if(/로브/.test(text)){title='로브 대처 확인';action='안전한 로브를 한 번 시도해 누가 뒤로 움직이고 어떻게 처리하는지 확인하세요.';}
-     else if(/리턴/.test(text)){title='리턴 상황 확인';action='안정적인 서브로 기록된 리턴 상황을 만들어 반응을 확인하세요. 코스·높이·속도별 차이는 경기에서 살펴보세요.';}
-     else if(/체력|긴랠리/.test(text)){title='랠리 뒤 움직임 확인';action='안정적으로 랠리를 연결하며 움직임과 파트너의 커버를 확인하세요. 기록만으로 당일 체력이나 컨디션을 단정하지 않습니다.';}
-     else if(/포핸드|백핸드/.test(text)){title='기록된 방향 확인';action='기록된 방향으로 안전하게 연결해 실제 반응을 확인하세요. 유리한 높이·속도·회전은 직접 살펴보세요.';}
-     if(tactics.length<5)tactics.push({title:player.name+' · '+title,action,basis});
-     if(checks.length<6)checks.push(player.name+' · '+keyword.text+' 상황에서의 실제 반응');
-    }
-   }
+  const cautions=[],responses=[],tactics=[],seen={cautions:new Map(),responses:new Map(),tactics:new Map()};
+  function add(field,key,tip){const existing=seen[field].get(key);if(existing){existing.basis+=' / '+tip.basis;return;}seen[field].set(key,tip);({cautions,responses,tactics})[field].push(tip);}
+  const observations=opponents.flatMap(player=>player.profile.keywords.map(keyword=>({player,keyword}))).sort((a,b)=>({weak:0,pattern:1,note:2})[a.keyword.kind]-({weak:0,pattern:1,note:2})[b.keyword.kind]);
+  for(const {player,keyword} of observations){
+   const basis=player.name+' · '+keyword.text,rule=references.match(keyword.kind,keyword.text);
+   if(rule){
+    if(rule.caution)add('cautions',rule.id,{title:rule.title,action:rule.caution,basis,sourceIds:rule.sourceIds});
+    add('responses',rule.id,{title:rule.title,action:rule.response,basis,sourceIds:rule.sourceIds});
+    if(rule.tactic)add('tactics',rule.id,{title:rule.title,action:rule.tactic,basis,sourceIds:rule.sourceIds});
+   }else if(keyword.kind==='pattern')add('cautions',player.name+':'+keyword.text,{title:player.name+' · '+keyword.text,action:'기록된 패턴에 같은 방식으로 반복 대응하지 말고 실제 전개에 맞춰 코스를 조절하세요.',basis});
+   else if(keyword.kind==='weak')add('tactics',player.name+':'+keyword.text,{title:player.name+' · '+keyword.text,action:'기록된 상황을 무리 없는 범위에서 만들어보세요. 같은 반응이 반복될 때 활용하세요.',basis});
   }
-  if(!patterns.length)patterns.push({title:'공격 패턴 확인 필요',action:'공격 빈도·서브 코스·랠리 패턴의 관찰 기록이 없습니다. 첫 게임에서 실제 전개를 확인하세요.',basis:'공격 패턴 기록 없음'});
-  if(!cautions.length)cautions.push({title:'편한 상황부터 확인',action:'두 선수가 편하게 쓰는 서브·리턴·네트 플레이를 살펴보세요. 특징만으로 기술 능력을 추정하지 않습니다.',basis:'주의할 공격 패턴 기록 없음'});
-  if(!tactics.length)tactics.push({title:'초반 플레이부터 확인',action:'서브·리턴·네트 접근과 두 선수의 커버를 관찰하세요. 아직 구체적인 공략을 정할 기록이 부족합니다.',basis:'어려워하는 공·상황 기록 없음'});
+  if(!cautions.length)cautions.push({title:'무리한 결정구 주의',action:'어려운 공에서 한 번에 끝내려 하지 말고 깊이와 코스로 전개하세요.',basis:'일반 복식 원칙 · 주의사항에 대응하는 기록 없음',sourceIds:['positioning']});
+  if(!responses.length)responses.push({...references.general});
+  if(!tactics.length)tactics.push({title:'짧거나 뜨는 공에서 전개',action:'상대가 짧거나 높게 돌려주는 공에서 공격하세요. 아직 특정 선수의 약점으로 볼 기록은 부족해요.',basis:'어려워하는 공·상황 기록 없음',sourceIds:['threeShots']});
   const styles={attack:'공격형',balance:'밸런스형',defense:'수비형'};
-  const summary=opponents.map(player=>player.name+' · '+(styles[player.profile.style]||'성향 확인 필요')).join(' / ')+'. 개별 관찰을 모은 요약이며, 페어의 역할 분담과 호흡은 경기에서 확인해 주세요.';
-  return {summary,patterns:patterns.slice(0,5),cautions,tactics,checks};
+  const summary=opponents.map(player=>player.name+' · '+(styles[player.profile.style]||'성향 미입력')).join(' / ');
+  return {summary,cautions:cautions.slice(0,5),responses:responses.slice(0,5),tactics:tactics.slice(0,5)};
  }
  const model={isLegalPair,summarizePairs,analyzeOpponentPair};
  if(typeof module==='object'&&module.exports)module.exports=model;
@@ -212,7 +197,6 @@ if(typeof document!=='undefined')(() => {
   const counts=el('div','count-grid');for(const name of names('C'))counts.append(el('span','',displayName(name)+' · '+plan.matches.filter(match=>match.pair.includes(name)).length+'경기'));$('counts').append(counts);
  }
 
- let checkedInputKey='',checkedObservations=new Set();
  function analysisInput(){
   if(!legalNames(state.team,[state.p1,state.p2]))return null;
   const opponentPlayerIds=[state.p1,state.p2].map(name=>state.team+':'+name).sort();
@@ -224,14 +208,14 @@ if(typeof document!=='undefined')(() => {
   const section=el('section','observation-section');section.append(el('h3','',title),el('p','observation-source',source));return section;
  }
  function appendTips(section,tips){
-  for(const tip of tips){const card=el('div','observation-tip');card.append(el('h4','',tip.title),el('p','observation-basis','근거 관찰 · '+tip.basis),el('p','',tip.action));section.append(card);}
+  for(const tip of tips){const card=el('div','observation-tip');card.append(el('h4','',tip.title),el('p','observation-basis','근거 관찰 · '+tip.basis),el('p','',tip.action));
+   if(tip.sourceIds?.length){const links=el('p','muted small');for(const id of tip.sourceIds){const source=window.OPPONENT_TACTICS.sources[id];if(!source)continue;const link=el('a','',source.title);link.href=source.url;link.target='_blank';link.rel='noopener noreferrer';links.append(link,el('span','',' '));}card.append(links);}section.append(card);}
  }
  function renderAnalysis(){
   for(const choice of $('analysis-teams').querySelectorAll('button'))choice.setAttribute('aria-pressed',String(choice.dataset.team===state.team));
   populate($('opponent1'),state.team,state.p1,state.p2);populate($('opponent2'),state.team,state.p2,state.p1);
   const container=$('analysis-result');container.replaceChildren();const input=analysisInput(),cloud=window.PLAYER_PROFILE_CLOUD;
   if(aiState?.status==='loading'&&aiState.inputKey!==input?.key){aiGeneration++;if(aiUnsubscribe){aiUnsubscribe();aiUnsubscribe=null;}clearTimeout(aiWaitTimer);aiState.status='stale';}
-  if(checkedInputKey!==input?.key){checkedInputKey=input?.key||'';checkedObservations=new Set();}
   const selectionStatus=$('analysis-selection-status');selectionStatus.hidden=Boolean(input);
   selectionStatus.textContent=!state.team?'상대 조를 선택해 주세요':state.p1||state.p2?'상대 선수 한 명을 더 선택해 주세요':'상대 선수 두 명을 선택해 주세요';
   const active=aiState?.inputKey===input?.key?aiState:null,loading=active?.status==='loading',done=Boolean(active?.result);
@@ -249,7 +233,7 @@ if(typeof document!=='undefined')(() => {
   const opponents=[state.p1,state.p2].map(name=>({name:displayName(name),tier:data.teams[state.team][name].tier,profile:window.PLAYER_PROFILES.get(state.team,name)}));
   const basic=model.analyzeOpponentPair(opponents),result=done?active.result:basic;
   if(done){const compact=observationSection('기본 관찰 요약','관찰 기록 · '+state.team+'조');for(const player of opponents){const p=player.profile;compact.append(el('p','',player.name+' · '+p.keywords.filter(item=>item.kind==='pattern'||item.kind==='weak').map(item=>item.text).join(' / ')));}container.append(compact);}
-  const heading=el('div','observation-heading');heading.append(el('h2','',done?'AI 상세 분석 · 완료':'기본 관찰 요약'),el('p','muted small',done?'관찰 기록 기반 제안 · 실제 경기에서 확인해 주세요.':'두 선수를 선택해 바로 보는 관찰 기록 기반 요약'));container.append(heading);
+  const heading=el('div','observation-heading');heading.append(el('h2','',done?'AI 상세 분석 · 완료':'기본 관찰 요약'),el('p','muted small',done?'관찰 기록 기반 제안 · 실제 경기에서 확인해 주세요.':'입력한 기록에 맞춘 복식 참고 자료 · AI 호출 없이 바로 표시'));container.append(heading);
   const overview=observationSection('상대 페어 한눈에 보기','관찰 기록 · '+state.team+'조');
   for(const player of opponents){
    const card=el('div','opponent-observation'),identity=el('div','opponent-observation-heading'),tier=player.tier;
@@ -258,11 +242,10 @@ if(typeof document!=='undefined')(() => {
    overview.append(card);
   }
   overview.append(el('p','opponent-pair-summary',result.summary));container.append(overview);
-  for(const [title,source,tips] of [['예상 경기 패턴','관찰 기록 · 빈도와 역할은 확인 필요',result.patterns],['주의할 점','관찰 기록 기반 · 당일 반응을 확인해 주세요',result.cautions],['공략할 상황','시도해볼 제안 · 효과는 확인 필요',result.tactics]]){
+  for(const [title,source,tips] of [['주의할 점','관찰 기록 기반',result.cautions],['대응방안',done?'관찰 기록과 복식 참고 자료 기반':'입력에 맞춘 복식 참고 자료',result.responses],['공략할 상황','실제 반응에 맞춰 활용하세요',result.tactics]]){
    const section=observationSection(title,source);appendTips(section,tips);container.append(section);
   }
-  const checks=observationSection('초반에 확인할 것','확인 필요 · 첫 게임 체크리스트'),checklist=el('div','observation-checklist');
-  for(const text of result.checks){const label=el('label','observation-check'),check=el('input');check.type='checkbox';check.checked=checkedObservations.has(text);check.addEventListener('change',()=>{if(check.checked)checkedObservations.add(text);else checkedObservations.delete(text);});label.append(check,el('span','',text));checklist.append(label);}checks.append(checklist);container.append(checks);
+
  }
  $('ai-analyze').addEventListener('click',requestAnalysis);
  async function requestAnalysis(){

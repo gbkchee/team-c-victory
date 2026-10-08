@@ -150,19 +150,27 @@ service cloud.firestore {
         && (items.size() <= 3 || validTactic(items[3]))
         && (items.size() <= 4 || validTactic(items[4]));
     }
-    function validAnalysisResult(result) {
-      return result is map && result.keys().hasOnly(['summary', 'patterns', 'cautions', 'tactics', 'checks'])
+    function validAnalysisResult(result, version) {
+      return result is map
         && analysisText(result.summary, 1200)
-        && validAnalysisTips(result.patterns)
         && validAnalysisTips(result.cautions)
         && validAnalysisTips(result.tactics)
-        && result.checks is list && result.checks.size() >= 1 && result.checks.size() <= 6
-        && analysisText(result.checks[0], 500)
-        && (result.checks.size() <= 1 || analysisText(result.checks[1], 500))
-        && (result.checks.size() <= 2 || analysisText(result.checks[2], 500))
-        && (result.checks.size() <= 3 || analysisText(result.checks[3], 500))
-        && (result.checks.size() <= 4 || analysisText(result.checks[4], 500))
-        && (result.checks.size() <= 5 || analysisText(result.checks[5], 500));
+        && ((version == 'gemini-opponent-v3'
+            && result.keys().hasOnly(['summary', 'cautions', 'responses', 'tactics'])
+            && validAnalysisTips(result.responses))
+          || (version == 'gemini-opponent-v2'
+            && result.keys().hasOnly(['summary', 'patterns', 'cautions', 'tactics', 'checks'])
+            && validAnalysisTips(result.patterns)
+            && validLegacyChecks(result.checks)));
+    }
+    function validLegacyChecks(checks) {
+      return checks is list && checks.size() >= 1 && checks.size() <= 6
+        && analysisText(checks[0], 500)
+        && (checks.size() <= 1 || analysisText(checks[1], 500))
+        && (checks.size() <= 2 || analysisText(checks[2], 500))
+        && (checks.size() <= 3 || analysisText(checks[3], 500))
+        && (checks.size() <= 4 || analysisText(checks[4], 500))
+        && (checks.size() <= 5 || analysisText(checks[5], 500));
     }
     function validAnalysisPlayers(record) {
       let other = record.opponentPlayerIds;
@@ -181,7 +189,7 @@ service cloud.firestore {
         && record.attempt is string && record.attempt.matches('^[a-f0-9-]{36}$')
         && record.startedAt == request.time && record.updatedAt == request.time
         && record.profileVersion is string && record.profileVersion.matches('^[a-f0-9]{16}$')
-        && record.modelName == 'gemini-3.5-flash-lite' && record.promptVersion == 'gemini-opponent-v2'
+        && record.modelName == 'gemini-3.5-flash-lite' && record.promptVersion in ['gemini-opponent-v2', 'gemini-opponent-v3']
         && validAnalysisPlayers(record)
         && usage.updatedAt == request.time && usage.lastAnalysisKey == key
         && usage.lastAttempt == record.attempt;
@@ -194,7 +202,7 @@ service cloud.firestore {
         && record.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'result', 'message'])
         && ((record.status == 'ready'
             && record.keys().hasOnly(['status', 'attempt', 'ownerId', 'startedAt', 'updatedAt', 'profileVersion', 'modelName', 'promptVersion', 'opponentPlayerIds', 'result'])
-            && validAnalysisResult(record.result))
+            && validAnalysisResult(record.result, record.promptVersion))
           || (record.status == 'error'
             && record.keys().hasOnly(['status', 'attempt', 'ownerId', 'startedAt', 'updatedAt', 'profileVersion', 'modelName', 'promptVersion', 'opponentPlayerIds', 'message'])
             && analysisText(record.message, 250)));

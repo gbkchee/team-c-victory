@@ -2,6 +2,27 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const data=require('./data.js'),model=require('./profile-model.js');
 const ai=require('./gemini-analysis.js'),{createService,createFirestoreStore,AnalysisError}=ai;
+const reference=require('./tactics-data.js'),matchup=require('./app.js');
+test('모든 기본 상대 입력에 조사한 자료가 연결되고 자유 메모의 부정 표현은 추정하지 않는다',()=>{
+ for(const [kind,terms] of Object.entries(model.keywordSuggestions))for(const text of terms){
+  const rule=reference.match(kind,text);assert.ok(rule,kind+' · '+text);assert.ok(rule.response);assert.ok(rule.sourceIds.length);
+  for(const id of rule.sourceIds)assert.ok(reference.sources[id]?.url.startsWith('https://'));
+ }
+ for(const rule of reference.rules)for(const id of rule.sourceIds)assert.ok(reference.sources[id],rule.id+' · '+id);
+ assert.equal(reference.match('pattern','로브 안 씀'),null);assert.equal(reference.match('note','탑스핀 약함'),null);assert.equal(reference.match('note','새로운 자유 메모'),null);
+ assert.equal(reference.match('pattern',' 포칭  자주 함 ').id,'poach');assert.equal(reference.match('note','로브 잘 함').id,'lob');
+});
+test('동일 관찰의 두 선수 근거를 합치고 신체 특징을 약점으로 바꾸지 않는다',()=>{
+ const player=(name,keywords)=>({name,profile:model.cleanProfile({keywords},'A')});
+ const keyword={kind:'pattern',text:'적극적인 포칭'},result=matchup.analyzeOpponentPair([player('동글',[keyword]),player('펩시',[keyword])]);
+ assert.equal(result.responses.length,1);assert.match(result.responses[0].basis,/동글 · 적극적인 포칭/);assert.match(result.responses[0].basis,/펩시 · 적극적인 포칭/);
+ assert.deepEqual(Object.keys(result).sort(),['cautions','responses','summary','tactics']);
+ const physical=matchup.analyzeOpponentPair([player('동글',[{kind:'note',text:'키가 큼'},{kind:'note',text:'왼손잡이'}]),player('펩시',[])]);
+ assert.equal(physical.tactics.length,1);assert.match(physical.tactics[0].basis,/기록 없음/);assert.ok(physical.responses.every(tip=>tip.sourceIds.length));
+ // Known recorded difficulties remain visible even with many feature notes.
+ const busy=matchup.analyzeOpponentPair([player('동글',model.keywordSuggestions.note.map(text=>({kind:'note',text}))),player('펩시',[{kind:'weak',text:'높은 백핸드'}])]);
+ assert.equal(busy.responses[0].title,'높은 백핸드 상황');assert.match(busy.responses[0].basis,/펩시/);
+});
 function fakeFirestore(){
  const entries=new Map();let tail=Promise.resolve(),now=Date.parse('2026-10-08T03:00:00Z');
  const snapshot=ref=>({exists:()=>entries.has(ref.path),data:()=>entries.get(ref.path)});
@@ -20,10 +41,10 @@ function fixture(generate,options={}){
  return {db,store,service,request,change,profiles};
 }
 const tip={title:'로브 패턴 확인',action:'초반에 로브의 높이와 깊이를 확인하세요.',basis:'동글 · 로브 자주 사용'};
-const validResult={summary:'상대의 로브 패턴과 낮은 발리 반응을 확인하세요.',patterns:[tip],cautions:[tip],tactics:[tip],checks:['첫 게임에서 두 선수의 역할을 확인하세요.']};
+const validResult={summary:'상대의 로브 패턴과 낮은 발리 반응을 확인하세요.',responses:[tip],cautions:[tip],tactics:[tip]};
 const errorCode=code=>error=>error instanceof AnalysisError&&error.code===code;
 test('인증·선택·최신 버전을 확인하고 오래된 강점은 AI에 보내지 않는다',async()=>{
- let calls=0;const f=fixture(async context=>{calls++;assert.ok(context.players.every(player=>!Object.hasOwn(player.profile,'legacyStrengths')));assert.equal(context.players.length,2);assert.ok(!Object.hasOwn(context,'ownPlayerIds'));return validResult;});
+ let calls=0;const f=fixture(async context=>{calls++;assert.ok(context.players.every(player=>!Object.hasOwn(player.profile,'legacyStrengths')));assert.equal(context.players.length,2);assert.ok(!Object.hasOwn(context,'ownPlayerIds'));assert.equal(context.referenceVersion,reference.version);assert.ok(context.referenceTips.some(tip=>tip.sourceIds.includes('lob')));assert.ok(context.referenceTips.every(tip=>tip.basis.startsWith('A:')));return validResult;});
  await assert.rejects(f.service(f.request(),null),errorCode('unauthenticated'));
  for(const patch of [{opponentPlayerIds:['A:동글','A:동글']},{opponentPlayerIds:['C:우디','C:숭']},{opponentPlayerIds:['A:동글','B:감자']},{opponentPlayerIds:['A:동글','A:없음']},{opponentPlayerIds:['A:송이','A:올리버']}])await assert.rejects(f.service({...f.request(),...patch},'user'),errorCode('invalid-argument'));
  await assert.rejects(f.service({...f.request(),expectedProfileHash:'0000000000000000'},'user'),errorCode('failed-precondition'));
@@ -73,7 +94,7 @@ test('실패 후 재시도와 잘못된 응답 처리를 지원한다',async()=>
  await assert.rejects(f.service(f.request(),'one'),errorCode('resource-exhausted'));
  assert.equal([...f.db.entries].find(([key])=>key.startsWith('geminiMatchupAnalyses/'))[1].status,'error');
  assert.equal((await f.service(f.request(),'one')).status,'ready');assert.equal(calls,2);assert.equal(f.db.entries.get('geminiAiUsage/team').count,2);
- const invalid=fixture(async()=>({...validResult,patterns:[]}));
+ const invalid=fixture(async()=>({...validResult,responses:[]}));
  await assert.rejects(invalid.service(invalid.request(),'one'),errorCode('internal'));
  assert.throws(()=>ai.validateResult({...validResult,summary:''},['C:우디','C:숭']),errorCode('internal'));
 });
@@ -92,7 +113,8 @@ test('45초 시간 초과 후 오류를 저장하고 재시도할 수 있다',as
 });
 test('Gemini 구조화 응답, 제한·차단·잘못된 JSON과 SDK 오류를 처리한다',()=>{
  const Schema=Object.fromEntries(['object','array','string','enumString'].map(name=>[name,value=>({type:name,...value})]));
- const schema=ai.responseSchema(Schema);assert.equal(schema.properties.patterns.maxItems,5);assert.ok(!schema.properties.roles);
+ const schema=ai.responseSchema(Schema);assert.equal(schema.properties.responses.maxItems,5);assert.deepEqual(Object.keys(schema.properties).sort(),['cautions','responses','summary','tactics']);assert.equal(ai.promptVersion,'gemini-opponent-v3');
+ const legacy={...validResult,patterns:validResult.responses,checks:['이전 체크리스트']};delete legacy.responses;assert.throws(()=>ai.validateResult(legacy),AnalysisError);
  assert.deepEqual(ai.parseResponse({text:()=>JSON.stringify(validResult),candidates:[{finishReason:'STOP'}]}),validResult);
  for(const response of [{promptFeedback:{blockReason:'SAFETY'}},{candidates:[{finishReason:'MAX_TOKENS'}]},{text:()=>'{broken'}])assert.throws(()=>ai.parseResponse(response),AnalysisError);
  for(const [error,code] of [[{status:403},'failed-precondition'],[{message:'[429 Too Many Requests]'},'resource-exhausted'],[{code:'appCheck/recaptcha-error'},'failed-precondition'],[{code:'permission-denied'},'permission-denied'],[{name:'TimeoutError'},'deadline-exceeded'],[{},'unavailable']])assert.equal(ai.normalizeError(error).code,code);

@@ -11,10 +11,27 @@ const refs={profiles:collection(db,'playerProfilesV2'),traits:collection(db,'pla
 const gemini=window.GEMINI_ANALYSIS,aiConfig=window.GEMINI_CONFIG;
 const state={status:'connecting',pendingCount:0,lineup:null,lineupReady:false,aiProvider:'Gemini',aiStatus:aiConfig?.appCheckSiteKey?'ready':'setup'};
 window.PLAYER_PROFILE_CLOUD=state;
-let started=false,ready=false,migrating=false,connection=0;
+let started=false,ready=false,migrating=false,connection=0,subscriptionFailed=false;
 let profileSubscriptions=[];
 const records={profiles:new Map(),traits:new Map(),suggestions:new Map(),keywords:new Map()};
 const received=new Set(),pending=new Map(),pendingFields=new Map(),queue=new Map(),writing=new Set();
+const pendingStorageKey='teamc.pending-profiles.v1';
+function persistPending(){
+ try{
+  localStorage.setItem(pendingStorageKey,JSON.stringify(Object.fromEntries([...pending].map(([id,profile])=>[id,{profile,fields:[...pendingFields.get(id)||[]]}]))));
+ }catch{console.warn('Unsent player edits could not be stored in this browser.');}
+}
+// Restore only explicit unsent fields, never the old profile cache as a whole.
+try{
+ const saved=JSON.parse(localStorage.getItem(pendingStorageKey)||'{}');
+ for(const [id,entry] of Object.entries(saved||{})){
+  if(!window.PLAYER_PROFILES.has(id)||!entry||!Array.isArray(entry.fields))continue;
+  const profile=window.PLAYER_PROFILE_MODEL.cleanProfile(entry.profile,id.split(':')[0]);
+  const fields=new Set(entry.fields.filter(field=>Object.hasOwn(profile,field)));
+  if(!fields.size)continue;
+  pending.set(id,profile);pendingFields.set(id,fields);queue.set(id,profile);
+ }
+}catch{console.warn('Unsent player edits could not be read from this browser.');}
 const emit=(name,detail)=>window.dispatchEvent(new CustomEvent(name,{detail}));
 function notifyStatus(status,error){
  state.status=status;state.pendingCount=pending.size;state.errorCode=error?.code||'';
@@ -41,10 +58,10 @@ function publishProfiles(){
   const raw={...record.profile,traits:records.traits.get(id)?.items||[]};
   let desired=pending.get(id);
   if(desired&&pendingFields.get(id)){desired={...raw,...Object.fromEntries([...pendingFields.get(id)].map(key=>[key,desired[key]]))};pending.set(id,desired);if(queue.has(id))queue.set(id,desired);}
-  if(desired&&equal(cloudProfile(desired),record.profile)&&(teamOf(id)!=='C'||equal(desired.traits,raw.traits))){pending.delete(id);pendingFields.delete(id);}
   profiles[id]=desired&&!equal(desired,raw)?desired:window.PLAYER_PROFILE_MODEL.cleanProfile(raw,teamOf(id));
  }
  for(const [id,raw] of pending)profiles[id]=raw;
+ persistPending();
  emit('playerprofilescloudchange',{profiles});
  notifyStatus('ready');
 }
@@ -80,7 +97,7 @@ async function flush(id){
  if(!ready||writing.has(id))return;
  writing.add(id);
  try{
-  while(queue.has(id)){
+  while(ready&&queue.has(id)){
    const raw=queue.get(id);queue.delete(id);
    const fields=pendingFields.get(id)?new Set(pendingFields.get(id)):null;
    await runTransaction(db,async transaction=>{
@@ -90,6 +107,11 @@ async function flush(id){
     if(!fields||Object.keys(patch).length)transaction.set(target,{profile,updatedAt:serverTimestamp()});
     if(teamOf(id)==='C'&&(!fields||fields.has('traits')))transaction.set(doc(refs.traits,id),{items:raw.traits,updatedAt:serverTimestamp()});
    });
+   // Acknowledgements retire only values this transaction actually saved. Newer edits stay queued.
+   const remaining=pendingFields.get(id),desired=pending.get(id);
+   if(remaining&&desired)for(const field of fields||Object.keys(raw))if(equal(desired[field],raw[field]))remaining.delete(field);
+   if(remaining&&!remaining.size){pending.delete(id);pendingFields.delete(id);queue.delete(id);}
+   persistPending();notifyStatus(subscriptionFailed?'error':'ready',subscriptionFailed?{code:state.errorCode}:undefined);
    await addSuggestions(raw,id);
   }
  }catch(error){
@@ -100,17 +122,19 @@ async function flush(id){
 state.saveProfile=(id,raw,fields=null)=>{
  if(!window.PLAYER_PROFILES.has(id))return;
  const profile=window.PLAYER_PROFILE_MODEL.cleanProfile(raw,teamOf(id));
- const wasFull=pending.has(id)&&!pendingFields.has(id);
- if(fields&&!wasFull){const existing=pendingFields.get(id)||new Set();for(const field of fields)existing.add(field);pendingFields.set(id,existing);}else pendingFields.delete(id);
+ const existing=pendingFields.get(id)||new Set();
+ for(const field of fields||Object.keys(profile))if(Object.hasOwn(profile,field))existing.add(field);
+ pendingFields.set(id,existing);
  pending.set(id,profile);queue.set(id,profile);
+ persistPending();
  notifyStatus(ready?'ready':state.status==='error'?'error':'connecting',state.status==='error'?{code:state.errorCode}:undefined);
  return flush(id);
 };
 state.retry=()=>{
- if(ready){for(const id of queue.keys())void flush(id);return;}
+ if(ready&&!subscriptionFailed&&state.lineupReady&&state.status==='ready'){for(const id of queue.keys())void flush(id);return;}
  connection++;
  for(const unsubscribe of profileSubscriptions)unsubscribe();
- profileSubscriptions=[];received.clear();started=false;migrating=false;
+ profileSubscriptions=[];received.clear();started=false;ready=false;migrating=false;subscriptionFailed=false;state.lineupReady=false;
  notifyStatus('connecting');start();
 };
 async function migrate(activeConnection){
@@ -118,7 +142,7 @@ async function migrate(activeConnection){
  if(activeConnection!==connection)return;
  const old=new Map(legacy.docs.map(item=>[item.id,item.data()])),local=window.PLAYER_PROFILES.all();
  for(const [id,localProfile] of Object.entries(local)){
-  if(records.profiles.has(id))continue;
+  if(records.profiles.has(id)){await addSuggestions({...records.profiles.get(id).profile,traits:records.traits.get(id)?.items||[]},id);continue;}
   const raw=old.has(id)?{...old.get(id).profile,traits:records.traits.get(id)?.items||old.get(id).profile?.traits||[]}:localProfile;
   const profile=window.PLAYER_PROFILE_MODEL.cleanProfile(raw,teamOf(id),localProfile.keywords||[]);
   await createIfMissing(refs.profiles,id,{profile:cloudProfile(profile)});
@@ -126,7 +150,7 @@ async function migrate(activeConnection){
   await addSuggestions(profile,id);
  }
  const snapshots=await Promise.all(Object.values(refs).map(ref=>getDocs(ref)));
- if(activeConnection!==connection)return;
+ if(activeConnection!==connection||subscriptionFailed)return;
  Object.keys(refs).forEach((key,index)=>{records[key]=new Map(snapshots[index].docs.map(item=>[item.id,item.data()]));});
  ready=true;publishProfiles();publishSuggestions();
  for(const id of queue.keys())void flush(id);
@@ -141,11 +165,11 @@ function start(){
    records[key]=new Map(snapshot.docs.map(item=>[item.id,item.data()]));received.add(key);
    if(received.size===Object.keys(refs).length&&!migrating){migrating=true;void migrate(activeConnection).catch(error=>{if(activeConnection!==connection)return;console.error('Profile migration failed',error);notifyStatus('error',error);});}
    else if(ready){if(key==='profiles'||key==='traits')publishProfiles();else publishSuggestions();}
-  },error=>{if(activeConnection!==connection)return;console.error('Firestore subscription failed',error);notifyStatus('error',error);}));
+  },error=>{if(activeConnection!==connection)return;subscriptionFailed=true;ready=false;console.error('Firestore subscription failed',error);notifyStatus('error',error);}));
   profileSubscriptions.push(onSnapshot(doc(db,'teamLineups','C'),snapshot=>{
    if(activeConnection!==connection)return;
    state.lineup=snapshot.exists()?snapshot.data():null;state.lineupReady=true;state.lineupError='';emit('teamlineupchange',{lineup:state.lineup});
-  },error=>{if(activeConnection!==connection)return;state.lineupError=error.code;state.lineupReady=false;emit('teamlineupchange',{error:error.code});}));
+  },error=>{if(activeConnection!==connection)return;subscriptionFailed=true;ready=false;state.lineupError=error.code;state.lineupReady=false;notifyStatus('error',error);emit('teamlineupchange',{error:error.code});}));
  }).catch(error=>{if(activeConnection!==connection)return;console.error('Anonymous sign-in failed',error);notifyStatus('error',error);});
 }
 state.saveLineup=async(plan,expectedRevision)=>{
