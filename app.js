@@ -80,7 +80,11 @@ if(typeof document!=='undefined')(() => {
   if(state.page==='players'&&window.PLAYER_PROFILES.has(player))q.set('player',player);
   const entry={...history.state};
   if(!q.has('player')){delete entry.teamcPlayerEntry;delete entry.teamcRosterScroll;}
-  try{history[push?'pushState':'replaceState'](entry,'','#'+q);}catch{}
+  const next='#'+q,stalePlayerEntry=!q.has('player')&&(Object.hasOwn(history.state||{},'teamcPlayerEntry')||Object.hasOwn(history.state||{},'teamcRosterScroll'));
+  // Cloud updates often leave the route unchanged. Avoid exhausting Safari's history limit.
+  if(location.hash===next&&!stalePlayerEntry)return;
+  try{history[push?'pushState':'replaceState'](entry,'',next);}
+  catch{if(location.hash!==next){if(push)location.hash=next;else location.replace(next);}}
  }
  function navigatePage(page){
   if(state.page===page)return;
@@ -88,7 +92,7 @@ if(typeof document!=='undefined')(() => {
   const previous=new URLSearchParams(location.hash.slice(1));
   if(previous.has('player')){
    previous.delete('player');const entry={...history.state};delete entry.teamcPlayerEntry;delete entry.teamcRosterScroll;
-   history.replaceState(entry,'','#'+previous);
+   try{history.replaceState(entry,'','#'+previous);}catch{location.replace('#'+previous);}
   }
   state.page=page;writeHash(true);
   window.dispatchEvent(new CustomEvent('teamcroutechange'));

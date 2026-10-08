@@ -61,11 +61,19 @@ function firestoreFixture(){
 }
 function browser(store,{saved={},hash='',siteKey='fixture-public-site-key',mobile=false}={}){
  const document=documentFixture(),window=new EventTarget(),storage=new Map(Object.entries(saved)),timers=new Map();let clock=0,sequence=0;
- const location={hash,href:'https://gbkchee.github.io/team-c-victory/'+hash};
+ let locationHash=hash;
+ const location={get hash(){return locationHash;},set hash(value){changeFragment(value,false);},href:'https://gbkchee.github.io/team-c-victory/'+hash,replace:value=>changeFragment(value,true)};
  const historyEntries=[{state:null,hash}],mobileMedia=new EventTarget();let historyIndex=0;mobileMedia.matches=mobile;
- const setLocation=value=>{location.hash=value;location.href='https://gbkchee.github.io/team-c-victory/'+value;};
+ const setLocation=value=>{locationHash=value;location.href='https://gbkchee.github.io/team-c-victory/'+value;};
+ function changeFragment(value,replace){
+  if(locationHash===value)return;
+  if(replace)historyEntries[historyIndex]={state:null,hash:value};
+  else{historyEntries.splice(historyIndex+1);historyEntries.push({state:null,hash:value});historyIndex++;}
+  setLocation(value);context.setTimeout(()=>window.dispatchEvent({type:'hashchange'}),0);
+ }
  const moveHistory=delta=>{const next=historyIndex+delta;if(next<0||next>=historyEntries.length)return;const oldHash=location.hash;historyIndex=next;setLocation(historyEntries[next].hash);window.dispatchEvent({type:'popstate',state:historyEntries[next].state});if(oldHash!==location.hash)window.dispatchEvent({type:'hashchange'});};
- const history={scrollRestoration:'auto',get state(){return historyEntries[historyIndex].state;},replaceState:(state,_,value)=>{historyEntries[historyIndex]={state,hash:value};setLocation(value);},pushState:(state,_,value)=>{historyEntries.splice(historyIndex+1);historyEntries.push({state,hash:value});historyIndex++;setLocation(value);},back:()=>moveHistory(-1),forward:()=>moveHistory(1)};
+ const writable=()=>{history.writeCount++;if(history.rejectWrites)throw Object.assign(new Error('History updates restricted'),{name:'SecurityError'});};
+ const history={scrollRestoration:'auto',writeCount:0,rejectWrites:false,get state(){return historyEntries[historyIndex].state;},replaceState:(state,_,value)=>{writable();historyEntries[historyIndex]={state,hash:value};setLocation(value);},pushState:(state,_,value)=>{writable();historyEntries.splice(historyIndex+1);historyEntries.push({state,hash:value});historyIndex++;setLocation(value);},back:()=>moveHistory(-1),forward:()=>moveHistory(1)};
  const context={window,document,location,history,navigator:{clipboard:{writeText:async()=>{}}},localStorage:{getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,value)},CustomEvent:class {constructor(type,{detail}={}){this.type=type;this.detail=detail;}},URLSearchParams,Intl,console,TextEncoder,crypto:{randomUUID:crypto.randomUUID,subtle:{digest:async(_,input)=>Uint8Array.from(crypto.createHash('sha256').update(input).digest()).buffer}},
   setTimeout:(callback,delay=0)=>{const id=++sequence;timers.set(id,{callback,due:clock+delay});return id;},clearTimeout:id=>timers.delete(id),...store.api};
  window.location=location;window.scrollY=0;window.scrollTo=options=>{window.scrollY=options.top;};window.matchMedia=query=>query==='(max-width: 767px)'?mobileMedia:{matches:false};
@@ -229,6 +237,30 @@ test('선수 상세를 떠나는 탭 이동은 상세 기록과 편집 화면을
  assert.equal(one.$('player-detail-page').hidden,true);assert.equal(one.$('site-header').hidden,false);assert.equal(one.$('page-analysis').hidden,false);
  one.history.back();await one.advance(0);
  assert.equal(one.document.body.dataset.page,'players');assert.equal(one.$('player-detail-page').hidden,true);assert.equal(new URLSearchParams(one.location.hash.slice(1)).has('player'),false);
+});
+test('내용이 같은 공유 갱신은 방문 기록을 반복해서 쓰지 않는다',async()=>{
+ const one=browser(firestoreFixture(),{mobile:true});await one.flush();await one.advance();
+ const before=one.history.writeCount;
+ for(let i=0;i<120;i++)one.window.dispatchEvent({type:'playerprofileschange'});
+ assert.equal(one.history.writeCount,before);
+ one.$('tab-strategy').click();assert.equal(one.document.body.dataset.page,'strategy');
+ one.$('tab-analysis').click();assert.equal(one.document.body.dataset.page,'analysis');
+});
+test('Safari처럼 방문 기록 API가 제한돼도 모바일 탭·공유 주소·뒤로 가기는 동작한다',async()=>{
+ const one=browser(firestoreFixture(),{mobile:true});await one.flush();await one.advance();
+ one.open('C:우디');one.$('rating-back').click();await one.advance(0);
+ one.history.rejectWrites=true;
+ one.$('tab-strategy').click();await one.advance(0);assert.equal(one.document.body.dataset.page,'strategy');assert.equal(one.$('page-strategy').hidden,false);
+ one.$('tab-analysis').click();await one.advance(0);assert.equal(one.document.body.dataset.page,'analysis');assert.equal(one.$('page-analysis').hidden,false);assert.equal(new URLSearchParams(one.location.hash.slice(1)).get('page'),'analysis');
+ one.clickText('analysis-teams','A조');one.select('opponent1','펩시');one.select('opponent2','동글');await one.advance(0);
+ assert.equal(one.document.body.dataset.page,'analysis');assert.equal(new URLSearchParams(one.location.hash.slice(1)).get('p1'),'펩시');assert.equal(new URLSearchParams(one.location.hash.slice(1)).get('p2'),'동글');
+ one.history.back();await one.advance(0);assert.equal(one.document.body.dataset.page,'strategy');assert.equal(one.$('player-detail-page').hidden,true);
+ one.history.back();await one.advance(0);assert.equal(one.document.body.dataset.page,'players');assert.equal(one.$('player-detail-page').hidden,true);
+});
+test('방문 기록 API가 제한된 상세 화면에서도 탭 이동은 목록 기록을 남긴다',async()=>{
+ const one=browser(firestoreFixture(),{mobile:true,hash:'#page=players&player=C%3A우디'});await one.flush();one.history.rejectWrites=true;
+ one.$('tab-analysis').click();await one.advance(0);assert.equal(one.document.body.dataset.page,'analysis');assert.equal(one.$('player-detail-page').hidden,true);
+ one.history.back();await one.advance(0);assert.equal(one.document.body.dataset.page,'players');assert.equal(new URLSearchParams(one.location.hash.slice(1)).has('player'),false);
 });
 test('특징·관찰 추천을 키보드 없이 선택·해제하고 입력 초안과 저장 값을 유지한다',async()=>{
  const store=firestoreFixture(),{blankDocuments}=require('./reset-test-data.cjs');for(const [path,value] of blankDocuments({seconds:1}))store.entries.set(path,value);
