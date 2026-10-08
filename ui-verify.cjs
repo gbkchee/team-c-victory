@@ -55,7 +55,7 @@ function firestoreFixture(){
   collection:(_,path)=>({path,collection:true}),doc:(ref,...parts)=>({path:[ref.path,...parts].filter(Boolean).join('/')}),getDocs:async ref=>snapshot(ref),serverTimestamp:()=>({seconds:Date.now()/1000}),Timestamp:{fromMillis:value=>({seconds:value/1000})},
   onSnapshot:(ref,callback,onError)=>{const entry={ref,callback};subscriptions.add(entry);queueMicrotask(()=>{if(api.deniedCollection===ref.path)onError?.({code:'permission-denied'});else callback(snapshot(ref));});return ()=>subscriptions.delete(entry);},
   runTransaction:(_,callback)=>{const task=tail.then(async()=>{const writes=[];const result=await callback({get:async ref=>docSnapshot(ref.path),set:(ref,value)=>writes.push([ref.path,clone(value)])});for(const [path,value] of writes)entries.set(path,value);if(writes.length)broadcast();return result;});tail=task.catch(()=>{});return task;},
-  fixtureImport:async path=>{if(api.importError)throw api.importError;return path.endsWith('firebase-ai.js')?{getAI:()=>({}),GoogleAIBackend:class {},Schema:Object.fromEntries(['object','array','string','enumString'].map(name=>[name,value=>({type:name,...value})])),getGenerativeModel:(_,options,requestOptions)=>({generateContent:async text=>{api.generations=(api.generations||0)+1;api.lastOptions={options,requestOptions};const context=JSON.parse(text),result=api.generate?await api.generate(context):{summary:'Gemini 연결 결과',patterns:[{title:'관찰 패턴',action:'패턴을 확인하세요.',basis:'입력된 관찰'}],cautions:[{title:'주의할 점',action:'반복 패턴을 확인하세요.',basis:'입력된 관찰'}],tactics:[{title:'패턴 확인',action:'초반 반응을 확인하세요.',basis:'입력된 관찰'}],checks:['로브 담당 확인']};return {response:{text:()=>JSON.stringify(result),candidates:[{finishReason:'STOP'}]}};}})}:{initializeAppCheck:()=>({}),ReCaptchaEnterpriseProvider:class {},getToken:async()=>({token:'fixture-attestation'})};}
+  fixtureImport:async path=>{if(api.importError)throw api.importError;return path.endsWith('firebase-ai.js')?{getAI:()=>({}),GoogleAIBackend:class {},Schema:Object.fromEntries(['object','array','string','enumString'].map(name=>[name,value=>({type:name,...value})])),getGenerativeModel:(_,options,requestOptions)=>({generateContent:async text=>{api.generations=(api.generations||0)+1;api.lastOptions={options,requestOptions};const context=JSON.parse(text),result=api.generate?await api.generate(context):{summary:'Gemini 연결 결과',patterns:[{title:'관찰 패턴',action:'패턴을 확인하세요.',basis:'입력된 관찰'}],cautions:[{title:'주의할 점',action:'반복 패턴을 확인하세요.',basis:'입력된 관찰'}],tactics:[{title:'패턴 확인',action:'초반 반응을 확인하세요.',basis:'입력된 관찰'}],checks:['로브 담당 확인']};return {response:{text:()=>JSON.stringify(result),candidates:[{finishReason:'STOP'}]}};}})}:{initializeAppCheck:()=>({}),ReCaptchaEnterpriseProvider:class {},getToken:async()=>{if(api.appCheckError)throw api.appCheckError;return {token:'fixture-attestation'};}};}
  };
  return {entries,api,broadcast};
 }
@@ -242,6 +242,16 @@ test('키워드 개수·글자 수·중복 안내와 전체 한도·삭제 후 �
  one.clickText('opponent-keywords','✓ 서브 후 네트 접근');for(const kind of ['note','pattern','weak'])assert.equal(one.$('profile-keyword-text-'+kind).disabled,false);
  one.clickText('opponent-keywords','＋ 서브 후 네트 접근');for(const kind of ['note','pattern','weak'])assert.equal(one.$('profile-keyword-text-'+kind).disabled,true);
  one.$('opponent-keywords').querySelector('.keyword-remove').click();for(const kind of ['note','pattern','weak'])assert.equal(one.$('profile-keyword-text-'+kind).disabled,false);
+});
+test('AI 버튼을 누른 뒤 App Check 오류 코드와 HTTP 상태를 표시하며 생성 한도를 사용하지 않는다',async()=>{
+ const store=firestoreFixture();store.api.appCheckError={code:'appCheck/fetch-status-error',customData:{httpStatus:403},message:'AppCheck: token exchange failed'};
+ const one=browser(store,{hash:'#page=analysis&team=A'});await one.flush();
+ one.select('opponent1','펩시');one.select('opponent2','동글');assert.equal(one.$('ai-analyze').disabled,false);
+ await Promise.all(one.$('ai-analyze').click());await one.flush();
+ const status=one.$('analysis-ai-status').textContent;assert.ok(status.includes('appCheck/fetch-status-error'));assert.ok(status.includes('HTTP 403'));
+ assert.equal(one.$('ai-analyze').disabled,false);assert.ok(one.$('ai-analyze').textContent.includes('다시 시도'));
+ assert.equal(store.api.generations||0,0);assert.equal(store.entries.has('geminiAiUsage/team'),false);
+ assert.ok(one.$('analysis-result').textContent.includes('기본 관찰 요약'));
 });
 test('최초 공유 연결 실패 후 재시도하며 입력값과 텍스트 초안을 보존한다',async()=>{
  const store=firestoreFixture();store.api.deniedCollection='playerProfilesV2';

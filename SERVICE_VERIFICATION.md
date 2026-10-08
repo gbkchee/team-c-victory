@@ -51,7 +51,7 @@ Firestore 콘솔의 `playerProfilesV2/{조:이름}`·`playerTraits/{C:이름}`�
 
 1. 두 기기에서 같은 상대 조의 두 명을 선택합니다. 러브끼리는 선택할 수 없어야 합니다.
 2. **AI 상세 분석**을 누릅니다. 상대 페어 요약·예상 패턴·주의할 점·근거가 있는 공략·초반 체크리스트이 한국어로 표시돼야 합니다. 첫 요청은 App Check 확인·SDK 로딩·생성 시간이 걸릴 수 있습니다.
-3. Firestore `geminiMatchupAnalyses`에 `status: ready`·`result`가 생기는지 확인합니다. 오류면 화면 메시지·브라우저 콘솔·Firestore 규칙·AI Logic 공급자·App Check 등록 도메인을 확인합니다.
+3. Firestore `geminiMatchupAnalyses`에 `status: ready`·`result`가 생기는지 확인합니다. 오류면 화면 메시지·브라우저 콘솔·Firestore 규칙·AI Logic 공급자·App Check 등록 도메인을 확인합니다. App Check 실패는 버튼 아래에 SDK 오류 코드와 제공된 HTTP 상태를 표시합니다. `recaptcha-error`는 캡차 실행 단계, `fetch-status-error`는 Firebase 토큰 교환 단계, `throttled`·`initial-throttle`은 앞선 실패 이후 재시도 제한을 구분하는 단서입니다. 코드만으로 등록·도메인·네트워크 문제의 원인을 확정하지 않습니다.
 4. `geminiAiUsage/team`의 `count`를 기록합니다. 같은 입력으로 다시 호출하면 공동 캐시 안내가 나오고 `count`가 증가하지 않아야 합니다.
 5. 다른 기기에서도 같은 요청을 실행합니다. 기존 결과를 공유해야 합니다. 양쪽에서 새 입력을 동시에 요청해도 신규 시도 수는 1만 증가해야 합니다.
 6. 상대 관찰을 바꾸고 공유 저장 완료 후 다시 요청합니다. 새 버전의 분석이 생성돼야 합니다.

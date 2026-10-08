@@ -64,9 +64,9 @@ test('한국 날짜별 50회 한도, 다음 날 초기화와 한도 이후 캐�
 });
 test('App Check 설정 실패는 한도를 사용하지 않고 기존 캐시는 계속 읽는다',async()=>{
  const f=fixture(async()=>validResult);await f.service(f.request(),'one');
- const blocked=createService({data,model,store:f.store,generate:()=>assert.fail('must not call Gemini'),prepare:async()=>{throw new AnalysisError('failed-precondition','앱 확인 설정 필요');}});
+ const blocked=createService({data,model,store:f.store,generate:()=>assert.fail('must not call Gemini'),prepare:async()=>{throw {code:'appCheck/fetch-status-error',customData:{httpStatus:403}};}});
  assert.equal((await blocked(f.request(),'two')).cached,true);f.change();
- await assert.rejects(blocked(f.request(),'two'),errorCode('failed-precondition'));assert.equal(f.db.entries.get('geminiAiUsage/team').count,1);
+ await assert.rejects(blocked(f.request(),'two'),error=>{assert.equal(error.code,'failed-precondition');assert.equal(error.reason,'app-check');assert.match(error.message,/appCheck\/fetch-status-error/);assert.match(error.message,/HTTP 403/);return true;});assert.equal(f.db.entries.get('geminiAiUsage/team').count,1);
 });
 test('실패 후 재시도와 잘못된 응답 처리를 지원한다',async()=>{
  let calls=0;const f=fixture(async()=>{if(++calls===1)throw new Error('[429 Too Many Requests]');return validResult;});
@@ -96,6 +96,10 @@ test('Gemini 구조화 응답, 제한·차단·잘못된 JSON과 SDK 오류를 �
  assert.deepEqual(ai.parseResponse({text:()=>JSON.stringify(validResult),candidates:[{finishReason:'STOP'}]}),validResult);
  for(const response of [{promptFeedback:{blockReason:'SAFETY'}},{candidates:[{finishReason:'MAX_TOKENS'}]},{text:()=>'{broken'}])assert.throws(()=>ai.parseResponse(response),AnalysisError);
  for(const [error,code] of [[{status:403},'failed-precondition'],[{message:'[429 Too Many Requests]'},'resource-exhausted'],[{code:'appCheck/recaptcha-error'},'failed-precondition'],[{code:'permission-denied'},'permission-denied'],[{name:'TimeoutError'},'deadline-exceeded'],[{},'unavailable']])assert.equal(ai.normalizeError(error).code,code);
+ for(const httpStatus of [403,429]){
+  const error=ai.normalizeError({code:'appCheck/throttled',customData:{httpStatus},message:'AppCheck: private error details 429'});
+  assert.equal(error.reason,'app-check');assert.match(error.message,/appCheck\/throttled/);assert.ok(error.message.includes('HTTP '+httpStatus));assert.ok(!error.message.includes('private'));assert.ok(error.message.length<=250);assert.equal(ai.normalizeError(error),error);
+ }
 });
 
 test('우리팀 입력과 숨긴 강점 기록은 상대 분석 캐시를 바꾸지 않는다',async()=>{

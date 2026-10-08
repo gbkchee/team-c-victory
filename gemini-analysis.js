@@ -33,9 +33,19 @@
  }
  function normalizeError(error){
   if(error instanceof AnalysisError)return error;
-  const code=error?.code||'',message=error?.message||'',status=Number(error?.status||error?.customData?.status||message.match(/\[(\d{3})(?:\s|\])/u)?.[1]||0);
+  const code=typeof error?.code==='string'?error.code:'',message=typeof error?.message==='string'?error.message:'',status=Number(error?.status||error?.customData?.httpStatus||error?.customData?.status||message.match(/\[(\d{3})(?:\s|\])/u)?.[1]||0);
+  if(code.startsWith('appCheck/')||code.startsWith('app-check/')||/App Check|appcheck|attestation/i.test(message)){
+   const details=[];
+   if(/^[a-zA-Z][a-zA-Z0-9/_-]{0,79}$/.test(code))details.push('오류 코드: '+code);
+   if(Number.isInteger(status)&&status>=400&&status<=599)details.push('HTTP '+status);
+   const hint=/recaptcha-error$/.test(code)?'reCAPTCHA 실행에 실패했어요. 등록 도메인과 점수 기반 웹 키인지 확인해 주세요.'
+    :/fetch-network-error$/.test(code)?'앱 확인 서버에 연결하지 못했어요. 네트워크나 브라우저의 콘텐츠 차단을 확인해 주세요.'
+    :/throttled$|initial-throttle$/.test(code)?'앞선 앱 확인 오류로 재시도가 잠시 제한됐어요. 잠시 후 새로고침해 주세요.'
+    :status===403?'Firebase가 앱 확인 요청을 거절했어요.'
+    :'앱 확인에 실패했어요.';
+   return new AnalysisError('failed-precondition',hint+(details.length?' ('+details.join(' · ')+')':''),'app-check');
+  }
   if(status===429||/RESOURCE_EXHAUSTED|quota|429/i.test(message))return new AnalysisError('resource-exhausted','Gemini 무료 사용량 한도에 도달했습니다. 저장된 분석은 계속 사용할 수 있어요. 잠시 후 다시 시도해 주세요.','provider-quota');
-  if(code.startsWith('appCheck/')||code.startsWith('app-check/')||/App Check|appcheck|attestation/i.test(message))return new AnalysisError('failed-precondition','앱 확인 설정을 확인해 주세요. 설정 후 다시 분석할 수 있어요.','app-check');
   if(code==='permission-denied')return new AnalysisError('permission-denied','Firestore 규칙을 최신 firestore.rules로 게시해 주세요.');
   if([400,401,403,404].includes(status)||/API.*disabled|SERVICE_DISABLED|not.*found/i.test(message))return new AnalysisError('failed-precondition','Firebase AI Logic의 Gemini Developer API와 모델 설정을 확인해 주세요.','ai-setup');
   if(error?.name==='AbortError'||error?.name==='TimeoutError'||/timeout|timed out/i.test(message))return new AnalysisError('deadline-exceeded','AI 분석 시간이 오래 걸렸습니다. 잠시 후 다시 시도해 주세요.');
