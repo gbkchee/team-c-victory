@@ -24,7 +24,7 @@ function blankDocuments(timestamp){
  return documents;
 }
 async function inspect(db,scope){
- const collections=['playerProfiles','playerProfilesV2','playerTraits',...(scope==='all'?['traitSuggestions','keywordSuggestions','teamLineups','matchupAnalyses']:[])];
+ const collections=['playerProfiles','playerProfilesV2','playerTraits',...(scope==='all'?['traitSuggestions','keywordSuggestions','teamLineups','matchupAnalyses','geminiMatchupAnalyses']:[])];
  const snapshots=await Promise.all(collections.map(name=>db.collection(name).get()));
  return Object.fromEntries(collections.map((name,index)=>[name,snapshots[index].size]));
 }
@@ -33,19 +33,19 @@ async function reset(db,scope,timestamp){
  const documents=blankDocuments(timestamp),batch=db.batch();
  for(const [path,value] of documents)batch.set(db.doc(path),value);
  await batch.commit();
- for(const collection of ['playerProfiles',...(scope==='all'?['traitSuggestions','keywordSuggestions','teamLineups','matchupAnalyses']:[])])await db.recursiveDelete(db.collection(collection));
+ for(const collection of ['playerProfiles',...(scope==='all'?['traitSuggestions','keywordSuggestions','teamLineups','matchupAnalyses','geminiMatchupAnalyses']:[])])await db.recursiveDelete(db.collection(collection));
  for(const collection of ['playerProfilesV2','playerTraits']){
   const snapshot=await db.collection(collection).get();
   for(const document of snapshot.docs)if(!documents.has(document.ref.path))await db.recursiveDelete(document.ref);
  }
- // Keep aiUsage: clearing the daily counter would allow extra paid calls on the same day.
+ // Keep both old and Gemini usage counters so resets do not grant extra daily attempts.
 }
 async function main(){
  const options=parseArguments(process.argv.slice(2));
- const requireFunctions=createRequire(__dirname+'/functions/package.json');
- const {initializeApp,applicationDefault}=requireFunctions('firebase-admin/app'),{getFirestore,FieldValue}=requireFunctions('firebase-admin/firestore');
+ const requireAdmin=createRequire(__dirname+'/admin-tools/package.json');
+ const {initializeApp,applicationDefault}=requireAdmin('firebase-admin/app'),{getFirestore,FieldValue}=requireAdmin('firebase-admin/firestore');
  initializeApp({projectId:options.project,credential:applicationDefault()});const db=getFirestore();
- console.log(JSON.stringify({project:options.project,scope:options.scope,mode:options.execute?'초기화 실행':'대상 확인만',collections:await inspect(db,options.scope),blankProfiles:31,blankTraits:8,retain:['기본 선수 명단','공식 배정표','aiUsage 일일 한도 기록']},null,2));
+ console.log(JSON.stringify({project:options.project,scope:options.scope,mode:options.execute?'초기화 실행':'대상 확인만',collections:await inspect(db,options.scope),blankProfiles:31,blankTraits:8,retain:['기본 선수 명단','공식 배정표','aiUsage·geminiAiUsage 일일 한도 기록']},null,2));
  if(!options.execute){console.log('이 실행에서는 데이터를 변경하지 않았습니다.');return;}
  await reset(db,options.scope,FieldValue.serverTimestamp());console.log('완료: 입력 초기화 및 테스트 데이터 정리. 웹페이지를 새로고침하세요.');
 }

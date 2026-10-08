@@ -133,6 +133,112 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    function analysisText(value, limit) {
+      return value is string && value.size() > 0 && value.size() <= limit;
+    }
+    function validTactic(tip) {
+      return tip is map && tip.keys().hasOnly(['title', 'action', 'basis'])
+        && analysisText(tip.title, 120) && analysisText(tip.action, 900)
+        && analysisText(tip.basis, 500);
+    }
+    function validAnalysisResult(result, ownIds) {
+      return result is map && result.keys().hasOnly(['direction', 'tactics', 'roles', 'checks'])
+        && analysisText(result.direction, 1200)
+        && result.tactics is list && result.tactics.size() >= 1 && result.tactics.size() <= 5
+        && validTactic(result.tactics[0])
+        && (result.tactics.size() <= 1 || validTactic(result.tactics[1]))
+        && (result.tactics.size() <= 2 || validTactic(result.tactics[2]))
+        && (result.tactics.size() <= 3 || validTactic(result.tactics[3]))
+        && (result.tactics.size() <= 4 || validTactic(result.tactics[4]))
+        && result.roles is list && result.roles.size() == 2
+        && result.roles[0] is map && result.roles[1] is map
+        && result.roles[0].keys().hasOnly(['playerId', 'action'])
+        && result.roles[1].keys().hasOnly(['playerId', 'action'])
+        && result.roles[0].playerId in ownIds && result.roles[1].playerId in ownIds
+        && result.roles[0].playerId != result.roles[1].playerId
+        && analysisText(result.roles[0].action, 900) && analysisText(result.roles[1].action, 900)
+        && result.checks is list && result.checks.size() >= 1 && result.checks.size() <= 6
+        && analysisText(result.checks[0], 500)
+        && (result.checks.size() <= 1 || analysisText(result.checks[1], 500))
+        && (result.checks.size() <= 2 || analysisText(result.checks[2], 500))
+        && (result.checks.size() <= 3 || analysisText(result.checks[3], 500))
+        && (result.checks.size() <= 4 || analysisText(result.checks[4], 500))
+        && (result.checks.size() <= 5 || analysisText(result.checks[5], 500));
+    }
+    function validAnalysisPlayers(record) {
+      let own = record.ownPlayerIds;
+      let other = record.opponentPlayerIds;
+      return own is list && own.size() == 2 && own.toSet().size() == 2
+        && own[0] is string && own[1] is string
+        && own[0].matches('^C:.{1,40}$') && own[1].matches('^C:.{1,40}$')
+        && other is list && other.size() == 2 && other.toSet().size() == 2
+        && other[0] is string && other[1] is string
+        && ((other[0].matches('^A:.{1,40}$') && other[1].matches('^A:.{1,40}$'))
+          || (other[0].matches('^B:.{1,40}$') && other[1].matches('^B:.{1,40}$'))
+          || (other[0].matches('^D:.{1,40}$') && other[1].matches('^D:.{1,40}$')));
+    }
+    function validAnalysisClaim(key) {
+      let record = request.resource.data;
+      let usage = getAfter(/databases/$(database)/documents/geminiAiUsage/team).data;
+      return key.matches('^[a-f0-9]{64}$')
+        && record.keys().hasOnly(['status', 'attempt', 'ownerId', 'startedAt', 'updatedAt', 'profileVersion', 'modelName', 'promptVersion', 'ownPlayerIds', 'opponentPlayerIds'])
+        && record.status == 'pending' && record.ownerId == request.auth.uid
+        && record.attempt is string && record.attempt.matches('^[a-f0-9-]{36}$')
+        && record.startedAt == request.time && record.updatedAt == request.time
+        && record.profileVersion is string && record.profileVersion.matches('^[a-f0-9]{16}$')
+        && record.modelName == 'gemini-3.5-flash-lite' && record.promptVersion == 'gemini-matchup-v1'
+        && validAnalysisPlayers(record)
+        && usage.updatedAt == request.time && usage.lastAnalysisKey == key
+        && usage.lastAttempt == record.attempt;
+    }
+    function validAnalysisFinish() {
+      let record = request.resource.data;
+      return resource.data.status == 'pending' && resource.data.ownerId == request.auth.uid
+        && resource.data.startedAt + duration.value(90, 's') > request.time
+        && record.updatedAt == request.time
+        && record.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'result', 'message'])
+        && ((record.status == 'ready'
+            && record.keys().hasOnly(['status', 'attempt', 'ownerId', 'startedAt', 'updatedAt', 'profileVersion', 'modelName', 'promptVersion', 'ownPlayerIds', 'opponentPlayerIds', 'result'])
+            && validAnalysisResult(record.result, record.ownPlayerIds))
+          || (record.status == 'error'
+            && record.keys().hasOnly(['status', 'attempt', 'ownerId', 'startedAt', 'updatedAt', 'profileVersion', 'modelName', 'promptVersion', 'ownPlayerIds', 'opponentPlayerIds', 'message'])
+            && analysisText(record.message, 250)));
+    }
+    match /geminiMatchupAnalyses/{analysisKey} {
+      allow read: if signedIn();
+      allow create: if signedIn() && validAnalysisClaim(analysisKey);
+      allow update: if signedIn() && (validAnalysisFinish()
+        || ((resource.data.status == 'error'
+              || (resource.data.status == 'pending' && resource.data.startedAt + duration.value(90, 's') <= request.time))
+            && validAnalysisClaim(analysisKey)
+            && request.resource.data.profileVersion == resource.data.profileVersion
+            && request.resource.data.ownPlayerIds == resource.data.ownPlayerIds
+            && request.resource.data.opponentPlayerIds == resource.data.opponentPlayerIds));
+      allow delete: if false;
+    }
+    function validGeminiUsage() {
+      let usage = request.resource.data;
+      let claim = getAfter(/databases/$(database)/documents/geminiMatchupAnalyses/$(usage.lastAnalysisKey)).data;
+      return usage.keys().hasOnly(['dayStart', 'count', 'lastAnalysisKey', 'lastAttempt', 'updatedAt'])
+        && usage.dayStart == (request.time + duration.value(9, 'h')).date()
+        && usage.count is int && usage.count >= 1 && usage.count <= 50
+        && usage.updatedAt == request.time
+        && claim.status == 'pending' && claim.ownerId == request.auth.uid
+        && claim.startedAt == request.time && claim.updatedAt == request.time
+        && claim.attempt == usage.lastAttempt;
+    }
+    match /geminiAiUsage/{team} {
+      allow read: if signedIn() && team == 'team';
+      allow create: if signedIn() && team == 'team' && validGeminiUsage()
+        && request.resource.data.count == 1;
+      allow update: if signedIn() && team == 'team' && validGeminiUsage()
+        && ((request.resource.data.dayStart == resource.data.dayStart
+              && request.resource.data.count == resource.data.count + 1)
+          || (request.resource.data.dayStart != resource.data.dayStart
+              && request.resource.data.count == 1));
+      allow delete: if false;
+    }
+
     match /playerProfiles/{playerId} {
       allow read: if signedIn();
       allow create, update: if signedIn()

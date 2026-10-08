@@ -1,15 +1,15 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
-import { collection, doc, getDocs, getFirestore, onSnapshot, runTransaction, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
-import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js';
+import { collection, doc, getDocs, getFirestore, onSnapshot, runTransaction, serverTimestamp, Timestamp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 
 const app=initializeApp({
  apiKey:'AIzaSyDM-UxfDeXw1pFVrQ7MRzeMr051sfCXLP0',authDomain:'team-c-victory.firebaseapp.com',projectId:'team-c-victory',
  storageBucket:'team-c-victory.firebasestorage.app',messagingSenderId:'666605203672',appId:'1:666605203672:web:c76d72181d352a0b5167ad'
 });
-const auth=getAuth(app),db=getFirestore(app),functions=getFunctions(app,'asia-northeast3');
+const auth=getAuth(app),db=getFirestore(app);
 const refs={profiles:collection(db,'playerProfilesV2'),traits:collection(db,'playerTraits'),suggestions:collection(db,'traitSuggestions'),keywords:collection(db,'keywordSuggestions')};
-const state={status:'connecting',pendingCount:0,lineup:null,lineupReady:false};
+const gemini=window.GEMINI_ANALYSIS,aiConfig=window.GEMINI_CONFIG;
+const state={status:'connecting',pendingCount:0,lineup:null,lineupReady:false,aiProvider:'Gemini',aiStatus:aiConfig?.appCheckSiteKey?'ready':'setup'};
 window.PLAYER_PROFILE_CLOUD=state;
 let started=false,ready=false,migrating=false;
 const records={profiles:new Map(),traits:new Map(),suggestions:new Map(),keywords:new Map()};
@@ -146,13 +146,37 @@ state.saveLineup=async(plan,expectedRevision)=>{
   transaction.set(target,{...plan,revision:revision+1,confirmedAt:serverTimestamp(),confirmedBy:auth.currentUser.uid});
  });
 };
+let appCheck=null,ai=null,aiSDK=null,appCheckSDK=null;
+async function prepareGemini(){
+ if(!aiConfig?.appCheckSiteKey)throw new gemini.AnalysisError('failed-precondition','AI 연결 설정 후 사용할 수 있어요.','ai-setup');
+ if(aiConfig.modelName!==gemini.modelName)throw new gemini.AnalysisError('failed-precondition','지원하는 Gemini 무료 모델 설정을 확인해 주세요.','ai-setup');
+ if(!aiSDK)[aiSDK,appCheckSDK]=await Promise.all([import('https://www.gstatic.com/firebasejs/12.19.0/firebase-ai.js'),import('https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js')]);
+ if(!appCheck){
+  try{
+   const local=['localhost','127.0.0.1','[::1]'].includes(window.location.hostname);
+   if(local&&localStorage.getItem('teamc.appcheck-debug')==='true')window.FIREBASE_APPCHECK_DEBUG_TOKEN=true;
+   appCheck=appCheckSDK.initializeAppCheck(app,{provider:new appCheckSDK.ReCaptchaEnterpriseProvider(aiConfig.appCheckSiteKey),isTokenAutoRefreshEnabled:true});
+  }catch(error){throw gemini.normalizeError(error);}
+ }
+ await appCheckSDK.getToken(appCheck);
+ if(!ai)ai=aiSDK.getAI(app,{backend:new aiSDK.GoogleAIBackend()});
+}
+const aiStore=gemini.createFirestoreStore({db,doc,runTransaction,serverTimestamp,Timestamp,data:window.BOARD_DATA,model:window.PLAYER_PROFILE_MODEL});
+const analyzeGemini=gemini.createService({data:window.BOARD_DATA,model:window.PLAYER_PROFILE_MODEL,store:aiStore,prepare:prepareGemini,generate:async context=>{
+ const generator=aiSDK.getGenerativeModel(ai,{model:gemini.modelName,systemInstruction:gemini.instructions,generationConfig:{responseMimeType:'application/json',responseSchema:gemini.responseSchema(aiSDK.Schema,context.ownPlayerIds),maxOutputTokens:2000}},{timeout:gemini.timeoutMs});
+ const output=await generator.generateContent(JSON.stringify(context));
+ return gemini.parseResponse(output.response,context.ownPlayerIds);
+}});
 state.analyzeMatchup=async request=>{
- if(!ready)throw new Error('팀 공유 저장소 연결 후 AI 분석을 사용할 수 있습니다.');
- const response=await httpsCallable(functions,'analyzeMatchup',{timeout:65000})(request);
- return response.data;
+ if(!ready)throw new gemini.AnalysisError('failed-precondition','팀 공유 저장소 연결 후 AI 분석을 사용할 수 있습니다.');
+ try{return await analyzeGemini(request,auth.currentUser?.uid);}catch(error){throw gemini.normalizeError(error);}
 };
-state.subscribeAnalysis=(key,onResult,onError)=>onSnapshot(doc(db,'matchupAnalyses',key),snapshot=>{
- if(snapshot.exists())onResult(snapshot.data());
+state.subscribeAnalysis=(key,onResult,onError)=>onSnapshot(doc(db,'geminiMatchupAnalyses',key),snapshot=>{
+ if(snapshot.exists()){
+  const record=snapshot.data();
+  try{onResult({...record,...(record.status==='ready'?{result:gemini.validateResult(record.result,record.ownPlayerIds)}:{})});}
+  catch(error){onError?.(gemini.normalizeError(error));}
+ }
 },onError);
 window.addEventListener('playerprofileschange',event=>{
  if(event.detail?.cloudRefresh)return;

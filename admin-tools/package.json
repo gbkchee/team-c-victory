@@ -1,0 +1,6 @@
+{
+  "name": "team-c-victory-admin-tools",
+  "private": true,
+  "engines": { "node": ">=22" },
+  "dependencies": { "firebase-admin": "^13.0.0" }
+}
