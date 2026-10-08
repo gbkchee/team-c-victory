@@ -1,7 +1,7 @@
 'use strict';
 (function(root){
  const profilesModel=typeof module==='object'&&module.exports?require('./profile-model.js'):root.PLAYER_PROFILE_MODEL;
- const algorithmVersion='pairing-v2';
+ const algorithmVersion='pairing-v3';
  const modeLabels={fixed:'전체 고정',free:'자유 조합',partial:'일부 고정'};
  const strategyLabels={balance:'밸런스',win:'강강 조합'};
  const pairOf=value=>Array.isArray(value)?value:value?.pair;
@@ -31,6 +31,12 @@
   }
   for(const name of names)if(counts[name]!==5)errors.push(name+'은 정확히 5경기 출전해야 합니다.');
   if(plan.mode==='fixed'&&new Set(plan.matches.filter(match=>legalPair(data,match?.pair)).map(match=>pairKey(match.pair))).size!==4)errors.push('전체 고정은 네 페어를 유지해야 합니다.');
+  // Keep previously confirmed plans readable; apply the new cap to newly generated plans.
+  if(plan.mode==='free'&&plan.algorithmVersion===algorithmVersion){
+   const pairCounts=new Map();
+   for(const match of plan.matches)if(legalPair(data,match?.pair)){const key=pairKey(match.pair);pairCounts.set(key,(pairCounts.get(key)||0)+1);}
+   if([...pairCounts.values()].some(count=>count>3))errors.push('자유 조합에서 같은 페어는 최대 3경기까지 함께 출전할 수 있습니다.');
+  }
   return [...new Set(errors)];
  }
  function partitions(data,fixedPairs=[]){
@@ -93,7 +99,7 @@
    if(legalPair(data,pair)&&(!pair.some(name=>lockedNames.has(name))||locks.some(lock=>pairKey(lock)===pairKey(pair))))allowed.push(quality(pair));
   }
   allowed.sort((a,b)=>b.grade-a.grade||a.conflict-b.conflict||b.fit-a.fit||(a.key<b.key?-1:1));
-  const anchor=allowed[0].key;
+  const anchor=allowed[0].key,strongGrade=allowed[0].grade;
   const groups=[...new Set(data.schedule.map(match=>match.time))].sort().map(time=>data.schedule.filter(match=>match.time===time));
   const restMask=names.reduce((mask,name)=>profiles[name].restPreference==='rest'?mask|(1<<indexOf[name]):mask,0);
   const continuousMask=names.reduce((mask,name)=>profiles[name].restPreference==='continuous'?mask|(1<<indexOf[name]):mask,0);
@@ -113,12 +119,16 @@
    return cost;
   }
   function metrics(matches){
-   let conflicts=0,squares=0,fit=0,anchorCount=0;
-   for(const match of matches){const q=quality(match.pair);conflicts+=q.conflict;squares+=q.grade*q.grade;fit+=q.fit;if(q.key===anchor)anchorCount++;}
-   return {conflicts,squares,fit,anchorCount,rest:restCost(matches),variation:new Set(matches.map(match=>pairKey(match.pair))).size>4};
+   let conflicts=0,squares=0,fit=0,anchorCount=0,strongCount=0;
+   for(const match of matches){const q=quality(match.pair);conflicts+=q.conflict;squares+=q.grade*q.grade;fit+=q.fit;if(q.key===anchor)anchorCount++;if(q.grade===strongGrade)strongCount++;}
+   return {conflicts,squares,fit,anchorCount,strongCount,rest:restCost(matches),...pairMetrics(matches)};
   }
-  const baseVector=m=>strategy==='win'?[-m.anchorCount,m.conflicts,-m.fit,m.squares,m.rest]:[m.conflicts,m.squares,-m.fit,m.rest];
-  const vector=m=>[mode!=='fixed'&&names.length-lockedNames.size>=4&&!m.variation?1:0,...baseVector(m)];
+  function pairMetrics(matches){
+   const counts=new Map();for(const match of matches){const key=pairKey(match.pair);counts.set(key,(counts.get(key)||0)+1);}
+   return {variation:counts.size>4,repeatExcess:[...counts.values()].reduce((sum,count)=>sum+Math.max(0,count-3),0)};
+  }
+  const baseVector=m=>strategy==='win'?[-m.anchorCount,mode==='free'?-m.strongCount:0,m.conflicts,-m.fit,m.squares,m.rest]:[m.conflicts,m.squares,-m.fit,m.rest];
+  const vector=m=>[mode==='free'?m.repeatExcess:0,mode!=='fixed'&&names.length-lockedNames.size>=4&&!m.variation?1:0,...baseVector(m)];
   function compare(a,b){const av=vector(a),bv=vector(b);for(let i=0;i<av.length;i++)if(av[i]!==bv[i])return av[i]-bv[i];return 0;}
   const layoutCache=new Map();
   function arrange(pairs){
@@ -182,7 +192,8 @@
       const m={conflicts:current.metrics.conflicts-old1.conflict-old2.conflict+new1.conflict+new2.conflict,
        squares:current.metrics.squares-old1.grade**2-old2.grade**2+new1.grade**2+new2.grade**2,
        fit:current.metrics.fit-old1.fit-old2.fit+new1.fit+new2.fit,
-       anchorCount:current.metrics.anchorCount-Number(old1.key===anchor)-Number(old2.key===anchor)+Number(new1.key===anchor)+Number(new2.key===anchor),rest,variation:new Set(matches.map(match=>pairKey(match.pair))).size>4};
+       anchorCount:current.metrics.anchorCount-Number(old1.key===anchor)-Number(old2.key===anchor)+Number(new1.key===anchor)+Number(new2.key===anchor),
+       strongCount:current.metrics.strongCount-Number(old1.grade===strongGrade)-Number(old2.grade===strongGrade)+Number(new1.grade===strongGrade)+Number(new2.grade===strongGrade),rest,...pairMetrics(matches)};
       if(compare(m,best.metrics)<0)best={matches,metrics:m};
      }
      // Move complete pairs too: single-player exchanges alone can trap late-game layouts.
@@ -200,6 +211,10 @@
    }
    candidates=[...candidates,...improvements].sort((a,b)=>compare(a.metrics,b.metrics)||textCompare(signature(a.matches),signature(b.matches)));
   }
+  if(mode==='free'){
+   candidates=candidates.filter(candidate=>candidate.metrics.repeatExcess===0);
+   if(!candidates.length)throw new Error('같은 페어 최대 3경기와 휴식·상대 조 분산 조건을 함께 만족하는 자유 조합을 찾지 못했습니다.');
+  }
   const distinct=new Set(),selected=[];
   for(const candidate of candidates){const key=signature(candidate.matches);if(distinct.has(key))continue;distinct.add(key);selected.push(candidate);if(selected.length===(strategy==='balance'?2:1))break;}
   const descriptions={balance:'등급 구성과 리턴 자리·역할 선호의 균형을 맞춘 안입니다.',win:'공식 등급이 높은 두 선수를 함께 배치하는 안입니다. 실제 실력이나 승률을 의미하지 않습니다.'};
@@ -208,6 +223,7 @@
    if(candidate.metrics.conflicts)reasons.push('리턴 자리 선호가 겹치는 경기가 있습니다. 경기 전에 자리를 조율하세요.');else reasons.push('확인된 리턴 자리 선호가 서로 충돌하는 경기는 없습니다.');
    if(names.some(name=>!profiles[name].position||!profiles[name].courtPreference))reasons.push('미입력은 실력이나 약점으로 추정하지 않았습니다. 편한 위치를 함께 확인하세요.');
    if(mode==='partial')reasons.push('지정한 '+locks.length+'개 페어는 함께 5경기 출전합니다. 나머지 인원은 자유 조합입니다.');
+   if(mode==='free')reasons.push('같은 페어는 전체 출전표에서 최대 3경기까지만 함께 출전합니다.');
    reasons.push('모든 선수가 A·B·D조를 만나고, 같은 상대 조와는 최대 2경기 출전합니다.');
    if(restMask)reasons.push('쉬었다가를 선택한 선수는 최대 2경기까지만 연속 출전합니다.');
    const plan={id:mode+'-'+strategy+'-'+(index+1),title:strategy==='balance'?'밸런스 '+(index+1)+'안':'강강 조합',description:descriptions[strategy],mode,strategy,

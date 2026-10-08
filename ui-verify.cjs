@@ -59,22 +59,26 @@ function firestoreFixture(){
  };
  return {entries,api,broadcast};
 }
-function browser(store,{saved={},hash='',siteKey='fixture-public-site-key',mobile=false}={}){
+function browser(store,{saved={},hash='',siteKey='fixture-public-site-key',mobile=false,fragmentDelay=0}={}){
  const document=documentFixture(),window=new EventTarget(),storage=new Map(Object.entries(saved)),timers=new Map();let clock=0,sequence=0;
  let locationHash=hash;
  const location={get hash(){return locationHash;},set hash(value){changeFragment(value,false);},href:'https://gbkchee.github.io/team-c-victory/'+hash,replace:value=>changeFragment(value,true)};
  const historyEntries=[{state:null,hash}],mobileMedia=new EventTarget();let historyIndex=0;mobileMedia.matches=mobile;
  const setLocation=value=>{locationHash=value;location.href='https://gbkchee.github.io/team-c-victory/'+value;};
  function changeFragment(value,replace){
+  if(history.rejectFragments)throw Object.assign(new Error('Fragment updates restricted'),{name:'SecurityError'});
   if(locationHash===value)return;
-  if(replace)historyEntries[historyIndex]={state:null,hash:value};
-  else{historyEntries.splice(historyIndex+1);historyEntries.push({state:null,hash:value});historyIndex++;}
-  setLocation(value);context.setTimeout(()=>window.dispatchEvent({type:'hashchange'}),0);
+  const commit=()=>{
+   if(replace)historyEntries[historyIndex]={state:null,hash:value};
+   else{historyEntries.splice(historyIndex+1);historyEntries.push({state:null,hash:value});historyIndex++;}
+   setLocation(value);context.setTimeout(()=>window.dispatchEvent({type:'hashchange'}),0);
+  };
+  if(fragmentDelay)context.setTimeout(commit,fragmentDelay);else commit();
  }
  const moveHistory=delta=>{const next=historyIndex+delta;if(next<0||next>=historyEntries.length)return;const oldHash=location.hash;historyIndex=next;setLocation(historyEntries[next].hash);window.dispatchEvent({type:'popstate',state:historyEntries[next].state});if(oldHash!==location.hash)window.dispatchEvent({type:'hashchange'});};
  const writable=()=>{history.writeCount++;if(history.rejectWrites)throw Object.assign(new Error('History updates restricted'),{name:'SecurityError'});};
  const history={scrollRestoration:'auto',writeCount:0,rejectWrites:false,get state(){return historyEntries[historyIndex].state;},replaceState:(state,_,value)=>{writable();historyEntries[historyIndex]={state,hash:value};setLocation(value);},pushState:(state,_,value)=>{writable();historyEntries.splice(historyIndex+1);historyEntries.push({state,hash:value});historyIndex++;setLocation(value);},back:()=>moveHistory(-1),forward:()=>moveHistory(1)};
- const context={window,document,location,history,navigator:{clipboard:{writeText:async()=>{}}},localStorage:{getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,value)},CustomEvent:class {constructor(type,{detail}={}){this.type=type;this.detail=detail;}},URLSearchParams,Intl,console,TextEncoder,crypto:{randomUUID:crypto.randomUUID,subtle:{digest:async(_,input)=>Uint8Array.from(crypto.createHash('sha256').update(input).digest()).buffer}},
+ const context={window,document,location,history,navigator:{clipboard:{writeText:async value=>{window.copiedLink=value;}}},localStorage:{getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,value)},CustomEvent:class {constructor(type,{detail}={}){this.type=type;this.detail=detail;}},URLSearchParams,Intl,console,TextEncoder,crypto:{randomUUID:crypto.randomUUID,subtle:{digest:async(_,input)=>Uint8Array.from(crypto.createHash('sha256').update(input).digest()).buffer}},
   setTimeout:(callback,delay=0)=>{const id=++sequence;timers.set(id,{callback,due:clock+delay});return id;},clearTimeout:id=>timers.delete(id),...store.api};
  window.location=location;window.scrollY=0;window.scrollTo=options=>{window.scrollY=options.top;};window.matchMedia=query=>query==='(max-width: 767px)'?mobileMedia:{matches:false};
  context.Option=function(text,value){const option=document.createElement('option');option.textContent=text;option.value=value;return option;};
@@ -130,11 +134,13 @@ test('운영 방식만으로 밸런스 2안·강강 1안을 비교하고 선택�
  assert.equal(new URLSearchParams(one.location.hash.slice(1)).has('strategy'),false);
  const sharedHash=one.location.hash,two=browser(store,{hash:sharedHash});await two.flush();await two.advance();assert.ok(two.$('selected-plan-label').textContent.includes('강강 조합'));
  await Promise.all(one.$('confirm-lineup').click());await one.flush();const saved=clone(store.entries.get('teamLineups/C'));
- assert.equal(saved.strategy,'win');assert.equal(saved.algorithmVersion,'pairing-v2');assert.equal(one.$('confirmed-pairs-block').hidden,false);
+ assert.equal(saved.strategy,'win');assert.equal(saved.algorithmVersion,'pairing-v3');assert.equal(one.$('confirmed-pairs-block').hidden,false);
  assert.equal(one.window.PAIRING_MODEL.opponentViolations(one.window.BOARD_DATA,saved.matches).length,0);
  one.$('pair-options').querySelectorAll('button')[1].click();assert.ok(one.$('selected-plan-label').textContent.includes('밸런스 2안'));assert.equal(one.$('confirmed-pairs-block').hidden,true);
  assert.deepEqual(store.entries.get('teamLineups/C').matches,saved.matches);
  one.clickText('operation-modes','자유 조합');await one.advance();assert.deepEqual(titles(),['밸런스 1안','밸런스 2안','강강 조합']);
+ for(const card of one.$('pair-options').children)for(const count of card.querySelectorAll('.pair-match-count'))assert.ok(Number(count.textContent.replace('경기',''))<=3);
+ assert.ok(one.$('strategy-pairs').textContent.includes('최대 3경기'));
  one.open('C:우디');one.choose('restPreference','rest');await one.flush();one.$('rating-close').click();await one.advance();
  assert.deepEqual(titles(),['밸런스 1안','밸런스 2안','강강 조합']);
  await Promise.all(one.$('confirm-lineup').click());await one.flush();
@@ -261,6 +267,38 @@ test('방문 기록 API가 제한된 상세 화면에서도 탭 이동은 목록
  const one=browser(firestoreFixture(),{mobile:true,hash:'#page=players&player=C%3A우디'});await one.flush();one.history.rejectWrites=true;
  one.$('tab-analysis').click();await one.advance(0);assert.equal(one.document.body.dataset.page,'analysis');assert.equal(one.$('player-detail-page').hidden,true);
  one.history.back();await one.advance(0);assert.equal(one.document.body.dataset.page,'players');assert.equal(new URLSearchParams(one.location.hash.slice(1)).has('player'),false);
+});
+test('주소 반영이 지연돼도 빠른 탭 선택·공유 갱신·공유 링크는 마지막 화면을 유지한다',async()=>{
+ const store=firestoreFixture(),one=browser(store,{mobile:true,fragmentDelay:20});await one.flush();await one.advance();one.history.rejectWrites=true;
+ const assertPage=page=>{assert.equal(one.document.body.dataset.page,page);assert.equal(one.$('page-'+page).hidden,false);assert.equal(one.$('player-detail-page').hidden,true);};
+ one.$('tab-strategy').click();assertPage('strategy');
+ one.$('tab-analysis').click();assertPage('analysis');
+ one.clickText('analysis-teams','A조');one.select('opponent1','펩시');one.select('opponent2','찐빵');
+ for(let i=0;i<20;i++)one.window.dispatchEvent({type:'playerprofileschange'});
+ await Promise.all(one.$('share').click());
+ const shared=new URLSearchParams(one.window.copiedLink.split('#')[1]);assert.equal(shared.get('page'),'analysis');assert.equal(shared.get('p2'),'찐빵');assertPage('analysis');
+ for(let i=0;i<6;i++){await one.advance(20);assertPage('analysis');}
+ assert.equal(new URLSearchParams(one.location.hash.slice(1)).get('p2'),'찐빵');
+ one.history.back();await one.advance(0);assertPage('strategy');
+ one.history.back();await one.advance(0);assertPage('players');
+ one.history.forward();one.history.forward();await one.advance(0);assertPage('analysis');assert.equal(one.$('opponent2').value,'찐빵');
+});
+test('주소가 늦게 바뀌는 선수 상세에서 탭 이동과 즉시 목록 복귀도 이전 선수를 재표시하지 않는다',async()=>{
+ const one=browser(firestoreFixture(),{mobile:true,fragmentDelay:20});await one.flush();await one.advance();one.history.rejectWrites=true;
+ one.open('C:우디');assert.equal(one.$('player-detail-page').hidden,false);
+ one.$('tab-strategy').click();one.$('tab-analysis').click();
+ assert.equal(one.document.body.dataset.page,'analysis');assert.equal(one.$('player-detail-page').hidden,true);
+ for(let i=0;i<7;i++){await one.advance(20);assert.equal(one.document.body.dataset.page,'analysis');assert.equal(one.$('player-detail-page').hidden,true);}
+ one.history.back();one.history.back();await one.advance(0);assert.equal(one.document.body.dataset.page,'players');assert.equal(one.$('player-detail-page').hidden,true);
+ one.open('C:숭');one.$('rating-back').click();await one.advance(20);await one.advance(0);
+ assert.equal(one.$('player-detail-page').hidden,true);assert.equal(new URLSearchParams(one.location.hash.slice(1)).has('player'),false);
+ one.history.forward();await one.advance(0);assert.equal(one.$('player-detail-page').hidden,false);assert.ok(one.$('rating-player-info').textContent.includes('숭'));
+});
+test('주소 기록이 모두 거절돼도 탭 화면과 선수 입력은 전환된다',async()=>{
+ const one=browser(firestoreFixture(),{mobile:true});await one.flush();await one.advance();one.history.rejectWrites=true;one.history.rejectFragments=true;
+ for(const page of ['strategy','analysis','players','analysis']){one.$('tab-'+page).click();assert.equal(one.document.body.dataset.page,page);assert.equal(one.$('page-'+page).hidden,false);}
+ one.$('tab-players').click();one.open('C:우디');one.choose('courtPreference','net');await one.flush();assert.equal(one.window.PLAYER_PROFILES.get('C','우디').courtPreference,'net');
+ one.$('tab-analysis').click();assert.equal(one.$('player-detail-page').hidden,true);assert.equal(one.document.body.dataset.page,'analysis');
 });
 test('특징·관찰 추천을 키보드 없이 선택·해제하고 입력 초안과 저장 값을 유지한다',async()=>{
  const store=firestoreFixture(),{blankDocuments}=require('./reset-test-data.cjs');for(const [path,value] of blankDocuments({seconds:1}))store.entries.set(path,value);

@@ -1,8 +1,51 @@
 'use strict';
 if(typeof module==='object'&&module.exports)module.exports=require('./profile-model.js');
+// One route owner for tabs and player details. Rendering never waits for Safari to commit a URL.
+if(typeof document!=='undefined')(() => {
+ let hash=location.hash,entry=history.state,observedHash=hash,observedEntry=entry,active=null;
+ const queue=[],fallbackEntries=new Map(),same=(a,b)=>JSON.stringify(a||{})===JSON.stringify(b||{});
+ const announce=()=>window.dispatchEvent(new CustomEvent('teamcroutechange'));
+ function pump(){
+  if(active||!queue.length)return;
+  const operation=queue.shift();
+  if(operation.back){history.back();return;}
+  try{
+   history[operation.push?'pushState':'replaceState'](operation.entry,'',operation.hash);
+   observedHash=location.hash;observedEntry=history.state;pump();
+  }catch{
+   if(location.hash===operation.hash){fallbackEntries.set(operation.hash,operation.entry);pump();return;}
+   active=operation;
+   try{if(operation.push)location.hash=operation.hash;else location.replace(operation.hash);}
+   catch{active=null;pump();}
+  }
+ }
+ function syncNativeRoute(){
+  const next=location.hash,nativeEntry=history.state;
+  if(next===observedHash&&same(nativeEntry,observedEntry))return;
+  observedHash=next;observedEntry=nativeEntry;
+  if(active&&next===active.hash){
+   fallbackEntries.set(next,active.entry);active=null;pump();return;
+  }
+  // A real back/forward action or an external link takes precedence over queued URL writes.
+  active=null;queue.length=0;hash=next;entry=fallbackEntries.get(next)||nativeEntry||null;announce();
+ }
+ window.TEAM_NAVIGATION={
+  params:()=>new URLSearchParams(hash.slice(1)),state:()=>entry,
+  href:()=>location.href.split('#')[0]+hash,
+  write(params,{push=false,state=entry}={}){
+   const next='#'+params;if(next===hash&&same(state,entry))return;
+   hash=next;entry=state;
+   const operation={hash:next,entry:state,push};
+   if(!push&&queue.length&&!queue.at(-1).push&&!queue.at(-1).back)queue[queue.length-1]=operation;else queue.push(operation);
+   pump();
+  },
+  back(){if(active||queue.length)queue.push({back:true});else history.back();}
+ };
+ window.addEventListener('hashchange',syncNativeRoute);window.addEventListener('popstate',syncNativeRoute);
+})();
 if(typeof document!=='undefined')(() => {
  const root=document.getElementById('ratings-panel');if(!root)return;
- const model=window.PLAYER_PROFILE_MODEL;
+ const model=window.PLAYER_PROFILE_MODEL,navigation=window.TEAM_NAVIGATION;
  const {positions,courtPreferences,styles,partnerRoles,restPreferences,opponentStyles,keywordKinds,keywordSuggestions,traitSuggestions,cleanText,cleanProfile}=model;
  const data=window.BOARD_DATA;
  const tiers={forty:'포티',thirty:'써티',love:'러브'},tierSymbols={forty:'4️⃣',thirty:'3️⃣',love:'🫶'},tierOrder={forty:0,thirty:1,love:2};
@@ -21,7 +64,7 @@ if(typeof document!=='undefined')(() => {
  const mobile=window.matchMedia('(max-width: 767px)');
  let editorOpen=false,listScroll=0,previousScrollRestoration='auto',silentDialogCloses=0,returning=false,navigationGeneration=0;
  function routePlayer(){
-  const params=new URLSearchParams(location.hash.slice(1)),id=params.get('player');
+  const params=navigation.params(),id=params.get('player');
   return (!params.get('page')||params.get('page')==='players')&&allowed.has(id)?id:null;
  }
  function closeDialogSilently(){if(root.open){silentDialogCloses++;root.close();}}
@@ -41,14 +84,14 @@ if(typeof document!=='undefined')(() => {
   if(!allowed.has(id))return;
   const wasOpen=editorOpen;
   if(!wasOpen){
-   listScroll=fromRoute&&Number.isFinite(history.state?.teamcRosterScroll)?history.state.teamcRosterScroll:window.scrollY||0;
+   listScroll=fromRoute&&Number.isFinite(navigation.state()?.teamcRosterScroll)?navigation.state().teamcRosterScroll:window.scrollY||0;
    previousScrollRestoration=history.scrollRestoration||'auto';history.scrollRestoration='manual';
   }
   navigationGeneration++;returning=false;current=id;editorOpen=true;render();
   $('player-roster').querySelectorAll('.roster-player').forEach(item=>item.setAttribute('aria-pressed',String(item.dataset.player===current)));
   if(mobile.matches&&!fromRoute){
-   const params=new URLSearchParams(location.hash.slice(1));params.set('page','players');params.set('player',current);
-   history.pushState({...history.state,teamcPlayerEntry:true,teamcRosterScroll:listScroll},'','#'+params);
+   const params=navigation.params();params.set('page','players');params.set('player',current);
+   navigation.write(params,{push:true,state:{...navigation.state(),teamcPlayerEntry:true,teamcRosterScroll:listScroll}});
   }
   presentEditor();root.scrollTop=0;
   if(mobile.matches)window.scrollTo({top:0,behavior:'instant'});
@@ -66,7 +109,7 @@ if(typeof document!=='undefined')(() => {
   history.scrollRestoration=restoration;
   setTimeout(()=>{
    if(editorOpen||generation!==navigationGeneration)return;
-   const page=new URLSearchParams(location.hash.slice(1)).get('page');
+   const page=navigation.params().get('page');
    if(!page||page==='players'){
     window.scrollTo({top:scroll,behavior:'instant'});
     const trigger=[...$('player-roster').querySelectorAll('.roster-player')].find(button=>button.dataset.player===current);
@@ -76,10 +119,10 @@ if(typeof document!=='undefined')(() => {
  }
  function returnToRoster(){
   if(!editorOpen||returning)return;
-  if(routePlayer()&&history.state?.teamcPlayerEntry){returning=true;history.back();return;}
+  if(routePlayer()&&navigation.state()?.teamcPlayerEntry){returning=true;navigation.back();return;}
   if(routePlayer()){
-   const params=new URLSearchParams(location.hash.slice(1)),state={...history.state};params.delete('player');delete state.teamcPlayerEntry;delete state.teamcRosterScroll;
-   history.replaceState(state,'','#'+params);
+   const params=navigation.params(),state={...navigation.state()};params.delete('player');delete state.teamcPlayerEntry;delete state.teamcRosterScroll;
+   navigation.write(params,{state});
   }
   hideEditor();
   window.dispatchEvent(new CustomEvent('teamcroutechange'));
@@ -352,8 +395,6 @@ if(typeof document!=='undefined')(() => {
   const rect=root.getBoundingClientRect();
   if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)returnToRoster();
  });
- window.addEventListener('hashchange',syncPlayerRoute);
- window.addEventListener('popstate',syncPlayerRoute);
  window.addEventListener('teamcroutechange',syncPlayerRoute);
  $('profile-reset').addEventListener('click',()=>{delete profiles[current];persist();render();});
  savedStatus();renderRoster();

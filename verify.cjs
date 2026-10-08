@@ -42,6 +42,11 @@ assert.ok(analysis.cautions.some(tip=>tip.title.includes('포칭')));assert.ok(!
 console.log('PASS: 공식 일정·기존 편성, 새 프로필과 보존 이관, 키워드 제한·미입력 처리');
 
 const pairing=require('./pairing-model.js');
+const assertFreePairCap=plan=>{
+ if(plan.mode!=='free')return;
+ const counts=new Map();for(const match of plan.matches){const key=[...match.pair].sort().join('/');counts.set(key,(counts.get(key)||0)+1);}
+ assert.ok([...counts.values()].every(count=>count<=3),'자유 조합의 같은 페어는 최대 3경기');
+};
 assert.equal(pairing.partitions(data).length,90);
 const fixture={};Object.keys(data.teams.C).forEach((name,i)=>fixture['C:'+name]={position:i%2?'fore':'back',courtPreference:i%2?'net':'baseline',partnerRoles:[i%2?'cover':'attack'],restPreference:i%3===0?'rest':i%3===1?'continuous':'flexible'});
 for(const mode of ['fixed','free','partial']){
@@ -51,6 +56,7 @@ for(const mode of ['fixed','free','partial']){
   assert.deepEqual(pairing.validatePlan(data,plan),[]);
   assert.deepEqual(pairing.restViolations(data,plan.matches,fixture),[]);
   assert.deepEqual(pairing.opponentViolations(data,plan.matches),[]);
+  assertFreePairCap(plan);
   const keys=new Set(plan.matches.map(match=>pairing.pairKey(match.pair)));
   assert.ok(mode==='fixed'?keys.size===4:keys.size>4);
   if(mode==='partial')assert.ok(plan.matches.filter(match=>match.pair.includes('우디')).every(match=>match.pair.includes('꿉')));
@@ -72,6 +78,7 @@ for(let trial=0;trial<12;trial++){
   assert.deepEqual(pairing.validatePlan(data,plan),[]);
   assert.deepEqual(pairing.restViolations(data,plan.matches,profiles),[]);
   assert.deepEqual(pairing.opponentViolations(data,plan.matches),[]);
+  assertFreePairCap(plan);
  }
 }
 // Regressions: resting players cannot be assigned a late three-game run, including with a fixed partner who prefers continuous play.
@@ -80,6 +87,7 @@ for(const scenario of ['blank','rest','mixed']){
  for(const mode of ['fixed','free','partial'])for(const plan of pairing.generate(data,profiles,{mode,fixedPairs:[['우디','한치']]})){
   assert.deepEqual(pairing.restViolations(data,plan.matches,profiles),[]);
   assert.deepEqual(pairing.opponentViolations(data,plan.matches),[]);
+  assertFreePairCap(plan);
  }
 }
 const triple=[{time:'14:30',endTime:'15:00',pair:['우디','한치']},{time:'15:00',endTime:'15:30',pair:['우디','한치']},{time:'15:30',endTime:'16:00',pair:['우디','한치']}];
@@ -89,4 +97,7 @@ assert.deepEqual(pairing.restViolations(data,triple.map((match,index)=>index===2
 const strong=pairing.generate(data,{}, {mode:'free'}).at(-1);
 assert.ok(strong.matches.filter(match=>match.pair.includes('우디')).every(match=>match.pair.some(name=>name!=='우디'&&data.teams.C[name].tier==='thirty')));
 const oldPlan={...normal,algorithmVersion:'pairing-v1',strategy:'stamina'};assert.deepEqual(pairing.validatePlan(data,oldPlan),[]);
-console.log('PASS: 세 운영 모드·밸런스 2안·강강 1안, 휴식 선수 최대 2연속, 상대 조별 1~2경기, 고정 유지·결정적 추천');
+// Repetition alone must reject a new free plan, while old confirmed plans stay readable.
+const repeated={...normal,mode:'free',fixedPairs:[]};assert.ok(pairing.validatePlan(data,repeated).some(error=>error.includes('최대 3경기')));
+assert.deepEqual(pairing.validatePlan(data,{...repeated,algorithmVersion:'pairing-v2'}),[]);
+console.log('PASS: 세 운영 모드·밸런스 2안·강강 1안, 자유 페어 최대 3경기, 휴식 선수 최대 2연속, 상대 조별 1~2경기, 고정 유지·결정적 추천');

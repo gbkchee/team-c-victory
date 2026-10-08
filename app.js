@@ -55,7 +55,7 @@
  else window.MATCHUP_MODEL=model;
 })();
 if(typeof document!=='undefined')(() => {
- const data=window.BOARD_DATA,$=id=>document.getElementById(id),model=window.MATCHUP_MODEL,pairing=window.PAIRING_MODEL,definitions=window.PLAYER_PROFILE_MODEL;
+ const data=window.BOARD_DATA,$=id=>document.getElementById(id),model=window.MATCHUP_MODEL,pairing=window.PAIRING_MODEL,definitions=window.PLAYER_PROFILE_MODEL,navigation=window.TEAM_NAVIGATION;
  const el=(tag,cls,text)=>{const node=document.createElement(tag);if(cls)node.className=cls;if(text!==undefined)node.textContent=text;return node;};
  const displayName=name=>name.replace(/\s*\(시트:.*\)$/,'');
  const tiers={forty:'4️⃣',thirty:'3️⃣',love:'🫶'},tierLabels={forty:'포티',thirty:'써티',love:'러브'},tierOrder={forty:0,thirty:1,love:2};
@@ -63,7 +63,7 @@ if(typeof document!=='undefined')(() => {
  let state={},plans=[],worker=null,generation=0,requestKey='',recommendationError='',calculating=false,timer=null,confirmationMessage='';
  const recommendationCache=new Map();let aiState=null,aiGeneration=0,aiUnsubscribe=null,aiWaitTimer=null;
  function readHash(){
-  const q=new URLSearchParams(location.hash.slice(1));let fixed=[];
+  const q=navigation.params();let fixed=[];
   try{const parsed=JSON.parse(q.get('fixed')||'[]');if(Array.isArray(parsed)&&parsed.length<=3&&parsed.every(item=>pairing.legalPair(data,item)))fixed=parsed;}catch{}
   const legacyVariant=q.has('strategy')?(q.get('strategy')==='win'?2:Math.min(1,Number(q.get('variant')||0))):Number(q.get('variant')||0);
   state={page:['players','strategy','analysis'].includes(q.get('page'))?q.get('page'):'players',
@@ -76,25 +76,21 @@ if(typeof document!=='undefined')(() => {
   const q=new URLSearchParams({page:state.page,mode:state.mode,variant:String(state.variant),view:state.view,filter:state.filter});
   if(state.mode==='partial')q.set('fixed',JSON.stringify(state.fixedPairs));
   for(const key of ['team','p1','p2'])if(state[key])q.set(key,state[key]);
-  const player=new URLSearchParams(location.hash.slice(1)).get('player');
+  const player=navigation.params().get('player');
   if(state.page==='players'&&window.PLAYER_PROFILES.has(player))q.set('player',player);
-  const entry={...history.state};
+  const entry={...navigation.state()};
   if(!q.has('player')){delete entry.teamcPlayerEntry;delete entry.teamcRosterScroll;}
-  const next='#'+q,stalePlayerEntry=!q.has('player')&&(Object.hasOwn(history.state||{},'teamcPlayerEntry')||Object.hasOwn(history.state||{},'teamcRosterScroll'));
-  // Cloud updates often leave the route unchanged. Avoid exhausting Safari's history limit.
-  if(location.hash===next&&!stalePlayerEntry)return;
-  try{history[push?'pushState':'replaceState'](entry,'',next);}
-  catch{if(location.hash!==next){if(push)location.hash=next;else location.replace(next);}}
+  navigation.write(q,{push,state:entry});
  }
  function navigatePage(page){
   if(state.page===page)return;
   // Leaving an editor must leave a roster entry behind, not a stale player detail.
-  const previous=new URLSearchParams(location.hash.slice(1));
+  const previous=navigation.params();
   if(previous.has('player')){
-   previous.delete('player');const entry={...history.state};delete entry.teamcPlayerEntry;delete entry.teamcRosterScroll;
-   try{history.replaceState(entry,'','#'+previous);}catch{location.replace('#'+previous);}
+   previous.delete('player');const entry={...navigation.state()};delete entry.teamcPlayerEntry;delete entry.teamcRosterScroll;
+   navigation.write(previous,{state:entry});
   }
-  state.page=page;writeHash(true);
+  state.page=page;renderPage();writeHash(true);
   window.dispatchEvent(new CustomEvent('teamcroutechange'));
  }
  function cleanPair(team,a,b){
@@ -283,11 +279,11 @@ if(typeof document!=='undefined')(() => {
 
  for(const [id,field] of [['opponent1','p1'],['opponent2','p2']])$(id).addEventListener('change',()=>{state[field]=$(id).value;[state.p1,state.p2]=cleanPair(state.team,state.p1,state.p2);renderAnalysis();writeHash();});
  for(const choice of $('analysis-teams').querySelectorAll('button'))choice.addEventListener('click',()=>{if(state.team!==choice.dataset.team){state.team=choice.dataset.team;state.p1='';state.p2='';}renderAnalysis();writeHash();});
- function render(){calculate();renderStrategy();renderAnalysis();renderPage();writeHash();}
- for(const event of ['hashchange','popstate','teamcroutechange'])window.addEventListener(event,()=>{readHash();render();});
+ function render(){renderPage();calculate();renderStrategy();renderAnalysis();writeHash();}
+ window.addEventListener('teamcroutechange',()=>{readHash();render();});
  window.addEventListener('playerprofileschange',()=>{confirmationMessage='';render();});
  window.addEventListener('playerprofilecloudstatuschange',()=>{renderStrategy();renderAnalysis();});
   window.addEventListener('teamlineupchange',render);
- $('share').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(location.href);$('share-status').textContent='현재 선택 링크를 복사했습니다.';$('share-fallback').hidden=true;}catch{$('share-fallback').hidden=false;$('share-url').value=location.href;$('share-url').focus();$('share-url').select();$('share-status').textContent='아래 링크를 복사해 공유하세요.';}});
+ $('share').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(navigation.href());$('share-status').textContent='현재 선택 링크를 복사했습니다.';$('share-fallback').hidden=true;}catch{$('share-fallback').hidden=false;$('share-url').value=navigation.href();$('share-url').focus();$('share-url').select();$('share-status').textContent='아래 링크를 복사해 공유하세요.';}});
  readHash();render();
 })();
