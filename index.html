@@ -63,6 +63,16 @@
 <section id="page-strategy" class="page-panel" role="tabpanel" aria-labelledby="tab-strategy" hidden>
 <div class="rule-strip"><span>전원 5경기</span><span>동시간 중복 출전 없음</span><span>러브끼리 조합 불가</span><span>총 게임 합 우선</span></div>
 <section class="strategy-panel">
+<section class="pairing-mode-panel" aria-labelledby="operation-modes-heading">
+<div class="pairing-mode-heading"><h2 id="operation-modes-heading">페어 운영 방식</h2><p class="muted small">경기마다 페어를 고정할지, 자유롭게 바꿀지 선택하세요.</p></div>
+<div id="operation-modes" class="strategy-grid" aria-label="페어 운영 방식"></div>
+<div id="fixed-pairs-editor" hidden>
+<p class="muted small">함께 출전할 페어를 1~3개 지정하세요. 지정한 선수는 해당 파트너와만 5경기 출전합니다.</p>
+<div id="fixed-pairs-list" class="fixed-pairs-list"></div>
+<div class="select-grid"><label>고정 선수 1<select id="fixed-player1"></select></label><label>고정 선수 2<select id="fixed-player2"></select></label></div>
+<button id="add-fixed-pair" type="button">고정 페어 추가</button>
+</div>
+</section>
 <div class="section-heading"><h2>01 <span>전략 선택</span></h2><span id="validation" role="status"></span></div>
 <div id="strategies" class="strategy-grid" aria-label="전략 선택"></div>
 <p id="recommendation-status" class="muted small" role="status"></p>
@@ -74,15 +84,7 @@
 <p id="strategy-description" class="muted"></p>
 <div class="pair-summary-heading selected-pairs-heading"><h3>선택한 페어 구성</h3><span id="pair-summary-count" class="badge"></span></div>
 <div id="strategy-pairs" class="strategy-pairs" aria-label="선택 전략의 페어 구성" aria-live="polite"></div>
-<details class="pairing-settings"><summary>페어 운영·출전표 설정</summary>
-<div class="pair-summary-heading"><h3>페어 운영 방식</h3></div>
-<div id="operation-modes" class="strategy-grid" aria-label="페어 운영 방식"></div>
-<div id="fixed-pairs-editor" hidden>
-<p class="muted small">함께 출전할 페어를 1~3개 지정하세요. 지정한 선수는 해당 파트너와만 5경기 출전합니다.</p>
-<div id="fixed-pairs-list" class="fixed-pairs-list"></div>
-<div class="select-grid"><label>고정 선수 1<select id="fixed-player1"></select></label><label>고정 선수 2<select id="fixed-player2"></select></label></div>
-<button id="add-fixed-pair" type="button">고정 페어 추가</button>
-</div>
+<details class="pairing-settings"><summary>출전표 확정·공동 관리</summary>
 <div id="lineup-controls" class="lineup-controls">
 <button id="view-draft" type="button">추천안 보기</button><button id="view-confirmed" type="button" disabled>팀 확정표 보기</button>
 <button id="confirm-lineup" class="primary-button" type="button" disabled>이 추천안으로 출전표 확정</button>

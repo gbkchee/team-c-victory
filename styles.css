@@ -96,6 +96,11 @@ main { max-width: var(--content-width); margin: auto; padding: 24px 20px 48px; }
 .strategy-button span { color: var(--muted); font-size: 12px; }
 .strategy-button[aria-pressed="true"] { border-color: var(--navy); background: var(--navy); color: var(--white); }
 .strategy-button[aria-pressed="true"] span { color: var(--blue-line); }
+.pairing-mode-panel { padding: 16px; margin-bottom: 24px; border: 1px solid var(--blue-line); border-radius: 14px; background: #f4f8ff; }
+.pairing-mode-heading { margin-bottom: 12px; }
+.pairing-mode-heading h2 { margin-bottom: 4px; color: var(--ink); font-size: 16px; }
+.pairing-mode-heading p { margin-bottom: 0; }
+.pairing-mode-panel #fixed-pairs-editor { padding-top: 8px; }
 .pair-summary-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 16px; margin: 18px 0 12px; border-top: 1px solid var(--divider); }
 .pair-summary-heading h3 { margin: 0; font-size: 15px; }
 .balance-variant { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 10px 14px; font-size: 14px; text-align: left; }
