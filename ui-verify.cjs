@@ -112,6 +112,26 @@ test('운영 모드, 일부 고정, 공동 확정표와 프로필 변경 후 유
  one.$('view-draft').click();one.clickText('operation-modes',one.window.PAIRING_MODEL.modeLabels.free);await one.advance();assert.equal(one.$('matches').querySelectorAll('.matrix-match').length,20);assert.equal(one.window.PLAYER_PROFILE_CLOUD.lineup.mode,'partial');
  await assert.rejects(one.window.PLAYER_PROFILE_CLOUD.saveLineup({...clone(one.window.PLAYER_PROFILE_CLOUD.lineup),revision:undefined,confirmedAt:undefined,confirmedBy:undefined},0),/다른 팀원/);
 });
+test('운영 방식만으로 밸런스 2안·강강 1안을 비교하고 선택한 표를 공유 저장한다',async()=>{
+ const store=firestoreFixture(),one=browser(store,{hash:'#page=strategy&strategy=stamina'});await one.flush();await one.advance();
+ assert.equal(one.$('strategies'),null);assert.equal(one.$('balance-variants'),null);
+ const titles=()=>one.$('pair-options').querySelectorAll('h3').map(node=>node.textContent);
+ assert.deepEqual(titles(),['밸런스 1안','밸런스 2안','강강 조합']);assert.equal(one.$('confirmed-pairs-block').hidden,true);
+ for(const card of one.$('pair-options').querySelectorAll('.pair-option'))assert.equal(card.querySelectorAll('li').length,4);
+ one.$('pair-options').querySelectorAll('button')[2].click();assert.ok(one.$('selected-plan-label').textContent.includes('강강 조합'));
+ assert.equal(new URLSearchParams(one.location.hash.slice(1)).has('strategy'),false);
+ const sharedHash=one.location.hash,two=browser(store,{hash:sharedHash});await two.flush();await two.advance();assert.ok(two.$('selected-plan-label').textContent.includes('강강 조합'));
+ await Promise.all(one.$('confirm-lineup').click());await one.flush();const saved=clone(store.entries.get('teamLineups/C'));
+ assert.equal(saved.strategy,'win');assert.equal(saved.algorithmVersion,'pairing-v2');assert.equal(one.$('confirmed-pairs-block').hidden,false);
+ assert.equal(one.window.PAIRING_MODEL.opponentViolations(one.window.BOARD_DATA,saved.matches).length,0);
+ one.$('pair-options').querySelectorAll('button')[1].click();assert.ok(one.$('selected-plan-label').textContent.includes('밸런스 2안'));assert.equal(one.$('confirmed-pairs-block').hidden,true);
+ assert.deepEqual(store.entries.get('teamLineups/C').matches,saved.matches);
+ one.clickText('operation-modes','자유 조합');await one.advance();assert.deepEqual(titles(),['밸런스 1안','밸런스 2안','강강 조합']);
+ one.open('C:우디');one.choose('restPreference','rest');await one.flush();one.$('rating-close').click();await one.advance();
+ assert.deepEqual(titles(),['밸런스 1안','밸런스 2안','강강 조합']);
+ await Promise.all(one.$('confirm-lineup').click());await one.flush();
+ assert.equal(one.window.PAIRING_MODEL.restViolations(one.window.BOARD_DATA,store.entries.get('teamLineups/C').matches,one.window.PLAYER_PROFILES.all()).length,0);
+});
 test('AI는 버튼으로만 호출하고 선택이 바뀐 뒤 늦은 결과를 표시하지 않는다',async()=>{
  let calls=0,release;const store=firestoreFixture();store.api.analyze=async()=>{calls++;return await new Promise(resolve=>{release=resolve;});};
  const one=browser(store,{hash:'#page=analysis&own1=우디&own2=숭&team=D&p1=아르(시트%3A%20야르)&p2=스노'});await one.flush();one.window.PLAYER_PROFILE_CLOUD.analyzeMatchup=request=>store.api.analyze(request);assert.equal(calls,0);assert.equal(one.$('ai-analyze').disabled,false);one.$('ai-analyze').click();assert.equal(calls,1);

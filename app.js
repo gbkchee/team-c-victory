@@ -65,14 +65,15 @@ if(typeof document!=='undefined')(() => {
  function readHash(){
   const q=new URLSearchParams(location.hash.slice(1));let fixed=[];
   try{const parsed=JSON.parse(q.get('fixed')||'[]');if(Array.isArray(parsed)&&parsed.length<=3&&parsed.every(item=>pairing.legalPair(data,item)))fixed=parsed;}catch{}
-  state={page:['players','strategy','analysis'].includes(q.get('page'))?q.get('page'):'players',strategy:Object.hasOwn(pairing.strategyLabels,q.get('strategy'))?q.get('strategy'):'balance',
-   mode:Object.hasOwn(pairing.modeLabels,q.get('mode'))?q.get('mode'):'fixed',fixedPairs:fixed,variant:Math.max(0,Math.min(2,Number(q.get('variant')||Number((q.get('balance')||'balance-1').slice(-1))-1)||0)),
+  const legacyVariant=q.has('strategy')?(q.get('strategy')==='win'?2:Math.min(1,Number(q.get('variant')||0))):Number(q.get('variant')||0);
+  state={page:['players','strategy','analysis'].includes(q.get('page'))?q.get('page'):'players',
+   mode:Object.hasOwn(pairing.modeLabels,q.get('mode'))?q.get('mode'):'fixed',fixedPairs:fixed,variant:Math.max(0,Math.min(2,legacyVariant)||0),
    view:['draft','confirmed'].includes(q.get('view'))?q.get('view'):'auto',filter:['A','B','D'].includes(q.get('filter'))?q.get('filter'):'all',team:['A','B','D'].includes(q.get('team'))?q.get('team'):'',
    p1:q.get('p1')||'',p2:q.get('p2')||''};
   [state.p1,state.p2]=cleanPair(state.team,state.p1,state.p2);
  }
  function writeHash(push=false){
-  const q=new URLSearchParams({page:state.page,strategy:state.strategy,mode:state.mode,variant:String(state.variant),view:state.view,filter:state.filter});
+  const q=new URLSearchParams({page:state.page,mode:state.mode,variant:String(state.variant),view:state.view,filter:state.filter});
   if(state.mode==='partial')q.set('fixed',JSON.stringify(state.fixedPairs));
   for(const key of ['team','p1','p2'])if(state[key])q.set(key,state[key]);
   const player=new URLSearchParams(location.hash.slice(1)).get('player');
@@ -104,7 +105,7 @@ if(typeof document!=='undefined')(() => {
  function pairLabel(pair){const node=el('span','pair-label');pair.forEach((name,index)=>{if(index)node.append(el('span','pair-plus','+'));const person=el('span','pair-person');person.append(el('strong','',displayName(name)),badge('C',name));node.append(person);});return node;}
  function cVersion(){return definitions.profileVersion(names('C').map(name=>({id:'C:'+name,tier:data.teams.C[name].tier,profile:window.PLAYER_PROFILES.get('C',name)})));}
  function confirmed(){const plan=window.PLAYER_PROFILE_CLOUD?.lineup;return plan&&!pairing.validatePlan(data,plan).length?plan:null;}
- function view(){return state.view==='auto'?(confirmed()?'confirmed':'draft'):state.view;}
+ function view(){return state.view==='auto'?'draft':state.view;}
  function activePlan(){return view()==='confirmed'?confirmed():plans[state.variant]||plans[0];}
  function changeDraft(patch){Object.assign(state,patch,{view:'draft',variant:0});confirmationMessage='';render();}
  function receiveRecommendations(message){
@@ -114,7 +115,7 @@ if(typeof document!=='undefined')(() => {
   state.variant=Math.min(state.variant,Math.max(0,plans.length-1));renderStrategy();writeHash();
  }
  function calculate(){
-  const options={mode:state.mode,strategy:state.strategy,fixedPairs:state.fixedPairs},key=definitions.fingerprint({version:cVersion(),options});
+  const options={mode:state.mode,fixedPairs:state.fixedPairs},key=definitions.fingerprint({algorithm:pairing.algorithmVersion,version:cVersion(),options});
   if(key===requestKey)return;requestKey=key;generation++;plans=[];recommendationError='';calculating=true;
   if(worker){worker.terminate();worker=null;}clearTimeout(timer);
   if(recommendationCache.has(key)){receiveRecommendations({generation,plans:recommendationCache.get(key)});return;}
@@ -157,7 +158,7 @@ if(typeof document!=='undefined')(() => {
  }
  for(const id of ['fixed-player1','fixed-player2'])$(id).addEventListener('change',renderFixedPairs);
  $('add-fixed-pair').addEventListener('click',()=>{const pair=[$('fixed-player1').value,$('fixed-player2').value];if(!legalNames('C',pair))return;$('fixed-player1').value='';$('fixed-player2').value='';changeDraft({fixedPairs:[...state.fixedPairs,pair]});});
- function showConfirmed(){const saved=confirmed();if(!saved)return;Object.assign(state,{view:'confirmed',mode:saved.mode,strategy:saved.strategy,fixedPairs:saved.fixedPairs.map(item=>item.pair)});render();}
+ function showConfirmed(){const saved=confirmed();if(!saved)return;Object.assign(state,{view:'confirmed',mode:saved.mode,fixedPairs:saved.fixedPairs.map(item=>item.pair)});render();}
  $('view-confirmed').addEventListener('click',showConfirmed);
  $('view-draft').addEventListener('click',()=>{state.view='draft';render();});
  $('confirm-lineup').addEventListener('click',async()=>{
@@ -167,25 +168,30 @@ if(typeof document!=='undefined')(() => {
   catch(error){confirmationMessage=error.message;}renderStrategy();writeHash();
  });
  function renderStrategy(){
-  $('strategies').replaceChildren(...Object.entries(pairing.strategyLabels).map(([id,title])=>button(title,state.strategy===id,()=>changeDraft({strategy:id}),'strategy-button')));
   $('operation-modes').replaceChildren(...Object.entries(pairing.modeLabels).map(([id,title])=>button(title,state.mode===id,()=>changeDraft({mode:id}),'strategy-button')));
   renderFixedPairs();const plan=activePlan(),saved=confirmed(),cloud=window.PLAYER_PROFILE_CLOUD;
-  $('recommendation-status').textContent=calculating?'선수 선호에 맞춰 추천안을 계산하고 있습니다.':recommendationError||'선수 정보가 바뀌면 추천안을 다시 계산합니다.';
+  $('recommendation-status').textContent=calculating?'선수 선호에 맞춰 추천안을 계산하고 있습니다.':recommendationError||(plans.length&&plans.length<3?'고정 조건 때문에 다른 밸런스 조합을 만들 수 없어 가능한 안만 표시합니다.':'선수 정보가 바뀌면 추천안을 다시 계산합니다.');
   $('validation').textContent=plan?'편성 검증 통과':'편성 준비';
   $('view-draft').setAttribute('aria-pressed',String(view()==='draft'));$('view-confirmed').setAttribute('aria-pressed',String(view()==='confirmed'));
   $('view-confirmed').disabled=!saved;
   $('confirm-lineup').disabled=view()!=='draft'||calculating||!plans.length||cloud?.status!=='ready'||cloud?.pendingCount>0||!cloud?.lineupReady;
   $('confirm-lineup').textContent=saved?'이 추천안으로 확정표 교체':'이 추천안으로 출전표 확정';
   $('lineup-status').textContent=confirmationMessage||(cloud?.lineup&&!saved?'저장된 출전표가 규정을 만족하지 않습니다. 새 추천안으로 교체하세요.':view()==='confirmed'&&saved
-   ?'팀 확정표 · '+pairing.modeLabels[saved.mode]+' · '+pairing.strategyLabels[saved.strategy]+(saved.profileVersion!==cVersion()?' · 선수 정보가 변경되었습니다. 확정표는 유지됩니다.':'')
+   ?'팀 확정표 · '+pairing.modeLabels[saved.mode]+' · '+(pairing.strategyLabels[saved.strategy]||'이전 추천안')+(saved.profileVersion!==cVersion()?' · 선수 정보가 변경되었습니다. 확정표는 유지됩니다.':'')+(saved.algorithmVersion!==pairing.algorithmVersion?' · 이전 편성 기준입니다. 새 추천안으로 교체할 수 있어요.':'')
    :cloud?.status!=='ready'||!cloud?.lineupReady?'추천안을 볼 수 있습니다. 팀 공유 저장소 연결 후 출전표를 확정할 수 있어요.':'추천안 · 팀 확정표와 별도로 비교할 수 있습니다.');
-  $('balance-variants-block').hidden=view()!=='draft'||plans.length<2;
-  $('balance-variants').replaceChildren(...plans.map((item,index)=>button((index+1)+'안: '+(['기본 조합','다른 페어 조합','새 페어 조합'][index]||item.title),state.variant===index,()=>{state.variant=index;renderStrategy();writeHash();},'balance-variant')));
-  $('strategy-description').textContent=plan?.description||'';
+  $('pair-options').replaceChildren(...plans.map((item,index)=>{
+   const selected=view()==='draft'&&state.variant===index,card=el('section','pair-option');card.dataset.selected=String(selected);
+   const heading=el('h3','',item.title);heading.id='pair-option-title-'+index;card.setAttribute('aria-labelledby',heading.id);card.append(heading,el('p','muted small',item.description));
+   const list=el('ul','pair-option-pairs');
+   for(const pair of model.summarizePairs(item.matches)){const row=el('li','');row.append(pairLabel(pair.pair),el('span','pair-match-count',pair.matches.length+'경기'));list.append(row);}
+   card.append(list,button(selected?'선택됨 · 출전표 표시 중':'이 안의 출전표 보기',selected,()=>{state.variant=index;state.view='draft';renderStrategy();writeHash();},'pair-option-select'));return card;
+  }));
+  $('confirmed-pairs-block').hidden=view()!=='confirmed';
   const pairs=plan?model.summarizePairs(plan.matches):[];$('pair-summary-count').textContent='8명 모두 5경기';
   $('strategy-pairs').replaceChildren(...pairs.map(item=>{const card=el('div','strategy-pair-card');card.append(pairLabel(item.pair),el('p','pair-match-count',item.matches.length+'경기'));return card;}));
   if(plan?.reasons?.length){const notes=el('div','recommendation-reasons');for(const reason of plan.reasons)notes.append(el('p','muted small',reason));$('strategy-pairs').append(notes);}
   $('filters').replaceChildren(...['all','A','B','D'].map(team=>button(team==='all'?'전체':team+'조',state.filter===team,()=>{state.filter=team;renderStrategy();writeHash();})));
+  $('selected-plan-label').textContent=plan?(view()==='confirmed'?'팀 확정표':'선택한 안')+' · '+plan.title:'';
   renderSchedule(plan);
  }
  function renderSchedule(plan){
@@ -277,7 +283,7 @@ if(typeof document!=='undefined')(() => {
  for(const event of ['hashchange','popstate','teamcroutechange'])window.addEventListener(event,()=>{readHash();render();});
  window.addEventListener('playerprofileschange',()=>{confirmationMessage='';render();});
  window.addEventListener('playerprofilecloudstatuschange',()=>{renderStrategy();renderAnalysis();});
- window.addEventListener('teamlineupchange',()=>{if(state.view==='auto'&&confirmed()){const saved=confirmed();Object.assign(state,{mode:saved.mode,strategy:saved.strategy,fixedPairs:saved.fixedPairs.map(item=>item.pair)});}render();});
+  window.addEventListener('teamlineupchange',render);
  $('share').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(location.href);$('share-status').textContent='현재 선택 링크를 복사했습니다.';$('share-fallback').hidden=true;}catch{$('share-fallback').hidden=false;$('share-url').value=location.href;$('share-url').focus();$('share-url').select();$('share-status').textContent='아래 링크를 복사해 공유하세요.';}});
  readHash();render();
 })();

@@ -44,20 +44,22 @@ console.log('PASS: 공식 일정·기존 편성, 새 프로필과 보존 이관,
 const pairing=require('./pairing-model.js');
 assert.equal(pairing.partitions(data).length,90);
 const fixture={};Object.keys(data.teams.C).forEach((name,i)=>fixture['C:'+name]={position:i%2?'fore':'back',courtPreference:i%2?'net':'baseline',partnerRoles:[i%2?'cover':'attack'],restPreference:i%3===0?'rest':i%3===1?'continuous':'flexible'});
-for(const mode of ['fixed','free','partial'])for(const strategy of ['balance','win','stamina']){
- const options={mode,strategy,fixedPairs:[['우디','꿉']]},plans=pairing.generate(data,fixture,options);
- assert.equal(plans.length,strategy==='balance'?3:1);
+for(const mode of ['fixed','free','partial']){
+ const options={mode,fixedPairs:[['우디','꿉']]},plans=pairing.generate(data,fixture,options);
+ assert.deepEqual(plans.map(plan=>plan.strategy),['balance','balance','win']);
  for(const plan of plans){
   assert.deepEqual(pairing.validatePlan(data,plan),[]);
+  assert.deepEqual(pairing.restViolations(data,plan.matches,fixture),[]);
+  assert.deepEqual(pairing.opponentViolations(data,plan.matches),[]);
   const keys=new Set(plan.matches.map(match=>pairing.pairKey(match.pair)));
   assert.ok(mode==='fixed'?keys.size===4:keys.size>4);
   if(mode==='partial')assert.ok(plan.matches.filter(match=>match.pair.includes('우디')).every(match=>match.pair.includes('꿉')));
  }
- assert.equal(new Set(plans.map(plan=>JSON.stringify(plan.matches.map(match=>pairing.pairKey(match.pair))))).size,plans.length);
+ assert.notDeepEqual(plans[0].matches,plans[1].matches);
  assert.deepEqual(pairing.generate(data,fixture,options),plans);
 }
 for(const fixedPairs of [[['꿉','한치']],[['우디','숭'],['숭','냉면']],[['우디','숭'],['냉면','만두'],['쏘오리','기른지']]])assert.throws(()=>pairing.generate(data,{}, {mode:'partial',fixedPairs}));
-const onlyTwo=pairing.generate(data,{}, {mode:'partial',fixedPairs:[['우디','꿉'],['숭','한치'],['냉면','만두']]});assert.equal(onlyTwo.length,1);
+const onlyTwo=pairing.generate(data,{}, {mode:'partial',fixedPairs:[['우디','꿉'],['숭','한치'],['냉면','만두']]});assert.equal(onlyTwo.length,2);
 const normal=pairing.generate(data,{}, {mode:'fixed'})[0];
 for(const mutate of [p=>p.matches[0].pair=['꿉','한치'],p=>p.matches[0].pair=['우디','우디'],p=>p.matches[0].court=1,p=>p.matches[0]=null,p=>p.fixedPairs='invalid',p=>p.matches.pop()]){const broken=JSON.parse(JSON.stringify(normal));mutate(broken);assert.ok(pairing.validatePlan(data,broken).length);}
 assert.notDeepEqual(pairing.generate(data,fixture,{mode:'fixed'}).map(p=>p.matches),pairing.generate(data,{}, {mode:'fixed'}).map(p=>p.matches));
@@ -66,6 +68,25 @@ for(const match of pairing.generate(data,tendencies,{mode:'fixed'})[0].matches)a
 let randomSeed=7;const random=()=>((randomSeed=Math.imul(randomSeed,1664525)+1013904223>>>0)/4294967296);
 for(let trial=0;trial<12;trial++){
  const profiles={};for(const name of Object.keys(data.teams.C))profiles['C:'+name]={position:['','fore','back','either'][Math.floor(random()*4)],courtPreference:['','baseline','net','either'][Math.floor(random()*4)],restPreference:['','rest','continuous','flexible'][Math.floor(random()*4)]};
- for(const mode of ['fixed','free','partial'])for(const plan of pairing.generate(data,profiles,{mode,strategy:['balance','win','stamina'][trial%3],fixedPairs:[['우디','한치']]}))assert.deepEqual(pairing.validatePlan(data,plan),[]);
+ for(const mode of ['fixed','free','partial'])for(const plan of pairing.generate(data,profiles,{mode,fixedPairs:[['우디','한치']]})){
+  assert.deepEqual(pairing.validatePlan(data,plan),[]);
+  assert.deepEqual(pairing.restViolations(data,plan.matches,profiles),[]);
+  assert.deepEqual(pairing.opponentViolations(data,plan.matches),[]);
+ }
 }
-console.log('PASS: 세 운영 모드·세 전략, 실제 교차 페어, 고정 유지, 결정적 추천, 다양한 선호와 잘못된 편성');
+// Regressions: resting players cannot be assigned a late three-game run, including with a fixed partner who prefers continuous play.
+for(const scenario of ['blank','rest','mixed']){
+ const profiles=Object.fromEntries(Object.keys(data.teams.C).map(name=>['C:'+name,{restPreference:scenario==='rest'?'rest':scenario==='mixed'?(['우디','한치'].includes(name)?'rest':'continuous'):''}]));
+ for(const mode of ['fixed','free','partial'])for(const plan of pairing.generate(data,profiles,{mode,fixedPairs:[['우디','한치']]})){
+  assert.deepEqual(pairing.restViolations(data,plan.matches,profiles),[]);
+  assert.deepEqual(pairing.opponentViolations(data,plan.matches),[]);
+ }
+}
+const triple=[{time:'14:30',endTime:'15:00',pair:['우디','한치']},{time:'15:00',endTime:'15:30',pair:['우디','한치']},{time:'15:30',endTime:'16:00',pair:['우디','한치']}];
+assert.deepEqual(pairing.restViolations(data,triple,{'C:우디':{restPreference:'rest'}}),['우디']);
+assert.deepEqual(pairing.restViolations(data,triple,{'C:우디':{restPreference:'continuous'}}),[]);
+assert.deepEqual(pairing.restViolations(data,triple.map((match,index)=>index===2?{...match,time:'16:00',endTime:'16:30'}:match),{'C:우디':{restPreference:'rest'}}),[]);
+const strong=pairing.generate(data,{}, {mode:'free'}).at(-1);
+assert.ok(strong.matches.filter(match=>match.pair.includes('우디')).every(match=>match.pair.some(name=>name!=='우디'&&data.teams.C[name].tier==='thirty')));
+const oldPlan={...normal,algorithmVersion:'pairing-v1',strategy:'stamina'};assert.deepEqual(pairing.validatePlan(data,oldPlan),[]);
+console.log('PASS: 세 운영 모드·밸런스 2안·강강 1안, 휴식 선수 최대 2연속, 상대 조별 1~2경기, 고정 유지·결정적 추천');
