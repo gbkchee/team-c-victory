@@ -53,6 +53,7 @@ if(typeof document!=='undefined')(() => {
   presentEditor();root.scrollTop=0;
   if(mobile.matches)window.scrollTo({top:0,behavior:'instant'});
   $('rating-player-info').focus({preventScroll:true});
+  if(mobile.matches&&!fromRoute)window.dispatchEvent(new CustomEvent('teamcroutechange'));
  }
  function hideEditor(){
   if(!editorOpen)return;
@@ -81,6 +82,7 @@ if(typeof document!=='undefined')(() => {
    history.replaceState(state,'','#'+params);
   }
   hideEditor();
+  window.dispatchEvent(new CustomEvent('teamcroutechange'));
  }
  function syncPlayerRoute(){
   const id=routePlayer();
@@ -352,6 +354,7 @@ if(typeof document!=='undefined')(() => {
  });
  window.addEventListener('hashchange',syncPlayerRoute);
  window.addEventListener('popstate',syncPlayerRoute);
+ window.addEventListener('teamcroutechange',syncPlayerRoute);
  $('profile-reset').addEventListener('click',()=>{delete profiles[current];persist();render();});
  savedStatus();renderRoster();
  window.PLAYER_PROFILES.all=()=>Object.fromEntries(roster.map(player=>[player.id,JSON.parse(JSON.stringify(profile(player.id)))]));

@@ -71,13 +71,26 @@ if(typeof document!=='undefined')(() => {
    p1:q.get('p1')||'',p2:q.get('p2')||''};
   [state.p1,state.p2]=cleanPair(state.team,state.p1,state.p2);
  }
- function writeHash(){
+ function writeHash(push=false){
   const q=new URLSearchParams({page:state.page,strategy:state.strategy,mode:state.mode,variant:String(state.variant),view:state.view,filter:state.filter});
   if(state.mode==='partial')q.set('fixed',JSON.stringify(state.fixedPairs));
   for(const key of ['team','p1','p2'])if(state[key])q.set(key,state[key]);
   const player=new URLSearchParams(location.hash.slice(1)).get('player');
   if(state.page==='players'&&window.PLAYER_PROFILES.has(player))q.set('player',player);
-  try{history.replaceState(history.state,'','#'+q);}catch{}
+  const entry={...history.state};
+  if(!q.has('player')){delete entry.teamcPlayerEntry;delete entry.teamcRosterScroll;}
+  try{history[push?'pushState':'replaceState'](entry,'','#'+q);}catch{}
+ }
+ function navigatePage(page){
+  if(state.page===page)return;
+  // Leaving an editor must leave a roster entry behind, not a stale player detail.
+  const previous=new URLSearchParams(location.hash.slice(1));
+  if(previous.has('player')){
+   previous.delete('player');const entry={...history.state};delete entry.teamcPlayerEntry;delete entry.teamcRosterScroll;
+   history.replaceState(entry,'','#'+previous);
+  }
+  state.page=page;writeHash(true);
+  window.dispatchEvent(new CustomEvent('teamcroutechange'));
  }
  function cleanPair(team,a,b){
   a=Object.hasOwn(data.teams[team]||{},a)?a:'';b=Object.hasOwn(data.teams[team]||{},b)?b:'';
@@ -121,7 +134,7 @@ if(typeof document!=='undefined')(() => {
  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('site-menu').hidden)closeMenu(true);});
  const tabs=[...document.querySelectorAll('.page-tab')];
  for(const [index,tab] of tabs.entries()){
-  tab.addEventListener('click',()=>{state.page=tab.dataset.page;renderPage();writeHash();});
+  tab.addEventListener('click',()=>navigatePage(tab.dataset.page));
   tab.addEventListener('keydown',event=>{let next;if(event.key==='ArrowRight')next=(index+1)%tabs.length;else if(event.key==='ArrowLeft')next=(index+tabs.length-1)%tabs.length;else if(event.key==='Home')next=0;else if(event.key==='End')next=tabs.length-1;else return;event.preventDefault();tabs[next].focus();tabs[next].click();});
  }
  function renderPage(){
@@ -184,7 +197,7 @@ if(typeof document!=='undefined')(() => {
    const matches=plan.matches.filter(match=>match.time===time&&(state.filter==='all'||match.team===state.filter)),row=el('tr'),th=el('th','matrix-time');th.scope='row';th.append(el('strong','',time),el('span','muted small','~ '+matches[0].endTime));row.append(th);
    for(let court=1;court<=4;court++){
     const cell=el('td'),match=matches.find(item=>item.court===court);cell.dataset.court=String(court);
-    if(match){const choice=button('',false,()=>{if(state.team!==match.team){state.p1='';state.p2='';}state.team=match.team;state.page='analysis';render();$('opponent1').focus();},'matrix-match');
+    if(match){const choice=button('',false,()=>{if(state.team!==match.team){state.p1='';state.p2='';}state.team=match.team;navigatePage('analysis');$('opponent1').focus();},'matrix-match');
      choice.dataset.match=match.id;choice.setAttribute('aria-label',time+' '+court+'코트 '+match.pair.map(displayName).join(' + ')+' vs '+match.team+'조, 페어 분석');
      choice.append(el('span','matrix-pair-names',match.pair.map(displayName).join(' ')),el('span','matrix-vs','vs'),el('span','matrix-opponent',match.team+'조'));cell.append(choice);
     }else{cell.className='matrix-empty';cell.textContent='—';}row.append(cell);
@@ -261,7 +274,8 @@ if(typeof document!=='undefined')(() => {
  for(const [id,field] of [['opponent1','p1'],['opponent2','p2']])$(id).addEventListener('change',()=>{state[field]=$(id).value;[state.p1,state.p2]=cleanPair(state.team,state.p1,state.p2);renderAnalysis();writeHash();});
  for(const choice of $('analysis-teams').querySelectorAll('button'))choice.addEventListener('click',()=>{if(state.team!==choice.dataset.team){state.team=choice.dataset.team;state.p1='';state.p2='';}renderAnalysis();writeHash();});
  function render(){calculate();renderStrategy();renderAnalysis();renderPage();writeHash();}
- window.addEventListener('hashchange',()=>{readHash();render();});window.addEventListener('playerprofileschange',()=>{confirmationMessage='';render();});
+ for(const event of ['hashchange','popstate','teamcroutechange'])window.addEventListener(event,()=>{readHash();render();});
+ window.addEventListener('playerprofileschange',()=>{confirmationMessage='';render();});
  window.addEventListener('playerprofilecloudstatuschange',()=>{renderStrategy();renderAnalysis();});
  window.addEventListener('teamlineupchange',()=>{if(state.view==='auto'&&confirmed()){const saved=confirmed();Object.assign(state,{mode:saved.mode,strategy:saved.strategy,fixedPairs:saved.fixedPairs.map(item=>item.pair)});}render();});
  $('share').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(location.href);$('share-status').textContent='현재 선택 링크를 복사했습니다.';$('share-fallback').hidden=true;}catch{$('share-fallback').hidden=false;$('share-url').value=location.href;$('share-url').focus();$('share-url').select();$('share-status').textContent='아래 링크를 복사해 공유하세요.';}});

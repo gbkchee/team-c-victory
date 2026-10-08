@@ -187,6 +187,29 @@ test('모바일 상세 직접 접속과 화면 크기 변경에서도 입력 초
  one.resize(true);assert.equal(one.$('ratings-panel').open,false);assert.equal(one.$('player-detail-page').hidden,false);assert.equal(one.$('profile-keyword-text-note').value,'입력 중인 특징');
  one.$('rating-back').click();await one.advance(0);assert.equal(one.$('player-detail-page').hidden,true);assert.equal(new URLSearchParams(one.location.hash.slice(1)).has('player'),false);assert.equal(one.$('main-content').hidden,false);
 });
+test('모바일 탭과 출전표에서 분석으로 이동한 뒤 뒤로 가면 이전 탭의 목록을 복원한다',async()=>{
+ const store=firestoreFixture(),one=browser(store,{mobile:true});await one.flush();await one.advance();
+ one.open('C:우디');one.$('rating-back').click();await one.advance(0);
+ one.$('tab-strategy').click();one.$('matches').querySelector('.matrix-match').click();
+ const team=new URLSearchParams(one.location.hash.slice(1)).get('team'),opponent=Object.keys(one.window.BOARD_DATA.teams[team])[0];
+ one.select('opponent1',opponent);await one.flush();assert.equal(one.$('opponent1').value,opponent);
+ assert.equal(one.document.body.dataset.page,'analysis');assert.equal(one.$('player-detail-page').hidden,true);
+ assert.equal(one.history.state?.teamcPlayerEntry,undefined);
+ const analysisHash=one.location.hash;
+ one.history.back();await one.advance(0);
+ assert.equal(one.document.body.dataset.page,'strategy');assert.equal(one.$('page-strategy').hidden,false);assert.equal(one.$('player-detail-page').hidden,true);
+ one.history.back();await one.advance(0);
+ assert.equal(one.document.body.dataset.page,'players');assert.equal(new URLSearchParams(one.location.hash.slice(1)).has('player'),false);assert.equal(one.$('main-content').hidden,false);
+ one.history.forward();one.history.forward();await one.advance(0);
+ assert.equal(one.location.hash,analysisHash);assert.equal(one.document.body.dataset.page,'analysis');assert.equal(one.$('player-detail-page').hidden,true);
+});
+test('선수 상세를 떠나는 탭 이동은 상세 기록과 편집 화면을 함께 정리한다',async()=>{
+ const one=browser(firestoreFixture(),{mobile:true,hash:'#page=players&player=C%3A우디'});await one.flush();
+ one.$('tab-analysis').click();await one.advance(0);
+ assert.equal(one.$('player-detail-page').hidden,true);assert.equal(one.$('site-header').hidden,false);assert.equal(one.$('page-analysis').hidden,false);
+ one.history.back();await one.advance(0);
+ assert.equal(one.document.body.dataset.page,'players');assert.equal(one.$('player-detail-page').hidden,true);assert.equal(new URLSearchParams(one.location.hash.slice(1)).has('player'),false);
+});
 test('특징·관찰 추천을 키보드 없이 선택·해제하고 입력 초안과 저장 값을 유지한다',async()=>{
  const store=firestoreFixture(),{blankDocuments}=require('./reset-test-data.cjs');for(const [path,value] of blankDocuments({seconds:1}))store.entries.set(path,value);
  store.entries.get('playerProfilesV2/A:펩시').profile.legacyStrengths=['예전 강점 메모'];
