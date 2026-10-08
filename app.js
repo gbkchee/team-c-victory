@@ -37,239 +37,195 @@
  else window.MATCHUP_MODEL=model;
 })();
 if(typeof document!=='undefined')(() => {
- const data=window.BOARD_DATA,$=id=>document.getElementById(id),model=window.MATCHUP_MODEL;
- const errors=window.validateBoard(data);
- if(errors.length){$('validation').textContent='편성 검증 실패';$('matches').textContent=errors.join(' / ');return;}
- $('validation').textContent='3개 전략 · 밸런스 3안 검증 완료';
- const pageTabs=[...document.querySelectorAll('.page-tab')],collator=new Intl.Collator('ko'),tierOrder={forty:0,thirty:1,love:2};
- const menuToggle=$('menu-toggle'),siteMenu=$('site-menu');
- function closeMenu(restoreFocus=false){
-  siteMenu.hidden=true;menuToggle.setAttribute('aria-expanded','false');
-  if(restoreFocus)menuToggle.focus();
- }
- menuToggle.addEventListener('click',()=>{
-  siteMenu.hidden=!siteMenu.hidden;menuToggle.setAttribute('aria-expanded',String(!siteMenu.hidden));
- });
- document.addEventListener('click',event=>{
-  if(!siteMenu.hidden&&!siteMenu.contains(event.target)&&!menuToggle.contains(event.target))closeMenu();
- });
- document.addEventListener('keydown',event=>{
-  if(event.key==='Escape'&&!siteMenu.hidden){event.preventDefault();closeMenu(true);}
- });
- const tierSymbols={forty:'4️⃣',thirty:'3️⃣',love:'🫶'},tierLabels={forty:'포티',thirty:'써티',love:'러브'};
+ const data=window.BOARD_DATA,$=id=>document.getElementById(id),model=window.MATCHUP_MODEL,pairing=window.PAIRING_MODEL,definitions=window.PLAYER_PROFILE_MODEL;
+ const el=(tag,cls,text)=>{const node=document.createElement(tag);if(cls)node.className=cls;if(text!==undefined)node.textContent=text;return node;};
  const displayName=name=>name.replace(/\s*\(시트:.*\)$/,'');
- let state={page:'players',strategy:'balance',balanceVariant:'balance-1',filter:'all',own1:'',own2:'',team:'',p1:'',p2:''};
- const strategy=()=>state.strategy==='balance'?data.balanceVariants.find(item=>item.id===state.balanceVariant):data.strategies.find(item=>item.id===state.strategy);
- const slot=id=>data.schedule.find(item=>item.id===id);
- const sortedNames=team=>Object.keys(data.teams[team]).sort((a,b)=>tierOrder[data.teams[team][a].tier]-tierOrder[data.teams[team][b].tier]||collator.compare(displayName(a),displayName(b)));
- const legalNames=(team,pair)=>model.isLegalPair(pair.map(name=>({name,tier:data.teams[team]?.[name]?.tier})));
+ const tiers={forty:'4️⃣',thirty:'3️⃣',love:'🫶'},tierLabels={forty:'포티',thirty:'써티',love:'러브'},tierOrder={forty:0,thirty:1,love:2};
+ const names=team=>Object.keys(data.teams[team]||{}).sort((a,b)=>tierOrder[data.teams[team][a].tier]-tierOrder[data.teams[team][b].tier]||a.localeCompare(b,'ko'));
+ let state={},plans=[],worker=null,generation=0,requestKey='',recommendationError='',calculating=false,timer=null,confirmationMessage='';
+ const recommendationCache=new Map();let aiState=null,aiGeneration=0,aiUnsubscribe=null;
+ function readHash(){
+  const q=new URLSearchParams(location.hash.slice(1));let fixed=[];
+  try{const parsed=JSON.parse(q.get('fixed')||'[]');if(Array.isArray(parsed)&&parsed.length<=3&&parsed.every(item=>pairing.legalPair(data,item)))fixed=parsed;}catch{}
+  state={page:['players','strategy','analysis'].includes(q.get('page'))?q.get('page'):'players',strategy:Object.hasOwn(pairing.strategyLabels,q.get('strategy'))?q.get('strategy'):'balance',
+   mode:Object.hasOwn(pairing.modeLabels,q.get('mode'))?q.get('mode'):'fixed',fixedPairs:fixed,variant:Math.max(0,Math.min(2,Number(q.get('variant')||Number((q.get('balance')||'balance-1').slice(-1))-1)||0)),
+   view:['draft','confirmed'].includes(q.get('view'))?q.get('view'):'auto',filter:['A','B','D'].includes(q.get('filter'))?q.get('filter'):'all',team:['A','B','D'].includes(q.get('team'))?q.get('team'):'',
+   own1:q.get('own1')||'',own2:q.get('own2')||'',p1:q.get('p1')||'',p2:q.get('p2')||''};
+  [state.own1,state.own2]=cleanPair('C',state.own1,state.own2);[state.p1,state.p2]=cleanPair(state.team,state.p1,state.p2);
+ }
+ function writeHash(){
+  const q=new URLSearchParams({page:state.page,strategy:state.strategy,mode:state.mode,variant:String(state.variant),view:state.view,filter:state.filter});
+  if(state.mode==='partial')q.set('fixed',JSON.stringify(state.fixedPairs));
+  for(const key of ['team','own1','own2','p1','p2'])if(state[key])q.set(key,state[key]);
+  try{history.replaceState(null,'','#'+q);}catch{}
+ }
  function cleanPair(team,a,b){
   a=Object.hasOwn(data.teams[team]||{},a)?a:'';b=Object.hasOwn(data.teams[team]||{},b)?b:'';
   if(a&&b&&!legalNames(team,[a,b]))b='';return [a,b];
  }
- function readHash(){
-  const q=new URLSearchParams(location.hash.slice(1));
-  const selected=data.strategies.find(item=>item.id===q.get('strategy'))||data.strategies[0];
-  const variant=data.balanceVariants.find(item=>item.id===q.get('balance'))||data.balanceVariants[0];
-  const selectedPlan=selected.id==='balance'?variant:selected;
-  const oldMatch=q.has('match')?selectedPlan.matches.find(item=>item.id===Number(q.get('match'))):null;
-  const team=['A','B','D'].includes(q.get('team'))?q.get('team'):oldMatch?.team||'';
-  const own=q.has('own1')||q.has('own2')?cleanPair('C',q.get('own1'),q.get('own2')):oldMatch?.pair||['',''];
-  const opponents=cleanPair(team,q.get('p1'),q.get('p2'));
-  state={
-   page:['players','strategy','analysis'].includes(q.get('page'))?q.get('page'):q.has('strategy')?'strategy':'players',
-   strategy:selected.id,balanceVariant:variant.id,filter:['A','B','D'].includes(q.get('filter'))?q.get('filter'):'all',
-   own1:own[0],own2:own[1],team,p1:opponents[0],p2:opponents[1]
-  };
- }
- function writeHash(){
-  const q=new URLSearchParams({page:state.page,strategy:state.strategy,filter:state.filter});
-  if(state.strategy==='balance')q.set('balance',state.balanceVariant);
-  for(const key of ['own1','own2','team','p1','p2'])if(state[key])q.set(key,state[key]);
-  try{history.replaceState(null,'','#'+q);}catch{}
- }
- function renderPage(){
-  closeMenu();
-  for(const tab of pageTabs){
-   const active=tab.dataset.page===state.page;tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;
-   $(tab.getAttribute('aria-controls')).hidden=!active;
-  }
-  $('share').hidden=state.page==='players';
- }
- for(const [index,tab] of pageTabs.entries()){
-  tab.addEventListener('click',()=>{state.page=tab.dataset.page;renderPage();writeHash();});
-  tab.addEventListener('keydown',event=>{
-   let next;
-   if(event.key==='ArrowRight')next=(index+1)%pageTabs.length;
-   else if(event.key==='ArrowLeft')next=(index+pageTabs.length-1)%pageTabs.length;
-   else if(event.key==='Home')next=0;
-   else if(event.key==='End')next=pageTabs.length-1;
-   else return;
-   event.preventDefault();pageTabs[next].focus();pageTabs[next].click();
-  });
- }
- const el=(tag,cls,text)=>{const node=document.createElement(tag);if(cls)node.className=cls;if(text!==undefined)node.textContent=text;return node;};
- function button(text,active,action,cls){
+ function legalNames(team,pair){return Boolean(data.teams[team])&&model.isLegalPair(pair.map(name=>({name,tier:data.teams[team][name]?.tier})));}
+ function button(text,active,action,cls=''){
   const node=el('button',cls,text);node.type='button';node.setAttribute('aria-pressed',String(active));node.addEventListener('click',action);return node;
  }
- function tierBadge(team,name){
-  const tier=data.teams[team][name].tier,badge=el('span','grade-badge',tierSymbols[tier]);
-  badge.title=tierLabels[tier];badge.setAttribute('role','img');badge.setAttribute('aria-label',tierLabels[tier]);return badge;
+ function badge(team,name){const node=el('span','grade-badge',tiers[data.teams[team][name].tier]);node.title=tierLabels[data.teams[team][name].tier];node.setAttribute('role','img');node.setAttribute('aria-label',node.title);return node;}
+ function pairLabel(pair){const node=el('span','pair-label');pair.forEach((name,index)=>{if(index)node.append(el('span','pair-plus','+'));const person=el('span','pair-person');person.append(el('strong','',displayName(name)),badge('C',name));node.append(person);});return node;}
+ function cVersion(){return definitions.profileVersion(names('C').map(name=>({id:'C:'+name,tier:data.teams.C[name].tier,profile:window.PLAYER_PROFILES.get('C',name)})));}
+ function confirmed(){const plan=window.PLAYER_PROFILE_CLOUD?.lineup;return plan&&!pairing.validatePlan(data,plan).length?plan:null;}
+ function view(){return state.view==='auto'?(confirmed()?'confirmed':'draft'):state.view;}
+ function activePlan(){return view()==='confirmed'?confirmed():plans[state.variant]||plans[0];}
+ function changeDraft(patch){Object.assign(state,patch,{view:'draft',variant:0});confirmationMessage='';render();}
+ function receiveRecommendations(message){
+  if(message.generation!==generation)return;
+  calculating=false;recommendationError=message.error||'';plans=message.plans||[];
+  if(plans.length){recommendationCache.set(requestKey,plans);if(recommendationCache.size>30)recommendationCache.delete(recommendationCache.keys().next().value);}
+  state.variant=Math.min(state.variant,Math.max(0,plans.length-1));renderStrategy();writeHash();
  }
- function pairLabel(team,pair){
-  const label=el('span','pair-label');
-  pair.forEach((name,index)=>{
-   if(index)label.append(el('span','pair-plus','+'));
-   const player=el('span','pair-person');player.append(el('strong','',displayName(name)),tierBadge(team,name));label.append(player);
-  });return label;
+ function calculate(){
+  const options={mode:state.mode,strategy:state.strategy,fixedPairs:state.fixedPairs},key=definitions.fingerprint({version:cVersion(),options});
+  if(key===requestKey)return;requestKey=key;generation++;plans=[];recommendationError='';calculating=true;
+  if(recommendationCache.has(key)){receiveRecommendations({generation,plans:recommendationCache.get(key)});return;}
+  if(worker)worker.terminate();clearTimeout(timer);
+  const currentGeneration=generation,profiles=window.PLAYER_PROFILES.all();
+  timer=setTimeout(()=>{
+   try{
+    worker=new Worker('pairing-worker.js');worker.onmessage=event=>receiveRecommendations(event.data);
+    worker.onerror=()=>{worker.terminate();worker=null;fallback();};
+    worker.postMessage({generation:currentGeneration,profiles,options});
+   }catch{fallback();}
+   function fallback(){try{receiveRecommendations({generation:currentGeneration,plans:pairing.generate(data,profiles,options)});}catch(error){receiveRecommendations({generation:currentGeneration,error:error.message});}}
+  },150);
+ }
+ function closeMenu(restore=false){$('site-menu').hidden=true;$('menu-toggle').setAttribute('aria-expanded','false');if(restore)$('menu-toggle').focus();}
+ $('menu-toggle').addEventListener('click',()=>{const open=$('site-menu').hidden;$('site-menu').hidden=!open;$('menu-toggle').setAttribute('aria-expanded',String(open));});
+ document.addEventListener('click',event=>{if(!$('site-menu').contains(event.target)&&!$('menu-toggle').contains(event.target))closeMenu();});
+ document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('site-menu').hidden)closeMenu(true);});
+ const tabs=[...document.querySelectorAll('.page-tab')];
+ for(const [index,tab] of tabs.entries()){
+  tab.addEventListener('click',()=>{state.page=tab.dataset.page;renderPage();writeHash();});
+  tab.addEventListener('keydown',event=>{let next;if(event.key==='ArrowRight')next=(index+1)%tabs.length;else if(event.key==='ArrowLeft')next=(index+tabs.length-1)%tabs.length;else if(event.key==='Home')next=0;else if(event.key==='End')next=tabs.length-1;else return;event.preventDefault();tabs[next].focus();tabs[next].click();});
+ }
+ function renderPage(){
+  closeMenu();for(const tab of tabs){const selected=tab.dataset.page===state.page;tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;$(tab.getAttribute('aria-controls')).hidden=!selected;}$('share').hidden=state.page==='players';
+ }
+ function populate(select,team,value,other,excluded=[]){
+  select.replaceChildren(new Option(team?'선택하세요':'조를 먼저 선택하세요',''));select.disabled=!team;
+  for(const name of names(team)){const option=new Option(displayName(name)+' · '+tiers[data.teams[team][name].tier],name);option.disabled=excluded.includes(name)||name===other||(Boolean(other)&&!legalNames(team,[name,other]));select.add(option);}select.value=value;
+ }
+ function renderFixedPairs(){
+  $('fixed-pairs-editor').hidden=state.mode!=='partial';
+  $('fixed-pairs-list').replaceChildren(...state.fixedPairs.map((pair,index)=>{const row=el('div','fixed-pair-row');row.append(pairLabel(pair),button('해제',false,()=>changeDraft({fixedPairs:state.fixedPairs.filter((_,i)=>i!==index)})));return row;}));
+  const excluded=state.fixedPairs.flat();
+  populate($('fixed-player1'),'C',$('fixed-player1').value,$('fixed-player2').value,excluded);
+  populate($('fixed-player2'),'C',$('fixed-player2').value,$('fixed-player1').value,excluded);
+  $('add-fixed-pair').disabled=state.fixedPairs.length>=3||!legalNames('C',[$('fixed-player1').value,$('fixed-player2').value]);
+ }
+ for(const id of ['fixed-player1','fixed-player2'])$(id).addEventListener('change',renderFixedPairs);
+ $('add-fixed-pair').addEventListener('click',()=>{const pair=[$('fixed-player1').value,$('fixed-player2').value];if(!legalNames('C',pair))return;$('fixed-player1').value='';$('fixed-player2').value='';changeDraft({fixedPairs:[...state.fixedPairs,pair]});});
+ function showConfirmed(){const saved=confirmed();if(!saved)return;Object.assign(state,{view:'confirmed',mode:saved.mode,strategy:saved.strategy,fixedPairs:saved.fixedPairs.map(item=>item.pair)});render();}
+ $('view-confirmed').addEventListener('click',showConfirmed);
+ $('view-draft').addEventListener('click',()=>{state.view='draft';render();});
+ $('confirm-lineup').addEventListener('click',async()=>{
+  const plan=plans[state.variant]||plans[0],cloud=window.PLAYER_PROFILE_CLOUD;if(!plan||calculating||plan.profileVersion!==cVersion())return;
+  $('confirm-lineup').disabled=true;confirmationMessage='팀 출전표를 저장하고 있습니다.';$('lineup-status').textContent=confirmationMessage;
+  try{await cloud.saveLineup(plan,cloud.lineup?.revision||0);confirmationMessage='팀 공통 출전표로 확정했습니다.';state.view='confirmed';}
+  catch(error){confirmationMessage=error.message;}renderStrategy();writeHash();
+ });
+ function renderStrategy(){
+  $('strategies').replaceChildren(...Object.entries(pairing.strategyLabels).map(([id,title])=>button(title,state.strategy===id,()=>changeDraft({strategy:id}),'strategy-button')));
+  $('operation-modes').replaceChildren(...Object.entries(pairing.modeLabels).map(([id,title])=>button(title,state.mode===id,()=>changeDraft({mode:id}),'strategy-button')));
+  renderFixedPairs();const plan=activePlan(),saved=confirmed(),cloud=window.PLAYER_PROFILE_CLOUD;
+  $('recommendation-status').textContent=calculating?'선수 선호에 맞춰 추천안을 계산하고 있습니다.':recommendationError||'선수 정보가 바뀌면 추천안을 다시 계산합니다.';
+  $('validation').textContent=plan?'편성 검증 통과':'편성 준비';
+  $('view-draft').setAttribute('aria-pressed',String(view()==='draft'));$('view-confirmed').setAttribute('aria-pressed',String(view()==='confirmed'));
+  $('view-confirmed').disabled=!saved;
+  $('confirm-lineup').disabled=view()!=='draft'||calculating||!plans.length||cloud?.status!=='ready'||cloud?.pendingCount>0||!cloud?.lineupReady;
+  $('confirm-lineup').textContent=saved?'이 추천안으로 확정표 교체':'이 추천안으로 출전표 확정';
+  $('lineup-status').textContent=confirmationMessage||(cloud?.lineup&&!saved?'저장된 출전표가 규정을 만족하지 않습니다. 새 추천안으로 교체하세요.':view()==='confirmed'&&saved
+   ?'팀 확정표 · '+pairing.modeLabels[saved.mode]+' · '+pairing.strategyLabels[saved.strategy]+(saved.profileVersion!==cVersion()?' · 선수 정보가 변경되었습니다. 확정표는 유지됩니다.':'')
+   :cloud?.status!=='ready'||!cloud?.lineupReady?'추천안을 볼 수 있습니다. 팀 공유 저장소 연결 후 출전표를 확정할 수 있어요.':'추천안 · 팀 확정표와 별도로 비교할 수 있습니다.');
+  $('balance-variants-block').hidden=view()!=='draft'||plans.length<2;
+  $('balance-variants').replaceChildren(...plans.map((item,index)=>button(item.title,state.variant===index,()=>{state.variant=index;renderStrategy();writeHash();},'balance-variant')));
+  $('strategy-description').textContent=plan?.description||'';
+  const pairs=plan?model.summarizePairs(plan.matches):[];$('pair-summary-count').textContent=pairs.length+'개 페어';
+  $('strategy-pairs').replaceChildren(...pairs.map(item=>{const card=el('div','strategy-pair-card');card.append(pairLabel(item.pair),el('p','muted small',item.matches.length+'경기 · '+item.matches.map(id=>'C'+id).join(', ')));return card;}));
+  if(plan?.reasons?.length){const notes=el('div','recommendation-reasons');for(const reason of plan.reasons)notes.append(el('p','muted small',reason));$('strategy-pairs').append(notes);}
+  $('filters').replaceChildren(...['all','A','B','D'].map(team=>button(team==='all'?'전체':team+'조',state.filter===team,()=>{state.filter=team;renderStrategy();writeHash();})));
+  renderSchedule(plan);
+ }
+ function renderSchedule(plan){
+  $('matches').replaceChildren();$('counts').replaceChildren();if(!plan)return;
+  const table=el('table','schedule-matrix');table.append(el('caption','sr-only',plan.title+' 시간대별 코트 출전표'));
+  const head=el('thead'),headRow=el('tr');for(const title of ['시간','1코트','2코트','3코트','4코트']){const th=el('th','',title);th.scope='col';headRow.append(th);}head.append(headRow);table.append(head);
+  const body=el('tbody'),times=[...new Set(plan.matches.filter(match=>state.filter==='all'||match.team===state.filter).map(match=>match.time))].sort();
+  for(const time of times){
+   const matches=plan.matches.filter(match=>match.time===time&&(state.filter==='all'||match.team===state.filter)),row=el('tr'),th=el('th','matrix-time');th.scope='row';th.append(el('strong','',time),el('span','muted small','~ '+matches[0].endTime));row.append(th);
+   for(let court=1;court<=4;court++){
+    const cell=el('td'),match=matches.find(item=>item.court===court);cell.dataset.court=String(court);
+    if(match){const choice=button('',false,()=>{state.own1=match.pair[0];state.own2=match.pair[1];if(state.team!==match.team){state.p1='';state.p2='';}state.team=match.team;state.page='analysis';render();$('our-player1').focus();},'matrix-match');
+     choice.dataset.match=match.id;choice.setAttribute('aria-label',time+' '+court+'코트 '+match.pair.map(displayName).join(' + ')+' vs '+match.team+'조, 페어 분석');
+     choice.append(el('span','matrix-pair-names',match.pair.map(displayName).join(' ')),el('span','matrix-vs','vs'),el('span','matrix-opponent',match.team+'조'));cell.append(choice);
+    }else{cell.className='matrix-empty';cell.textContent='—';}row.append(cell);
+   }body.append(row);
+  }table.append(body);$('matches').append(table);
+  const counts=el('div','count-grid');for(const name of names('C'))counts.append(el('span','',displayName(name)+' · '+plan.matches.filter(match=>match.pair.includes(name)).length+'경기'));$('counts').append(counts);
  }
  function playerCard(name,team){
-  const profile=window.PLAYER_PROFILES.get(team,name),definitions=window.PLAYER_PROFILE_MODEL,card=el('div','player');
-  card.append(el('strong','',displayName(name)),tierBadge(team,name));
-  if(team==='C'){
-   for(const [title,text] of [
-    ['선호 리턴 자리',definitions.positions[profile.position]],['편한 플레이 위치',definitions.courtPreferences[profile.courtPreference]],
-    ['플레이 성향',definitions.styles[profile.style]],['잘 맞는 파트너',profile.partnerRoles.map(key=>definitions.partnerRoles[key]).join(', ')||'미선택'],
-    ['특징',profile.traits.join(', ')||'아직 입력 전'],['경기·휴식',definitions.restPreferences[profile.restPreference]]
-   ])card.append(el('p','',title+' · '+text));
-  }else{
-   card.append(el('p','','플레이 성향 · '+definitions.styles[profile.style]));
-   for(const [kind,title] of Object.entries(definitions.keywordKinds))card.append(el('p',kind==='weak'?'weakness':'',title+' · '+(profile.keywords.filter(item=>item.kind===kind).map(item=>item.text).join(', ')||'정보 없음')));
-  }
-  return card;
+  const profile=window.PLAYER_PROFILES.get(team,name),card=el('div','player');card.append(el('strong','',displayName(name)),badge(team,name));
+  const rows=team==='C'?[
+   ['선호 리턴 자리',definitions.positions[profile.position]],['편한 위치',definitions.courtPreferences[profile.courtPreference]],['성향',definitions.styles[profile.style]],
+   ['잘 맞는 파트너',profile.partnerRoles.map(role=>definitions.partnerRoles[role]).join(', ')||'미선택'],['특징',profile.traits.join(', ')||'미입력'],['경기·휴식',definitions.restPreferences[profile.restPreference]]
+  ]:[['성향',definitions.styles[profile.style]],...Object.entries(definitions.keywordKinds).map(([kind,title])=>[title,profile.keywords.filter(item=>item.kind===kind).map(item=>item.text).join(', ')||'미입력'])];
+  for(const [title,text] of rows)card.append(el('p','',title+' · '+text));return card;
  }
- function submissionTime(time){
-  const [hour,minute]=time.split(':').map(Number),total=hour*60+minute-10;
-  return String(Math.floor(total/60)).padStart(2,'0')+':'+String(total%60).padStart(2,'0');
- }
- function analyzeScheduledPair(match){
-  state.own1=match.pair[0];state.own2=match.pair[1];
-  if(state.team!==match.team){state.p1='';state.p2='';}
-  state.team=match.team;state.page='analysis';render();$('our-player1').focus({preventScroll:true});
- }
- function renderStrategy(){
-  $('strategies').replaceChildren();
-  for(const item of data.strategies){
-   const choice=button('',state.strategy===item.id,()=>{state.strategy=item.id;render();},'strategy-button');
-   choice.append(el('strong','',item.title),el('span','',item.subtitle));$('strategies').append(choice);
-  }
-  $('balance-variants-block').hidden=state.strategy!=='balance';
-  $('balance-variants').replaceChildren();
-  for(const variant of data.balanceVariants){
-   const choice=button('',state.balanceVariant===variant.id,()=>{state.balanceVariant=variant.id;render();},'balance-variant');
-   choice.dataset.variant=variant.id;
-   choice.append(el('strong','',variant.title),el('span','',variant.subtitle));$('balance-variants').append(choice);
-  }
-  $('strategy-description').textContent=strategy().description;
-  const pairs=model.summarizePairs(strategy().matches);$('pair-summary-count').textContent=pairs.length+'개 페어';
-  $('strategy-pairs').replaceChildren(...pairs.map(item=>{
-   const card=el('div','strategy-pair-card');
-   card.append(pairLabel('C',item.pair),el('p','muted small',item.matches.length+'경기 · '+item.matches.map(id=>'C'+id).join(', ')));return card;
-  }));
-  $('filters').replaceChildren();
-  for(const team of ['all','A','B','D'])$('filters').append(button(team==='all'?'전체':team+'조',state.filter===team,()=>{state.filter=team;render();}));
-  const times=new Map();
-  for(const match of strategy().matches.filter(item=>state.filter==='all'||item.team===state.filter)){
-   const group=times.get(match.time)||[];group.push(match);times.set(match.time,group);
-  }
-  const table=el('table','schedule-matrix');
-  table.append(el('caption','sr-only',(state.strategy==='balance'?'밸런스형 '+strategy().title:strategy().title)+' 시간대별 코트 출전표'));
-  const head=el('thead'),headRow=el('tr');
-  for(const title of ['시간','1코트','2코트','3코트','4코트']){
-   const cell=el('th','',title);cell.scope='col';headRow.append(cell);
-  }
-  head.append(headRow);table.append(head);
-  const body=el('tbody');
-  for(const [time,matches] of times){
-   const row=el('tr');row.dataset.time=time;
-   const timeCell=el('th','matrix-time');timeCell.scope='row';
-   timeCell.append(el('strong','',time),el('span','muted small','~ '+slot(matches[0].id).endTime));row.append(timeCell);
-   for(let court=1;court<=4;court++){
-    const cell=el('td'),match=matches.find(item=>slot(item.id).court===court);cell.dataset.court=String(court);
-    if(match){
-     const pair=el('button','matrix-match');pair.type='button';pair.dataset.match=String(match.id);
-     pair.setAttribute('aria-label',time+' '+court+'코트 C'+match.id+' '+match.pair.map(displayName).join(' + ')+' vs '+match.team+'조, 페어 분석');
-     pair.append(el('span','matrix-pair-names',match.pair.map(displayName).join(' ')),el('span','matrix-vs','vs'),el('span','matrix-opponent',match.team+'조'));
-     pair.addEventListener('click',()=>analyzeScheduledPair(match));cell.append(pair);
-    }else{
-     cell.className='matrix-empty';cell.textContent='—';cell.setAttribute('aria-label',time+' '+court+'코트 C조 출전 없음');
-    }
-    row.append(cell);
-   }
-   body.append(row);
-  }
-  table.append(body);$('matches').replaceChildren(table);
-  const counts=el('div','count-grid');
-  for(const name of sortedNames('C'))counts.append(el('span','',displayName(name)+' · '+strategy().matches.filter(match=>match.pair.includes(name)).length+'경기'));
-  $('counts').replaceChildren(counts);
- }
- function populate(select,team,value,other){
-  select.replaceChildren(new Option(team?'선택하세요':'조를 먼저 선택하세요',''));select.disabled=!team;
-  if(team)for(const name of sortedNames(team)){
-   const option=new Option(displayName(name)+' · '+tierSymbols[data.teams[team][name].tier],name);
-   option.disabled=name===other||(Boolean(other)&&!legalNames(team,[name,other]));select.add(option);
-  }
-  select.value=value;
- }
- function resultList(title,items,cls){
-  const section=el('section',cls||'analysis-notes');section.append(el('h3','',title));
-  const list=el('ul');for(const text of items)list.append(el('li','',text));section.append(list);return section;
+ function listSection(title,items){const section=el('section','analysis-notes');section.append(el('h3','',title));const list=el('ul');for(const text of items)list.append(el('li','',text));section.append(list);return section;}
+ function analysisInput(){
+  if(!legalNames('C',[state.own1,state.own2])||!legalNames(state.team,[state.p1,state.p2]))return null;
+  const ownPlayerIds=[state.own1,state.own2].map(name=>'C:'+name).sort(),opponentPlayerIds=[state.p1,state.p2].map(name=>state.team+':'+name).sort();
+  const players=[...ownPlayerIds,...opponentPlayerIds].map(id=>{const split=id.indexOf(':'),team=id.slice(0,split),name=id.slice(split+1);return {id,tier:data.teams[team][name].tier,profile:window.PLAYER_PROFILES.get(team,name)};});
+  const expectedProfileHash=definitions.profileVersion(players);return {ownPlayerIds,opponentPlayerIds,expectedProfileHash,key:definitions.fingerprint({ownPlayerIds,opponentPlayerIds,expectedProfileHash})};
  }
  function renderAnalysis(){
-  populate($('our-player1'),'C',state.own1,state.own2);populate($('our-player2'),'C',state.own2,state.own1);
-  $('analysis-team').value=state.team;
+  populate($('our-player1'),'C',state.own1,state.own2);populate($('our-player2'),'C',state.own2,state.own1);$('analysis-team').value=state.team;
   populate($('opponent1'),state.team,state.p1,state.p2);populate($('opponent2'),state.team,state.p2,state.p1);
-  const result=$('analysis-result');result.replaceChildren();
-  if(!legalNames('C',[state.own1,state.own2])||!state.team||!legalNames(state.team,[state.p1,state.p2])){
-   const message=!state.own1||!state.own2?'C조 선수 두 명을 골라 우리 페어를 선택해 주세요.':!state.team?'상대 조를 선택해 주세요.':'상대 선수 두 명을 선택하면 결과가 표시됩니다.';
-   result.append(el('p','empty',message));return;
-  }
-  const ownNames=[state.own1,state.own2],opponentNames=[state.p1,state.p2];
-  const panel=el('section','analysis-result-panel');
-  panel.append(el('h2','analysis-title',ownNames.map(displayName).join(' + ')+' vs '+state.team+'조 '+opponentNames.map(displayName).join(' + ')));
-  panel.append(el('p','muted small','선택한 경기 선호와 관찰 키워드를 함께 보고 준비할 운영을 정리했습니다.'));
+  const container=$('analysis-result');container.replaceChildren();const input=analysisInput();
+  if(!input){container.append(el('p','empty','우리 페어와 상대 페어를 선택해 주세요.'));return;}
+  const panel=el('section','analysis-result-panel');panel.append(el('h2','analysis-title',[state.own1,state.own2].map(displayName).join(' + ')+' vs '+state.team+'조 '+[state.p1,state.p2].map(displayName).join(' + ')));
   const snapshots=el('div','analysis-snapshots');
-  for(const [team,names,title] of [['C',ownNames,'우리 페어'],[state.team,opponentNames,'상대 페어']]){
-   const section=el('section','pair-snapshot');section.append(el('h3','',title));
-   const cards=el('div','players');for(const name of names)cards.append(playerCard(name,team));section.append(cards);snapshots.append(section);
+  for(const [team,pair,title] of [['C',[state.own1,state.own2],'우리 페어'],[state.team,[state.p1,state.p2],'상대 페어']]){const section=el('section','pair-snapshot'),cards=el('div','players');section.append(el('h3','',title));for(const name of pair)cards.append(playerCard(name,team));section.append(cards);snapshots.append(section);}panel.append(snapshots);
+  const action=el('div','ai-actions'),start=button(aiState?.status==='loading'&&aiState.inputKey===input.key?'분석 중…':'AI 분석',false,requestAnalysis,'primary-button');start.id='ai-analyze';
+  start.disabled=window.PLAYER_PROFILE_CLOUD?.status!=='ready'||window.PLAYER_PROFILE_CLOUD?.pendingCount>0||(aiState?.status==='loading'&&aiState.inputKey===input.key);action.append(start);
+  const status=el('p','muted small');status.setAttribute('role','status');
+  status.textContent=aiState?.inputKey===input.key?(aiState.error||aiState.message||''):(aiState?'선택 또는 선수 정보가 변경되었습니다. 다시 분석해 주세요.':'버튼을 누르면 입력한 선호와 관찰을 바탕으로 공략을 생성합니다.');
+  if(window.PLAYER_PROFILE_CLOUD?.status!=='ready')status.textContent='팀 공유 저장소 연결 후 AI 분석을 사용할 수 있습니다.';action.append(status);panel.append(action);
+  if(aiState?.inputKey===input.key&&aiState.result){
+   const result=aiState.result;panel.append(listSection('전체 운영 방향',[result.direction]));
+   const tactics=el('section','analysis-plans');tactics.append(el('h3','','상대 패턴 대응과 공략'));
+   for(const tip of result.tactics){const card=el('div','analysis-tip');card.append(el('h4','',tip.title),el('p','',tip.action),el('p','muted small','근거 · '+tip.basis));tactics.append(card);}panel.append(tactics);
+   panel.append(listSection('우리 페어 역할',result.roles.map(role=>displayName(role.playerId.slice(2))+' · '+role.action)),listSection('초반 확인할 점',result.checks));
+  }else{
+   const notes=model.analyzeMatchup([state.own1,state.own2].map(name=>({name,profile:window.PLAYER_PROFILES.get('C',name)})),[state.p1,state.p2].map(name=>({name,profile:window.PLAYER_PROFILES.get(state.team,name)})));
+   if(notes.roles.length)panel.append(listSection('함께 정할 역할',notes.roles));
   }
-  panel.append(snapshots);
-  const analysis=model.analyzeMatchup(
-   ownNames.map(name=>({name:displayName(name),profile:window.PLAYER_PROFILES.get('C',name)})),
-   opponentNames.map(name=>({name:displayName(name),profile:window.PLAYER_PROFILES.get(state.team,name)}))
-  );
-  const plans=el('section','analysis-plans');plans.append(el('h3','','시도해볼 공략'));
-  for(const plan of analysis.plans){
-   const card=el('div','analysis-tip');card.append(el('h4','',plan.title),el('p','',plan.text),el('p','muted small',plan.evidence));plans.append(card);
-  }
-  panel.append(plans,resultList('우리 페어 역할 분담',analysis.roles));
-  if(analysis.checks.length)panel.append(resultList('경기 전에 함께 확인',analysis.checks));
   const combo=data.combos[state.team].find(item=>item.pair.includes(state.p1)&&item.pair.includes(state.p2));
-  if(combo?.points.length){
-   const notes=el('details','analysis-source-notes');notes.append(el('summary','','기존 시트의 상대 공략 메모'));
-   notes.append(el('p','muted small','기존 시트에 기반한 참고 메모입니다. 새 관찰 기록과 함께 확인해 주세요.'));
-   const list=el('ul');for(const text of combo.points)list.append(el('li','',text));notes.append(list);panel.append(notes);
-  }
-  result.append(panel);
+  if(combo?.points.length){const details=el('details','analysis-source-notes');details.append(el('summary','','기존 시트의 상대 공략 메모'),listSection('참고 메모',combo.points));panel.append(details);}container.append(panel);
  }
- function render(){renderStrategy();renderAnalysis();renderPage();writeHash();}
- for(const [id,field,team] of [['our-player1','own1','C'],['our-player2','own2','C'],['opponent1','p1',null],['opponent2','p2',null]]){
-  $(id).addEventListener('change',()=>{
-   state[field]=$(id).value;
-   if(team)[state.own1,state.own2]=cleanPair('C',state.own1,state.own2);
-   else [state.p1,state.p2]=cleanPair(state.team,state.p1,state.p2);
-   renderAnalysis();writeHash();
-  });
+ async function requestAnalysis(){
+  const input=analysisInput();if(!input)return;const token=++aiGeneration;if(aiUnsubscribe){aiUnsubscribe();aiUnsubscribe=null;}
+  aiState={inputKey:input.key,status:'loading',message:'AI가 입력한 기록을 읽고 있습니다.'};renderAnalysis();
+  const stillCurrent=()=>token===aiGeneration&&analysisInput()?.key===input.key;
+  try{
+   const {key,...request}=input,response=await window.PLAYER_PROFILE_CLOUD.analyzeMatchup(request);if(!stillCurrent())return;
+   function accept(record){if(!stillCurrent())return;if(record.status==='ready'){aiState={inputKey:input.key,status:'ready',result:record.result,message:response.cached?'팀원이 생성한 분석을 불러왔습니다.':'AI 분석을 생성했습니다.'};if(aiUnsubscribe){aiUnsubscribe();aiUnsubscribe=null;}renderAnalysis();}
+    else if(record.status==='error'){aiState={inputKey:input.key,status:'error',error:record.message||'분석에 실패했습니다. 다시 시도해 주세요.'};if(aiUnsubscribe){aiUnsubscribe();aiUnsubscribe=null;}renderAnalysis();}}
+   if(response.status==='ready')accept(response);else{aiState.message='같은 분석을 생성하고 있습니다. 완료되면 함께 표시됩니다.';renderAnalysis();aiUnsubscribe=window.PLAYER_PROFILE_CLOUD.subscribeAnalysis(response.analysisKey,accept,error=>{if(stillCurrent()){aiState={inputKey:input.key,status:'error',error:'분석을 불러오지 못했습니다. 다시 시도해 주세요.'};renderAnalysis();}});}
+  }catch(error){if(stillCurrent()){const messages={'functions/not-found':'AI 서버가 아직 배포되지 않았습니다. Firebase 연결 설정을 확인해 주세요.','functions/failed-precondition':'선수 정보가 변경되었거나 AI 키 설정이 필요합니다. 최신 정보로 다시 시도해 주세요.','functions/resource-exhausted':'오늘의 신규 AI 분석 한도에 도달했습니다. 저장된 분석은 계속 볼 수 있습니다.','functions/deadline-exceeded':'분석 시간이 오래 걸렸습니다. 잠시 후 다시 시도해 주세요.'};aiState={inputKey:input.key,status:'error',error:messages[error.code]||error.message||'AI 분석에 실패했습니다. 다시 시도해 주세요.'};renderAnalysis();}}
  }
- $('analysis-team').addEventListener('change',()=>{state.team=['A','B','D'].includes($('analysis-team').value)?$('analysis-team').value:'';state.p1='';state.p2='';renderAnalysis();writeHash();});
- window.addEventListener('hashchange',()=>{readHash();render();});
- window.addEventListener('playerprofileschange',()=>render());
- $('share').addEventListener('click',async()=>{
-  if(!/^https?:$/.test(location.protocol)){
-   $('share-status').textContent='HTML 파일을 첨부해 공유하세요. 선택 상태는 파일에 포함되지 않습니다.';$('share-fallback').hidden=true;return;
-  }
-  try{await navigator.clipboard.writeText(location.href);$('share-status').textContent='현재 화면의 선택 링크를 복사했습니다.';$('share-fallback').hidden=true;}
-  catch{$('share-fallback').hidden=false;$('share-url').value=location.href;$('share-url').focus();$('share-url').select();$('share-status').textContent='아래 링크를 복사해 공유하세요.';}
- });
+ for(const [id,field] of [['our-player1','own1'],['our-player2','own2'],['opponent1','p1'],['opponent2','p2']])$(id).addEventListener('change',()=>{state[field]=$(id).value;[state.own1,state.own2]=cleanPair('C',state.own1,state.own2);[state.p1,state.p2]=cleanPair(state.team,state.p1,state.p2);renderAnalysis();writeHash();});
+ $('analysis-team').addEventListener('change',()=>{state.team=$('analysis-team').value;state.p1='';state.p2='';renderAnalysis();writeHash();});
+ function render(){calculate();renderStrategy();renderAnalysis();renderPage();writeHash();}
+ window.addEventListener('hashchange',()=>{readHash();render();});window.addEventListener('playerprofileschange',render);
+ window.addEventListener('playerprofilecloudstatuschange',()=>{renderStrategy();renderAnalysis();});
+ window.addEventListener('teamlineupchange',()=>{if(state.view==='auto'&&confirmed()){const saved=confirmed();Object.assign(state,{mode:saved.mode,strategy:saved.strategy,fixedPairs:saved.fixedPairs.map(item=>item.pair)});}render();});
+ $('share').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(location.href);$('share-status').textContent='현재 선택 링크를 복사했습니다.';$('share-fallback').hidden=true;}catch{$('share-fallback').hidden=false;$('share-url').value=location.href;$('share-url').focus();$('share-url').select();$('share-status').textContent='아래 링크를 복사해 공유하세요.';}});
  readHash();render();
 })();

@@ -40,3 +40,30 @@ assert.equal(isLegalPair([{name:'우디',tier:'forty'},{name:'우디',tier:'fort
 const analysis=analyzeMatchup(players.map(p=>({name:p.id.slice(2),profile:p.profile})),[{name:'동글',profile:opponent}]);
 assert.ok(analysis.roles.some(text=>text.includes('네트')));assert.ok(analysis.checks.some(text=>text.includes('포칭')));
 console.log('PASS: 공식 일정·기존 편성, 새 프로필과 보존 이관, 키워드 제한·미입력 처리');
+
+const pairing=require('./pairing-model.js');
+assert.equal(pairing.partitions(data).length,90);
+const fixture={};Object.keys(data.teams.C).forEach((name,i)=>fixture['C:'+name]={position:i%2?'fore':'back',courtPreference:i%2?'net':'baseline',partnerRoles:[i%2?'cover':'attack'],restPreference:i%3===0?'rest':i%3===1?'continuous':'flexible'});
+for(const mode of ['fixed','free','partial'])for(const strategy of ['balance','win','stamina']){
+ const options={mode,strategy,fixedPairs:[['우디','꿉']]},plans=pairing.generate(data,fixture,options);
+ assert.equal(plans.length,strategy==='balance'?3:1);
+ for(const plan of plans){
+  assert.deepEqual(pairing.validatePlan(data,plan),[]);
+  const keys=new Set(plan.matches.map(match=>pairing.pairKey(match.pair)));
+  assert.ok(mode==='fixed'?keys.size===4:keys.size>4);
+  if(mode==='partial')assert.ok(plan.matches.filter(match=>match.pair.includes('우디')).every(match=>match.pair.includes('꿉')));
+ }
+ assert.equal(new Set(plans.map(plan=>JSON.stringify(plan.matches.map(match=>pairing.pairKey(match.pair))))).size,plans.length);
+ assert.deepEqual(pairing.generate(data,fixture,options),plans);
+}
+for(const fixedPairs of [[['꿉','한치']],[['우디','숭'],['숭','냉면']],[['우디','숭'],['냉면','만두'],['쏘오리','기른지']]])assert.throws(()=>pairing.generate(data,{}, {mode:'partial',fixedPairs}));
+const onlyTwo=pairing.generate(data,{}, {mode:'partial',fixedPairs:[['우디','꿉'],['숭','한치'],['냉면','만두']]});assert.equal(onlyTwo.length,1);
+const normal=pairing.generate(data,{}, {mode:'fixed'})[0];
+for(const mutate of [p=>p.matches[0].pair=['꿉','한치'],p=>p.matches[0].pair=['우디','우디'],p=>p.matches[0].court=1,p=>p.matches[0]=null,p=>p.fixedPairs='invalid',p=>p.matches.pop()]){const broken=JSON.parse(JSON.stringify(normal));mutate(broken);assert.ok(pairing.validatePlan(data,broken).length);}
+assert.notDeepEqual(pairing.generate(data,fixture,{mode:'fixed'}).map(p=>p.matches),pairing.generate(data,{}, {mode:'fixed'}).map(p=>p.matches));
+let randomSeed=7;const random=()=>((randomSeed=Math.imul(randomSeed,1664525)+1013904223>>>0)/4294967296);
+for(let trial=0;trial<12;trial++){
+ const profiles={};for(const name of Object.keys(data.teams.C))profiles['C:'+name]={position:['','fore','back','either'][Math.floor(random()*4)],courtPreference:['','baseline','net','either'][Math.floor(random()*4)],restPreference:['','rest','continuous','flexible'][Math.floor(random()*4)]};
+ for(const mode of ['fixed','free','partial'])for(const plan of pairing.generate(data,profiles,{mode,strategy:['balance','win','stamina'][trial%3],fixedPairs:[['우디','한치']]}))assert.deepEqual(pairing.validatePlan(data,plan),[]);
+}
+console.log('PASS: 세 운영 모드·세 전략, 실제 교차 페어, 고정 유지, 결정적 추천, 다양한 선호와 잘못된 편성');

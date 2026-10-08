@@ -243,3 +243,15 @@ select:disabled { background: var(--bg); color: var(--muted); }
   .friendly-title { font-size: 13px; }
 }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+.lineup-controls, .ai-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 16px 0 8px; }
+.primary-button { background: var(--navy); color: var(--white); border-color: var(--navy); }
+button:disabled { opacity: .55; }
+.lineup-controls button[aria-pressed="true"] { border-color: var(--navy); background: var(--bg); }
+.fixed-pairs-list { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.fixed-pair-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+#add-fixed-pair { margin-top: 10px; }
+.recommendation-reasons { grid-column: 1 / -1; }
+#recommendation-status, #lineup-status { overflow-wrap: anywhere; }
+.ai-actions p { flex-basis: 100%; }
+@media (max-width: 500px) { .lineup-controls .primary-button { width: 100%; } }
