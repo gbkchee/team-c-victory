@@ -23,6 +23,8 @@ class Element extends EventTarget {
  querySelector(selector){return this.querySelectorAll(selector)[0]||null;}
  click(){if(!this.disabled)return this.dispatchEvent({type:'click'});return [];}
  focus(){this.document.activeElement=this;}
+ blur(){if(this.document.activeElement===this)this.document.activeElement=this.document.body;}
+ setSelectionRange(start,end){this.selectionStart=start;this.selectionEnd=end;}
  select(){}
  scrollIntoView(){}
  get isConnected(){return this.document.body.contains(this);}
@@ -57,12 +59,16 @@ function firestoreFixture(){
  };
  return {entries,api,broadcast};
 }
-function browser(store,{saved={},hash='',siteKey='fixture-public-site-key'}={}){
+function browser(store,{saved={},hash='',siteKey='fixture-public-site-key',mobile=false}={}){
  const document=documentFixture(),window=new EventTarget(),storage=new Map(Object.entries(saved)),timers=new Map();let clock=0,sequence=0;
  const location={hash,href:'https://gbkchee.github.io/team-c-victory/'+hash};
- const context={window,document,location,history:{replaceState:(_,__,value)=>{location.hash=value;location.href='https://gbkchee.github.io/team-c-victory/'+value;}},navigator:{clipboard:{writeText:async()=>{}}},localStorage:{getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,value)},CustomEvent:class {constructor(type,{detail}={}){this.type=type;this.detail=detail;}},URLSearchParams,Intl,console,TextEncoder,crypto:{randomUUID:crypto.randomUUID,subtle:{digest:async(_,input)=>Uint8Array.from(crypto.createHash('sha256').update(input).digest()).buffer}},
+ const historyEntries=[{state:null,hash}],mobileMedia=new EventTarget();let historyIndex=0;mobileMedia.matches=mobile;
+ const setLocation=value=>{location.hash=value;location.href='https://gbkchee.github.io/team-c-victory/'+value;};
+ const moveHistory=delta=>{const next=historyIndex+delta;if(next<0||next>=historyEntries.length)return;const oldHash=location.hash;historyIndex=next;setLocation(historyEntries[next].hash);window.dispatchEvent({type:'popstate',state:historyEntries[next].state});if(oldHash!==location.hash)window.dispatchEvent({type:'hashchange'});};
+ const history={scrollRestoration:'auto',get state(){return historyEntries[historyIndex].state;},replaceState:(state,_,value)=>{historyEntries[historyIndex]={state,hash:value};setLocation(value);},pushState:(state,_,value)=>{historyEntries.splice(historyIndex+1);historyEntries.push({state,hash:value});historyIndex++;setLocation(value);},back:()=>moveHistory(-1),forward:()=>moveHistory(1)};
+ const context={window,document,location,history,navigator:{clipboard:{writeText:async()=>{}}},localStorage:{getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,value)},CustomEvent:class {constructor(type,{detail}={}){this.type=type;this.detail=detail;}},URLSearchParams,Intl,console,TextEncoder,crypto:{randomUUID:crypto.randomUUID,subtle:{digest:async(_,input)=>Uint8Array.from(crypto.createHash('sha256').update(input).digest()).buffer}},
   setTimeout:(callback,delay=0)=>{const id=++sequence;timers.set(id,{callback,due:clock+delay});return id;},clearTimeout:id=>timers.delete(id),...store.api};
- window.location=location;window.matchMedia=()=>({matches:false});
+ window.location=location;window.scrollY=0;window.scrollTo=options=>{window.scrollY=options.top;};window.matchMedia=query=>query==='(max-width: 767px)'?mobileMedia:{matches:false};
  context.Option=function(text,value){const option=document.createElement('option');option.textContent=text;option.value=value;return option;};
  context.Worker=class {
   constructor(){this.stopped=false;}
@@ -79,7 +85,8 @@ function browser(store,{saved={},hash='',siteKey='fixture-public-site-key'}={}){
  const open=id=>{const node=$('player-roster').querySelectorAll('button').find(node=>node.dataset.player===id);assert.ok(node);node.click();};
  const choose=(field,value)=>{const input=$('profile-'+field+'-'+value);assert.ok(input);input.checked=true;input.dispatchEvent({type:'change'});};
  const submit=(id,text)=>{const input=$(id);input.value=text;let form=input.parentNode;while(form.tagName!=='FORM')form=form.parentNode;form.dispatchEvent({type:'submit',preventDefault(){}});};
- return {window,document,storage,$,flush,advance,clickText,select,open,choose,submit};
+ const resize=isMobile=>{mobileMedia.matches=isMobile;mobileMedia.dispatchEvent({type:'change'});};
+ return {window,document,storage,$,flush,advance,clickText,select,open,choose,submit,history,location,resize};
 }
 test('새 입력 화면, 기존 데이터 이관, 20개 제한과 두 기기 실시간 공유',async()=>{
  const store=firestoreFixture(),one=browser(store,{saved:{'courtside.player-profiles.v3':JSON.stringify({'C:우디':{position:'fore',confidentSkills:['serve'],traits:['왼손잡이']}})}});
@@ -158,4 +165,35 @@ test('AI SDK 로딩 차단 시 기본 공략과 선수 저장은 계속 동작�
  const store=firestoreFixture();store.api.importError=new Error('network blocked by policy');const one=browser(store,{hash:'#page=analysis&own1=우디&own2=숭&team=A&p1=동글&p2=펩시'});await one.flush();
  await Promise.all(one.$('ai-analyze').click());assert.ok(one.$('analysis-result').textContent.includes('AI에 연결하지 못했습니다'));assert.ok(one.$('analysis-result').textContent.includes('기본 공략'));assert.equal(store.entries.has('geminiAiUsage/team'),false);
  one.open('C:우디');one.choose('courtPreference','net');await one.flush();assert.equal(store.entries.get('playerProfilesV2/C:우디').profile.courtPreference,'net');assert.equal(one.window.PLAYER_PROFILE_CLOUD.status,'ready');
+});
+test('모바일 선수 상세는 별도 화면으로 열리고 뒤로 가기·앞으로 가기와 목록 위치를 유지한다',async()=>{
+ const store=firestoreFixture(),one=browser(store,{mobile:true});await one.flush();one.window.scrollY=840;one.open('C:우디');
+ assert.equal(one.$('player-detail-page').hidden,false);assert.notEqual(one.$('ratings-panel').open,true);assert.equal(one.$('main-content').hidden,true);assert.equal(one.$('site-header').hidden,true);
+ assert.equal(one.$('player-profile-editor').parentNode,one.$('player-detail-page'));assert.equal(one.$('rating-back').hidden,false);assert.equal(one.window.scrollY,0);
+ assert.equal(new URLSearchParams(one.location.hash.slice(1)).get('player'),'C:우디');assert.equal(one.history.state.teamcRosterScroll,840);
+ one.choose('courtPreference','net');await one.flush();
+ assert.equal(new URLSearchParams(one.location.hash.slice(1)).get('player'),'C:우디');assert.equal(one.history.state.teamcPlayerEntry,true);assert.equal(one.$('player-detail-page').hidden,false);
+ one.history.back();await one.advance(0);assert.equal(one.$('player-detail-page').hidden,true);assert.equal(one.$('main-content').hidden,false);assert.equal(one.$('site-header').hidden,false);assert.equal(one.window.scrollY,840);assert.equal(one.document.activeElement.dataset.player,'C:우디');assert.equal(one.history.scrollRestoration,'auto');
+ one.history.forward();await one.flush();assert.equal(one.$('player-detail-page').hidden,false);assert.equal(one.$('profile-courtPreference-net').checked,true);
+ one.$('rating-back').click();await one.advance(0);assert.equal(one.window.scrollY,840);assert.equal(one.$('player-detail-page').hidden,true);assert.equal(store.entries.get('playerProfilesV2/C:우디').profile.courtPreference,'net');
+});
+test('모바일 상세 직접 접속과 화면 크기 변경에서도 입력 초안·포커스·공유 값이 유지된다',async()=>{
+ const store=firestoreFixture(),one=browser(store,{mobile:true,hash:'#page=players&player=D%3A아르(시트%3A%20야르)'});await one.flush();
+ assert.equal(one.$('player-detail-page').hidden,false);assert.ok(one.$('rating-player-info').textContent.includes('아르'));
+ const input=one.$('profile-keyword-text-note');input.value='입력 중인 특징';input.focus();input.setSelectionRange(4,4);
+ store.entries.get('playerProfilesV2/D:아르(시트: 야르)').profile.style='attack';store.broadcast();await one.flush();
+ assert.equal(one.$('profile-keyword-text-note').value,'입력 중인 특징');assert.equal(one.document.activeElement,one.$('profile-keyword-text-note'));assert.equal(one.document.activeElement.selectionStart,4);assert.equal(one.$('profile-style-attack').checked,true);
+ one.resize(false);assert.equal(one.$('ratings-panel').open,true);assert.equal(one.$('player-detail-page').hidden,true);assert.equal(one.$('player-profile-editor').parentNode,one.$('ratings-panel'));assert.equal(one.$('profile-keyword-text-note').value,'입력 중인 특징');
+ one.resize(true);assert.equal(one.$('ratings-panel').open,false);assert.equal(one.$('player-detail-page').hidden,false);assert.equal(one.$('profile-keyword-text-note').value,'입력 중인 특징');
+ one.$('rating-back').click();await one.advance(0);assert.equal(one.$('player-detail-page').hidden,true);assert.equal(new URLSearchParams(one.location.hash.slice(1)).has('player'),false);assert.equal(one.$('main-content').hidden,false);
+});
+test('상대 특징은 첫 항목이고 기존 강점 메모를 숨기며 새 특징을 양쪽 팀에 저장할 수 있다',async()=>{
+ const store=firestoreFixture(),{blankDocuments}=require('./reset-test-data.cjs');for(const [path,value] of blankDocuments({seconds:1}))store.entries.set(path,value);
+ store.entries.get('playerProfilesV2/A:펩시').profile.legacyStrengths=['예전 강점 메모'];
+ const one=browser(store,{mobile:true});await one.flush();one.open('A:펩시');
+ assert.deepEqual(one.$('opponent-profile-section').children.map(node=>node.id),['opponent-features','opponent-profile-fields','opponent-keywords']);assert.equal(one.$('opponent-features').querySelector('h3').textContent,'특징');
+ assert.ok(!one.$('player-profile-editor').textContent.includes('기존 강점 메모'));assert.ok(!one.$('player-profile-editor').textContent.includes('예전 강점 메모'));assert.ok(!one.$('player-profile-editor').textContent.includes('기타 특징'));
+ for(const text of ['탑스핀','베이스라인 긴 공'])one.clickText('opponent-features','＋ '+text);await one.flush();
+ const opponent=store.entries.get('playerProfilesV2/A:펩시').profile;assert.deepEqual(opponent.keywords,[{kind:'note',text:'탑스핀'},{kind:'note',text:'베이스라인 긴 공'}]);assert.deepEqual(opponent.legacyStrengths,['예전 강점 메모']);
+ one.$('rating-back').click();await one.advance(0);one.open('C:우디');for(const text of ['탑스핀','베이스라인 긴 공'])one.clickText('team-traits','＋ '+text);await one.flush();assert.deepEqual(store.entries.get('playerTraits/C:우디').items,['탑스핀','베이스라인 긴 공']);
 });

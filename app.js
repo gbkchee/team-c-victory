@@ -76,7 +76,9 @@ if(typeof document!=='undefined')(() => {
   const q=new URLSearchParams({page:state.page,strategy:state.strategy,mode:state.mode,variant:String(state.variant),view:state.view,filter:state.filter});
   if(state.mode==='partial')q.set('fixed',JSON.stringify(state.fixedPairs));
   for(const key of ['team','own1','own2','p1','p2'])if(state[key])q.set(key,state[key]);
-  try{history.replaceState(null,'','#'+q);}catch{}
+  const player=new URLSearchParams(location.hash.slice(1)).get('player');
+  if(state.page==='players'&&window.PLAYER_PROFILES.has(player))q.set('player',player);
+  try{history.replaceState(history.state,'','#'+q);}catch{}
  }
  function cleanPair(team,a,b){
   a=Object.hasOwn(data.teams[team]||{},a)?a:'';b=Object.hasOwn(data.teams[team]||{},b)?b:'';
@@ -193,7 +195,7 @@ if(typeof document!=='undefined')(() => {
   const rows=team==='C'?[
    ['선호 리턴 자리',definitions.positions[profile.position]],['편한 위치',definitions.courtPreferences[profile.courtPreference]],['성향',definitions.styles[profile.style]],
    ['잘 맞는 파트너',profile.partnerRoles.map(role=>definitions.partnerRoles[role]).join(', ')||'미선택'],['특징',profile.traits.join(', ')||'미입력'],['경기·휴식',definitions.restPreferences[profile.restPreference]]
-  ]:[['성향',definitions.styles[profile.style]],...Object.entries(definitions.keywordKinds).map(([kind,title])=>[title,profile.keywords.filter(item=>item.kind===kind).map(item=>item.text).join(', ')||'미입력'])];
+  ]:[['특징',profile.keywords.filter(item=>item.kind==='note').map(item=>item.text).join(', ')||'미입력'],['성향',definitions.styles[profile.style]],...Object.entries(definitions.keywordKinds).filter(([kind])=>kind!=='note').map(([kind,title])=>[title,profile.keywords.filter(item=>item.kind===kind).map(item=>item.text).join(', ')||'미입력'])];
   for(const [title,text] of rows)card.append(el('p','',title+' · '+text));return card;
  }
  function listSection(title,items){const section=el('section','analysis-notes');section.append(el('h3','',title));const list=el('ul');for(const text of items)list.append(el('li','',text));section.append(list);return section;}

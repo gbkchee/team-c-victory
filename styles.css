@@ -134,7 +134,7 @@ main { max-width: var(--content-width); margin: auto; padding: 24px 20px 48px; }
 .rules ul { padding-left: 20px; }
 
 label { display: block; color: var(--muted); font-size: 12px; }
-select, input { display: block; width: 100%; min-height: 46px; padding: 9px; margin-top: 6px; border: 1px solid var(--blue-line); border-radius: 8px; background: var(--white); color: var(--ink); }
+select, input { display: block; width: 100%; min-height: 46px; padding: 9px; margin-top: 6px; border: 1px solid var(--blue-line); border-radius: 8px; background: var(--white); color: var(--ink); font-size: 16px; }
 select:disabled { background: var(--bg); color: var(--muted); }
 .select-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .analysis-selection-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin: 20px 0; }
@@ -168,6 +168,12 @@ select:disabled { background: var(--bg); color: var(--muted); }
 .rating-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 #rating-player-info { display: flex; align-items: center; gap: 10px; color: var(--navy); font-size: 21px; }
 .rating-close { flex-shrink: 0; width: 44px; height: 44px; padding: 0; border-color: transparent; border-radius: 100px; background: var(--bg); font-size: 28px; line-height: 1; }
+.rating-back { justify-self: start; padding: 8px 0; border: 0; background: transparent; font-size: 14px; font-weight: 700; }
+.player-detail-page { min-height: 100dvh; padding: 0 max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); background: var(--white); }
+.player-detail-page .player-profile-editor { max-width: 720px; margin: 0 auto; }
+.player-detail-page .rating-dialog-heading { position: sticky; top: 0; z-index: 2; display: grid; gap: 2px; padding: max(8px, env(safe-area-inset-top)) 0 12px; border-bottom: 1px solid var(--divider); background: var(--white); }
+.player-detail-page #rating-player-info { margin: 0; font-size: 21px; }
+body.player-detail-open > .skip-link { display: none; }
 #profile-save-status { min-height: 20px; }
 .profile-fields { display: flex; flex-direction: column; gap: 22px; margin-top: 20px; }
 #team-profile-fields > .profile-fields-group { margin-top: 0; }
@@ -186,6 +192,7 @@ select:disabled { background: var(--bg); color: var(--muted); }
 .opponent-keywords { margin-top: 24px; }
 .keyword-section { padding-top: 6px; margin-top: 18px; border-top: 1px solid var(--divider); }
 .keyword-section h3 { color: var(--navy); }
+.opponent-features .keyword-section { padding-top: 0; margin-top: 20px; border-top: 0; }
 .rating-keywords { display: flex; flex-wrap: wrap; gap: 8px; }
 .keyword-chip { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 3px 5px 3px 9px; border: 1px solid var(--blue-line); border-radius: 10px; background: var(--bg); color: var(--navy); font-size: 12px; overflow-wrap: anywhere; }
 .keyword-remove { flex-shrink: 0; min-width: 44px; min-height: 44px; padding: 2px 8px; border: 0; background: transparent; font-size: 19px; }

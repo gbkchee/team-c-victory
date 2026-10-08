@@ -12,11 +12,82 @@ if(typeof document!=='undefined')(() => {
  }))).sort((a,b)=>a.team.localeCompare(b.team)||(tierOrder[a.tier]??3)-(tierOrder[b.tier]??3)||collator.compare(a.displayName,b.displayName));
  const allowed=new Set(roster.map(player=>player.id)),storageKey='courtside.player-profiles.v4';
  const oldStorageKeys=['courtside.player-profiles.v3','courtside.player-ratings.v2','courtside.player-pentagons.v1'];
- let profiles={},sharedTraitSuggestions=[],sharedKeywordSuggestions={},saveAvailable=true,current='',lastTrigger=null;
+ let profiles={},sharedTraitSuggestions=[],sharedKeywordSuggestions={},saveAvailable=true,current='';
  const $=id=>document.getElementById(id),person=id=>roster.find(player=>player.id===id);
  const label=id=>{const player=person(id);return player.team+'조 '+player.displayName;};
  const tier=id=>tiers[person(id).tier]||'등급 미확인',tierSymbol=id=>tierSymbols[person(id).tier]||'❔';
  const el=(tag,cls,text)=>{const node=document.createElement(tag);if(cls)node.className=cls;if(text!==undefined)node.textContent=text;return node;};
+ const editor=$('player-profile-editor'),detailPage=$('player-detail-page'),main=$('main-content'),header=$('site-header');
+ const mobile=window.matchMedia('(max-width: 767px)');
+ let editorOpen=false,listScroll=0,previousScrollRestoration='auto',silentDialogCloses=0,returning=false,navigationGeneration=0;
+ function routePlayer(){
+  const params=new URLSearchParams(location.hash.slice(1)),id=params.get('player');
+  return (!params.get('page')||params.get('page')==='players')&&allowed.has(id)?id:null;
+ }
+ function closeDialogSilently(){if(root.open){silentDialogCloses++;root.close();}}
+ function presentEditor(){
+  if(mobile.matches){
+   closeDialogSilently();detailPage.append(editor);detailPage.hidden=false;main.hidden=true;header.hidden=true;
+   document.body.classList.remove('player-dialog-open');document.body.classList.add('player-detail-open');
+   $('rating-back').hidden=false;$('rating-close').hidden=true;
+  }else{
+   root.append(editor);detailPage.hidden=true;main.hidden=false;header.hidden=false;
+   document.body.classList.remove('player-detail-open');document.body.classList.add('player-dialog-open');
+   $('rating-back').hidden=true;$('rating-close').hidden=false;
+   if(!root.open)root.showModal();
+  }
+ }
+ function openEditor(id,fromRoute=false){
+  if(!allowed.has(id))return;
+  const wasOpen=editorOpen;
+  if(!wasOpen){
+   listScroll=fromRoute&&Number.isFinite(history.state?.teamcRosterScroll)?history.state.teamcRosterScroll:window.scrollY||0;
+   previousScrollRestoration=history.scrollRestoration||'auto';history.scrollRestoration='manual';
+  }
+  navigationGeneration++;returning=false;current=id;editorOpen=true;render();
+  $('player-roster').querySelectorAll('.roster-player').forEach(item=>item.setAttribute('aria-pressed',String(item.dataset.player===current)));
+  if(mobile.matches&&!fromRoute){
+   const params=new URLSearchParams(location.hash.slice(1));params.set('page','players');params.set('player',current);
+   history.pushState({...history.state,teamcPlayerEntry:true,teamcRosterScroll:listScroll},'','#'+params);
+  }
+  presentEditor();root.scrollTop=0;
+  if(mobile.matches)window.scrollTo({top:0,behavior:'instant'});
+  $('rating-player-info').focus({preventScroll:true});
+ }
+ function hideEditor(){
+  if(!editorOpen)return;
+  const active=document.activeElement;if(editor.contains(active))active.blur?.();
+  editorOpen=false;returning=false;closeDialogSilently();root.append(editor);
+  detailPage.hidden=true;main.hidden=false;header.hidden=false;
+  document.body.classList.remove('player-dialog-open');document.body.classList.remove('player-detail-open');
+  $('rating-back').hidden=true;$('rating-close').hidden=false;
+  const generation=++navigationGeneration,scroll=listScroll,restoration=previousScrollRestoration;
+  history.scrollRestoration=restoration;
+  setTimeout(()=>{
+   if(editorOpen||generation!==navigationGeneration)return;
+   const page=new URLSearchParams(location.hash.slice(1)).get('page');
+   if(!page||page==='players'){
+    window.scrollTo({top:scroll,behavior:'instant'});
+    const trigger=[...$('player-roster').querySelectorAll('.roster-player')].find(button=>button.dataset.player===current);
+    if(trigger?.getClientRects().length)trigger.focus({preventScroll:true});
+   }
+  },0);
+ }
+ function returnToRoster(){
+  if(!editorOpen||returning)return;
+  if(routePlayer()&&history.state?.teamcPlayerEntry){returning=true;history.back();return;}
+  if(routePlayer()){
+   const params=new URLSearchParams(location.hash.slice(1)),state={...history.state};params.delete('player');delete state.teamcPlayerEntry;delete state.teamcRosterScroll;
+   history.replaceState(state,'','#'+params);
+  }
+  hideEditor();
+ }
+ function syncPlayerRoute(){
+  const id=routePlayer();
+  if(id){if(!editorOpen||id!==current)openEditor(id,true);}
+  else if(editorOpen)hideEditor();
+ }
+ mobile.addEventListener?.('change',()=>{renderRoster();if(editorOpen)presentEditor();});
  function initialKeywords(id){
   const player=person(id);if(!player||player.team==='C')return [];
   const info=data.teams[player.team][player.name];
@@ -62,17 +133,17 @@ if(typeof document!=='undefined')(() => {
   profiles=incoming;
   try{localStorage.setItem(storageKey,JSON.stringify(profiles));saveAvailable=true;}catch{saveAvailable=false;}
   savedStatus();renderRoster();
-  if(root.open)render();
+  if(editorOpen)render(true);
   window.dispatchEvent(new CustomEvent('playerprofileschange',{detail:{cloudRefresh:true}}));
  });
  window.addEventListener('playerprofilecloudstatuschange',savedStatus);
  window.addEventListener('playertraitssuggestionschange',event=>{
   sharedTraitSuggestions=Array.isArray(event.detail?.suggestions)?event.detail.suggestions:[];
-  if(root.open&&person(current)?.team==='C')renderTraits();
+  if(editorOpen&&person(current)?.team==='C')preserveDrafts(renderTraits);
  });
  window.addEventListener('playerkeywordsuggestionschange',event=>{
   sharedKeywordSuggestions=event.detail?.suggestions||{};
-  if(root.open&&person(current)?.team!=='C')renderKeywords();
+  if(editorOpen&&person(current)?.team!=='C')preserveDrafts(renderKeywords);
  });
  function choiceField(title,field,options,multiple=false,help='',stack=false){
   const group=el('fieldset','profile-field'),legend=el('legend','',title),choices=el('div','profile-choices'+(stack?' profile-choices-stack':''));
@@ -158,7 +229,7 @@ function renderTraits(){
  }
  function renderKeywords(){
   const drafts=Object.fromEntries(Object.keys(keywordKinds).map(kind=>[kind,$('profile-keyword-text-'+kind)?.value||'']));
-  const groups=$('opponent-keywords');groups.replaceChildren();
+  const groups=$('opponent-keywords'),features=$('opponent-features');groups.replaceChildren();features.replaceChildren();
   for(const [kind,title] of Object.entries(keywordKinds)){
    const section=el('section','keyword-section'),list=el('div','rating-keywords');
    section.append(el('h3','',title));
@@ -194,19 +265,25 @@ function renderTraits(){
     button.disabled=keywords.some(item=>item.text===text);
     button.addEventListener('click',()=>addKeyword(text));suggestions.append(button);
    }
-   section.append(list,form,el('p','muted small','빠른 추가'),suggestions,status);groups.append(section);
+   section.append(list,form,el('p','muted small','빠른 추가'),suggestions,status);(kind==='note'?features:groups).append(section);
   }
-  const legacy=profile(current).legacyStrengths;
-  if(legacy.length){const details=el('details','analysis-source-notes');details.append(el('summary','','기존 강점 메모 (참고)'),el('p','muted small',legacy.join(' · ')));groups.append(details);}
  }
- function render(){
+ function preserveDrafts(operation){
+  const drafts=[...editor.querySelectorAll('input')].filter(input=>input.type==='text').map(input=>({id:input.id,value:input.value}));
+  const active=document.activeElement,focused=editor.contains(active)&&active.type==='text'?{id:active.id,start:active.selectionStart,end:active.selectionEnd}:null;
+  operation();
+  for(const draft of drafts){const input=$(draft.id);if(input)input.value=draft.value;}
+  if(focused){const input=$(focused.id);if(input){input.focus({preventScroll:true});if(typeof focused.start==='number')input.setSelectionRange?.(focused.start,focused.end);}}
+ }
+ function render(keepDrafts=false){
+  if(keepDrafts){preserveDrafts(()=>render());return;}
   const own=person(current).team==='C';
   $('rating-player-info').replaceChildren(el('span','',label(current)),tierBadge(current));
   $('profile-help').textContent=own
    ?'본인이 원하는 경기 방식을 알려 주세요. 선택하지 않은 항목이 있어도 괜찮아요.'
    :'실제로 본 플레이를 기록해 주세요. 잘 모르면 모르겠음으로 남겨 주세요. 키워드는 40자 이내, 선수당 총 20개까지 추가할 수 있어요.';
   $('team-profile-section').hidden=!own;$('opponent-profile-section').hidden=own;
-  $('team-profile-fields').replaceChildren();$('opponent-profile-fields').replaceChildren();$('opponent-keywords').replaceChildren();
+  $('team-profile-fields').replaceChildren();$('opponent-profile-fields').replaceChildren();$('opponent-keywords').replaceChildren();$('opponent-features').replaceChildren();
   if(own)renderTeamFields();else renderOpponentFields();
   $('profile-reset').textContent=own?'선택 선수의 입력 초기화':'입력 초기화 · 키워드는 시트 기록으로 복원';
   savedStatus();
@@ -222,13 +299,11 @@ function renderTraits(){
    heading.append(title,el('span','roster-count','선수 '+players.length+'명'));section.append(heading);
    for(const player of players){
     const item=el('li'),button=el('button','roster-player');button.type='button';button.dataset.player=player.id;
-    button.setAttribute('aria-pressed',String(player.id===current));button.setAttribute('aria-controls','ratings-panel');button.setAttribute('aria-haspopup','dialog');
+    button.setAttribute('aria-pressed',String(player.id===current));button.setAttribute('aria-controls',mobile.matches?'player-detail-page':'ratings-panel');if(!mobile.matches)button.setAttribute('aria-haspopup','dialog');
     button.setAttribute('aria-label',label(player.id)+', '+tier(player.id)+', '+(team==='C'?'경기 선호 입력':'상대 선수 분석'));
     fillRosterCard(button,player.id);
     button.addEventListener('click',()=>{
-     current=player.id;lastTrigger=button;render();
-     groups.querySelectorAll('.roster-player').forEach(item=>item.setAttribute('aria-pressed',String(item.dataset.player===current)));
-     root.showModal();document.body.classList.add('player-dialog-open');$('rating-player-info').focus({preventScroll:true});
+     openEditor(player.id);
     });
     item.append(button);list.append(item);
    }
@@ -261,22 +336,22 @@ function renderTraits(){
   $('roster-heading-'+shortcut.dataset.group).focus({preventScroll:true});
   section.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});
  });
- $('rating-close').addEventListener('click',()=>root.close());
+ $('rating-close').addEventListener('click',returnToRoster);
+ $('rating-back').addEventListener('click',returnToRoster);
  root.addEventListener('close',()=>{
-  document.body.classList.remove('player-dialog-open');
-  if(lastTrigger?.isConnected&&lastTrigger.getClientRects().length)lastTrigger.focus({preventScroll:true});
+  if(silentDialogCloses){silentDialogCloses--;return;}
+  returnToRoster();
  });
  root.addEventListener('click',event=>{
   if(event.target!==root)return;
   const rect=root.getBoundingClientRect();
-  if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)root.close();
+  if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)returnToRoster();
  });
- window.addEventListener('hashchange',()=>{
-  const params=new URLSearchParams(window.location.hash.slice(1));
-  if(root.open&&(['strategy','analysis'].includes(params.get('page'))||(!params.has('page')&&params.has('strategy'))))root.close();
- });
+ window.addEventListener('hashchange',syncPlayerRoute);
+ window.addEventListener('popstate',syncPlayerRoute);
  $('profile-reset').addEventListener('click',()=>{delete profiles[current];persist();render();});
  savedStatus();renderRoster();
  window.PLAYER_PROFILES.all=()=>Object.fromEntries(roster.map(player=>[player.id,JSON.parse(JSON.stringify(profile(player.id)))]));
+ syncPlayerRoute();
  window.dispatchEvent(new CustomEvent('playerprofilesready'));
 })();

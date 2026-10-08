@@ -3,7 +3,7 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#003a70"><title>🎾 최강씨씨씨C조!!!! 🎾</title><link rel="stylesheet" href="styles.css"><script defer src="data.js"></script><script defer src="validation.js"></script><script defer src="profile-model.js"></script><script defer src="ratings.js"></script><script defer src="pairing-model.js"></script><script defer src="gemini-config.js"></script><script defer src="gemini-analysis.js"></script><script defer src="app.js"></script></head>
 <body>
 <a class="skip-link" href="#main-content">본문으로 이동</a>
-<header class="site-header">
+<header id="site-header" class="site-header">
 <div class="header-inner">
 <nav class="club-navigation" aria-label="클럽 메뉴">
 <a class="brand" href="./" aria-label="COURT MATES 홈"><img src="assets/club-emblem.svg" width="28" height="28" alt=""><span>COURT MATES</span></a>
@@ -40,17 +40,20 @@
 </div>
 <div id="player-roster" class="roster-grid" aria-label="C·A·B·D조 전체 선수"></div>
 <dialog id="ratings-panel" class="ratings-panel" aria-labelledby="rating-player-info" aria-describedby="profile-help">
-<div class="rating-dialog-heading"><h2 id="rating-player-info" tabindex="-1"></h2><button id="rating-close" type="button" class="rating-close" aria-label="선수 정보 팝업 닫기">×</button></div>
+<div id="player-profile-editor" class="player-profile-editor">
+<div class="rating-dialog-heading"><button id="rating-back" type="button" class="rating-back" hidden>← 선수 목록</button><h2 id="rating-player-info" tabindex="-1"></h2><button id="rating-close" type="button" class="rating-close" aria-label="선수 정보 팝업 닫기">×</button></div>
 <p id="profile-help" class="muted"></p>
 <section id="team-profile-section" hidden aria-label="C조 경기 선호">
 <div id="team-profile-fields" class="profile-fields"></div>
 </section>
 <section id="opponent-profile-section" hidden aria-label="상대 선수 관찰">
+<div id="opponent-features" class="opponent-features"></div>
 <div id="opponent-profile-fields" class="profile-fields"></div>
 <div id="opponent-keywords" class="opponent-keywords"></div>
 </section>
 <button id="profile-reset" type="button" class="profile-reset"></button>
 <p id="profile-save-status" class="muted small" role="status"></p>
+</div>
 </dialog>
 </section>
 <section id="page-strategy" class="page-panel" role="tabpanel" aria-labelledby="tab-strategy" hidden>
@@ -122,4 +125,6 @@
 </section>
 <footer class="friendly-note"><img src="assets/heart-handshake.svg" width="24" height="24" alt=""><p class="friendly-title">어차피 우승은 C조</p><p class="friendly-tagline">2026 TENET</p></footer>
 <noscript>이 전략보드에는 JavaScript가 필요합니다. JavaScript를 허용하는 브라우저에서 열어주세요.</noscript>
-</main><script type="module" src="firebase-cloud.js"></script></body></html>
+</main>
+<section id="player-detail-page" class="player-detail-page" role="main" aria-labelledby="rating-player-info" aria-describedby="profile-help" hidden></section>
+<script type="module" src="firebase-cloud.js"></script></body></html>
