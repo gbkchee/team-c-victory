@@ -127,7 +127,6 @@ if(typeof document!=='undefined')(() => {
  function renderPage(){
   document.body.dataset.page=state.page;
   document.querySelector('.brand img').src=state.page==='players'?'assets/roster-club-emblem.svg':'assets/club-emblem.svg';
-  document.querySelector('.court-illustration').src=state.page==='players'?'assets/roster-court-illustration.svg':'assets/court-illustration.svg';
   const menuImage=$('menu-toggle').querySelector('img');menuImage.src=state.page==='analysis'?'assets/analysis-ellipsis.svg':'assets/ellipsis.svg';menuImage.width=state.page==='analysis'?44:24;menuImage.height=state.page==='analysis'?44:24;
   closeMenu();for(const tab of tabs){const selected=tab.dataset.page===state.page;tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;$(tab.getAttribute('aria-controls')).hidden=!selected;}$('share').hidden=state.page==='players';
  }

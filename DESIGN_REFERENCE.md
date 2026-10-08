@@ -26,8 +26,8 @@
 | roster-club-emblem.svg | 5:625 | 28×28, 선수 목록 헤더 |
 | ellipsis.svg | 5:1044 | 24×24, 선수·전략 메뉴 버튼 |
 | analysis-ellipsis.svg | 31:15856 | 44×44, 분석 메뉴 버튼 |
-| court-illustration.svg | 15:11264 | 88×106, 전략 소개 |
-| roster-court-illustration.svg | 5:634 | 88×106, 선수 목록 소개 |
+| court-illustration.svg | 15:11264 | 이전 전략 소개 이미지, PNG로 교체 |
+| roster-court-illustration.svg | 5:634 | 이전 선수 목록 소개 이미지, PNG로 교체 |
 | crown.svg | 10:2 | 15×15, C조 목록 바로가기 |
 | profile-status-dot.svg | 31:11360 | 5×5, 저장 완료 상태 |
 | profile-saving-dot.svg | 31:12134 | 5×5, 저장 중 상태 |
@@ -35,6 +35,8 @@
 | ai-spinner.svg | 31:16027 | 16×16, AI 분석 진행 버튼 |
 
 파일의 존재·루트 크기와 HTML/JS/CSS 사용 위치를 확인했습니다. 앱에는 임시 Figma 에셋 주소나 디자인 스크린샷을 사용하지 않습니다.
+
+사용자가 제공한 `../court_illustration.png`를 `assets/court_illustration.png`로 복사해 선수 목록·페어 조합의 소개 이미지로 사용합니다. 176×212 원본을 88×106으로 표시하며, 탭을 바꿀 때 이전 SVG로 되돌리지 않습니다.
 
 ## 검증 범위
 

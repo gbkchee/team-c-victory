@@ -37,6 +37,7 @@ img { display: block; flex-shrink: 0; }
 .site-menu a:hover, .site-menu button:hover { background: var(--surface); }
 .site-menu p { margin: 8px 10px; color: var(--muted); font-size: 11px; }
 .match-introduction { display: flex; align-items: center; gap: 12px; padding: 16px 20px 24px; }
+.court-illustration { width: 88px; height: 106px; object-fit: contain; }
 .welcome-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 10px; color: var(--navy); }
 .welcome-copy p { margin: 0; font-size: 11px; font-weight: 700; }
 .site-title { font-size: 27px; line-height: 1.25; letter-spacing: -1px; font-weight: 700; word-break: keep-all; overflow-wrap: anywhere; }
