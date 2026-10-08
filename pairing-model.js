@@ -6,6 +6,7 @@
  const strategyLabels={balance:'밸런스형',win:'필승카드형',stamina:'체력안배형'};
  const pairOf=value=>Array.isArray(value)?value:value?.pair;
  const pairKey=pair=>[...pair].sort().join('\u0000');
+ const textCompare=(a,b)=>a<b?-1:a>b?1:0;
  function legalPair(data,pair){return Array.isArray(pair)&&pair.length===2&&pair[0]!==pair[1]&&pair.every(name=>Object.hasOwn(data.teams.C,name))&&!pair.every(name=>data.teams.C[name].tier==='love');}
  function validatePlan(data,plan,fixedPairs=plan?.fixedPairs||[]){
   const errors=[],names=Object.keys(data.teams.C),counts=Object.fromEntries(names.map(name=>[name,0])),slots=new Map(),ids=new Set();
@@ -61,6 +62,7 @@
    const conflict=['fore','back'].includes(a.position)&&a.position===b.position?1:0;
    if((a.position==='fore'&&b.position==='back')||(a.position==='back'&&b.position==='fore'))fit+=3;
    if((a.courtPreference==='net'&&b.courtPreference==='baseline')||(a.courtPreference==='baseline'&&b.courtPreference==='net'))fit+=2;
+   if((a.style==='attack'&&b.style==='defense')||(a.style==='defense'&&b.style==='attack'))fit+=1;
    for(const [own,other] of [[a,b],[b,a]]){
     if(own.partnerRoles.includes('cover')&&other.courtPreference==='baseline')fit+=2;
     if(own.partnerRoles.includes('attack')&&other.courtPreference==='net')fit+=2;
@@ -116,14 +118,14 @@
     }
     states=next;
    }
-   const best=[...states.values()].filter(item=>item.counts.every(count=>count===5)).sort((a,b)=>a.cost-b.cost||a.path.join('').localeCompare(b.path.join('')))[0];
+   const best=[...states.values()].filter(item=>item.counts.every(count=>count===5)).sort((a,b)=>a.cost-b.cost||textCompare(a.path.join(''),b.path.join('')))[0];
    if(!best)throw new Error('시간표에 고정 페어를 배치할 수 없습니다.');
    layoutCache.set(cacheKey,best.path);return best.path;
   }
   let candidates=combinations.map(pairs=>{
    const layout=arrange(pairs),matches=data.schedule.map((slot,index)=>({...slot,pair:pairs[layout[index]]}));
    return {matches,metrics:metrics(matches)};
-  }).sort((a,b)=>compare(a.metrics,b.metrics)||signature(a.matches).localeCompare(signature(b.matches)));
+  }).sort((a,b)=>compare(a.metrics,b.metrics)||textCompare(signature(a.matches),signature(b.matches)));
   function signature(matches){const counts=new Map();for(const match of matches){const key=pairKey(match.pair);counts.set(key,(counts.get(key)||0)+1);}return [...counts].sort().map(([key,count])=>key+':'+count).join('|');}
   if(mode!=='fixed'){
    const seeds=candidates.slice(0,12),improvements=[];
@@ -149,7 +151,7 @@
      if(best===current)break;current=best;improvements.push(current);
     }
    }
-   candidates=[...candidates,...improvements].sort((a,b)=>compare(a.metrics,b.metrics)||signature(a.matches).localeCompare(signature(b.matches)));
+   candidates=[...candidates,...improvements].sort((a,b)=>compare(a.metrics,b.metrics)||textCompare(signature(a.matches),signature(b.matches)));
   }
   const distinct=new Set(),selected=[];
   for(const candidate of candidates){const key=signature(candidate.matches);if(distinct.has(key))continue;distinct.add(key);selected.push(candidate);if(selected.length===(strategy==='balance'?3:1))break;}

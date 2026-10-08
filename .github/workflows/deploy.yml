@@ -32,7 +32,9 @@ jobs:
           node-version: '22'
           package-manager-cache: false
       - name: Validate and build site
-        run: npm run build
+        run: |
+          npm test
+          npm run build
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
       - name: Upload site

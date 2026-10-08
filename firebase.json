@@ -1,5 +1,15 @@
 {
   "firestore": {
     "rules": "firestore.rules"
-  }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "runtime": "nodejs22",
+      "predeploy": [
+        "node \"$PROJECT_DIR/prepare-functions.cjs\""
+      ]
+    }
+  ]
 }

@@ -43,7 +43,7 @@ if(typeof document!=='undefined')(() => {
  const tiers={forty:'4️⃣',thirty:'3️⃣',love:'🫶'},tierLabels={forty:'포티',thirty:'써티',love:'러브'},tierOrder={forty:0,thirty:1,love:2};
  const names=team=>Object.keys(data.teams[team]||{}).sort((a,b)=>tierOrder[data.teams[team][a].tier]-tierOrder[data.teams[team][b].tier]||a.localeCompare(b,'ko'));
  let state={},plans=[],worker=null,generation=0,requestKey='',recommendationError='',calculating=false,timer=null,confirmationMessage='';
- const recommendationCache=new Map();let aiState=null,aiGeneration=0,aiUnsubscribe=null;
+ const recommendationCache=new Map();let aiState=null,aiGeneration=0,aiUnsubscribe=null,aiWaitTimer=null;
  function readHash(){
   const q=new URLSearchParams(location.hash.slice(1));let fixed=[];
   try{const parsed=JSON.parse(q.get('fixed')||'[]');if(Array.isArray(parsed)&&parsed.length<=3&&parsed.every(item=>pairing.legalPair(data,item)))fixed=parsed;}catch{}
@@ -83,14 +83,14 @@ if(typeof document!=='undefined')(() => {
  function calculate(){
   const options={mode:state.mode,strategy:state.strategy,fixedPairs:state.fixedPairs},key=definitions.fingerprint({version:cVersion(),options});
   if(key===requestKey)return;requestKey=key;generation++;plans=[];recommendationError='';calculating=true;
+  if(worker){worker.terminate();worker=null;}clearTimeout(timer);
   if(recommendationCache.has(key)){receiveRecommendations({generation,plans:recommendationCache.get(key)});return;}
-  if(worker)worker.terminate();clearTimeout(timer);
   const currentGeneration=generation,profiles=window.PLAYER_PROFILES.all();
   timer=setTimeout(()=>{
    try{
-    worker=new Worker('pairing-worker.js');worker.onmessage=event=>receiveRecommendations(event.data);
-    worker.onerror=()=>{worker.terminate();worker=null;fallback();};
-    worker.postMessage({generation:currentGeneration,profiles,options});
+    const instance=new Worker('pairing-worker.js');worker=instance;instance.onmessage=event=>receiveRecommendations(event.data);
+    instance.onerror=()=>{instance.terminate();if(currentGeneration!==generation)return;if(worker===instance)worker=null;fallback();};
+    instance.postMessage({generation:currentGeneration,profiles,options});
    }catch{fallback();}
    function fallback(){try{receiveRecommendations({generation:currentGeneration,plans:pairing.generate(data,profiles,options)});}catch(error){receiveRecommendations({generation:currentGeneration,error:error.message});}}
   },150);
@@ -188,6 +188,7 @@ if(typeof document!=='undefined')(() => {
   populate($('our-player1'),'C',state.own1,state.own2);populate($('our-player2'),'C',state.own2,state.own1);$('analysis-team').value=state.team;
   populate($('opponent1'),state.team,state.p1,state.p2);populate($('opponent2'),state.team,state.p2,state.p1);
   const container=$('analysis-result');container.replaceChildren();const input=analysisInput();
+  if(aiState?.status==='loading'&&aiState.inputKey!==input?.key){aiGeneration++;if(aiUnsubscribe){aiUnsubscribe();aiUnsubscribe=null;}clearTimeout(aiWaitTimer);aiState.status='stale';}
   if(!input){container.append(el('p','empty','우리 페어와 상대 페어를 선택해 주세요.'));return;}
   const panel=el('section','analysis-result-panel');panel.append(el('h2','analysis-title',[state.own1,state.own2].map(displayName).join(' + ')+' vs '+state.team+'조 '+[state.p1,state.p2].map(displayName).join(' + ')));
   const snapshots=el('div','analysis-snapshots');
@@ -210,20 +211,20 @@ if(typeof document!=='undefined')(() => {
   if(combo?.points.length){const details=el('details','analysis-source-notes');details.append(el('summary','','기존 시트의 상대 공략 메모'),listSection('참고 메모',combo.points));panel.append(details);}container.append(panel);
  }
  async function requestAnalysis(){
-  const input=analysisInput();if(!input)return;const token=++aiGeneration;if(aiUnsubscribe){aiUnsubscribe();aiUnsubscribe=null;}
+  const input=analysisInput();if(!input)return;const token=++aiGeneration;clearTimeout(aiWaitTimer);if(aiUnsubscribe){aiUnsubscribe();aiUnsubscribe=null;}
   aiState={inputKey:input.key,status:'loading',message:'AI가 입력한 기록을 읽고 있습니다.'};renderAnalysis();
   const stillCurrent=()=>token===aiGeneration&&analysisInput()?.key===input.key;
   try{
    const {key,...request}=input,response=await window.PLAYER_PROFILE_CLOUD.analyzeMatchup(request);if(!stillCurrent())return;
-   function accept(record){if(!stillCurrent())return;if(record.status==='ready'){aiState={inputKey:input.key,status:'ready',result:record.result,message:response.cached?'팀원이 생성한 분석을 불러왔습니다.':'AI 분석을 생성했습니다.'};if(aiUnsubscribe){aiUnsubscribe();aiUnsubscribe=null;}renderAnalysis();}
-    else if(record.status==='error'){aiState={inputKey:input.key,status:'error',error:record.message||'분석에 실패했습니다. 다시 시도해 주세요.'};if(aiUnsubscribe){aiUnsubscribe();aiUnsubscribe=null;}renderAnalysis();}}
-   if(response.status==='ready')accept(response);else{aiState.message='같은 분석을 생성하고 있습니다. 완료되면 함께 표시됩니다.';renderAnalysis();aiUnsubscribe=window.PLAYER_PROFILE_CLOUD.subscribeAnalysis(response.analysisKey,accept,error=>{if(stillCurrent()){aiState={inputKey:input.key,status:'error',error:'분석을 불러오지 못했습니다. 다시 시도해 주세요.'};renderAnalysis();}});}
-  }catch(error){if(stillCurrent()){const messages={'functions/not-found':'AI 서버가 아직 배포되지 않았습니다. Firebase 연결 설정을 확인해 주세요.','functions/failed-precondition':'선수 정보가 변경되었거나 AI 키 설정이 필요합니다. 최신 정보로 다시 시도해 주세요.','functions/resource-exhausted':'오늘의 신규 AI 분석 한도에 도달했습니다. 저장된 분석은 계속 볼 수 있습니다.','functions/deadline-exceeded':'분석 시간이 오래 걸렸습니다. 잠시 후 다시 시도해 주세요.'};aiState={inputKey:input.key,status:'error',error:messages[error.code]||error.message||'AI 분석에 실패했습니다. 다시 시도해 주세요.'};renderAnalysis();}}
+   function accept(record){if(!stillCurrent())return;if(record.status==='ready'){clearTimeout(aiWaitTimer);aiState={inputKey:input.key,status:'ready',result:record.result,message:response.cached?'팀원이 생성한 분석을 불러왔습니다.':'AI 분석을 생성했습니다.'};if(aiUnsubscribe){aiUnsubscribe();aiUnsubscribe=null;}renderAnalysis();}
+    else if(record.status==='error'){clearTimeout(aiWaitTimer);aiState={inputKey:input.key,status:'error',error:record.message||'분석에 실패했습니다. 다시 시도해 주세요.'};if(aiUnsubscribe){aiUnsubscribe();aiUnsubscribe=null;}renderAnalysis();}}
+   if(response.status==='ready')accept(response);else{aiWaitTimer=setTimeout(()=>{if(stillCurrent()){if(aiUnsubscribe){aiUnsubscribe();aiUnsubscribe=null;}aiState={inputKey:input.key,status:'error',error:'분석 시간이 오래 걸렸습니다. 다시 시도해 주세요.'};renderAnalysis();}},90000);aiState.message='같은 분석을 생성하고 있습니다. 완료되면 함께 표시됩니다.';renderAnalysis();aiUnsubscribe=window.PLAYER_PROFILE_CLOUD.subscribeAnalysis(response.analysisKey,accept,error=>{if(stillCurrent()){clearTimeout(aiWaitTimer);if(aiUnsubscribe){aiUnsubscribe();aiUnsubscribe=null;}aiState={inputKey:input.key,status:'error',error:'분석을 불러오지 못했습니다. 다시 시도해 주세요.'};renderAnalysis();}});}
+  }catch(error){if(stillCurrent()){const messages={'functions/not-found':'AI 서버가 아직 배포되지 않았습니다. Firebase 연결 설정을 확인해 주세요.','functions/failed-precondition':'선수 정보가 변경되었거나 AI 키 설정이 필요합니다. 최신 정보로 다시 시도해 주세요.','functions/deadline-exceeded':'분석 시간이 오래 걸렸습니다. 잠시 후 다시 시도해 주세요.'};aiState={inputKey:input.key,status:'error',error:messages[error.code]||error.message||'AI 분석에 실패했습니다. 다시 시도해 주세요.'};renderAnalysis();}}
  }
  for(const [id,field] of [['our-player1','own1'],['our-player2','own2'],['opponent1','p1'],['opponent2','p2']])$(id).addEventListener('change',()=>{state[field]=$(id).value;[state.own1,state.own2]=cleanPair('C',state.own1,state.own2);[state.p1,state.p2]=cleanPair(state.team,state.p1,state.p2);renderAnalysis();writeHash();});
  $('analysis-team').addEventListener('change',()=>{state.team=$('analysis-team').value;state.p1='';state.p2='';renderAnalysis();writeHash();});
  function render(){calculate();renderStrategy();renderAnalysis();renderPage();writeHash();}
- window.addEventListener('hashchange',()=>{readHash();render();});window.addEventListener('playerprofileschange',render);
+ window.addEventListener('hashchange',()=>{readHash();render();});window.addEventListener('playerprofileschange',()=>{confirmationMessage='';render();});
  window.addEventListener('playerprofilecloudstatuschange',()=>{renderStrategy();renderAnalysis();});
  window.addEventListener('teamlineupchange',()=>{if(state.view==='auto'&&confirmed()){const saved=confirmed();Object.assign(state,{mode:saved.mode,strategy:saved.strategy,fixedPairs:saved.fixedPairs.map(item=>item.pair)});}render();});
  $('share').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(location.href);$('share-status').textContent='현재 선택 링크를 복사했습니다.';$('share-fallback').hidden=true;}catch{$('share-fallback').hidden=false;$('share-url').value=location.href;$('share-url').focus();$('share-url').select();$('share-status').textContent='아래 링크를 복사해 공유하세요.';}});

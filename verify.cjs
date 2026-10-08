@@ -61,6 +61,8 @@ const onlyTwo=pairing.generate(data,{}, {mode:'partial',fixedPairs:[['우디','�
 const normal=pairing.generate(data,{}, {mode:'fixed'})[0];
 for(const mutate of [p=>p.matches[0].pair=['꿉','한치'],p=>p.matches[0].pair=['우디','우디'],p=>p.matches[0].court=1,p=>p.matches[0]=null,p=>p.fixedPairs='invalid',p=>p.matches.pop()]){const broken=JSON.parse(JSON.stringify(normal));mutate(broken);assert.ok(pairing.validatePlan(data,broken).length);}
 assert.notDeepEqual(pairing.generate(data,fixture,{mode:'fixed'}).map(p=>p.matches),pairing.generate(data,{}, {mode:'fixed'}).map(p=>p.matches));
+const tendencies={};Object.keys(data.teams.C).forEach((name,index)=>tendencies['C:'+name]={style:index<4?'attack':'defense'});
+for(const match of pairing.generate(data,tendencies,{mode:'fixed'})[0].matches)assert.notEqual(tendencies['C:'+match.pair[0]].style,tendencies['C:'+match.pair[1]].style);
 let randomSeed=7;const random=()=>((randomSeed=Math.imul(randomSeed,1664525)+1013904223>>>0)/4294967296);
 for(let trial=0;trial<12;trial++){
  const profiles={};for(const name of Object.keys(data.teams.C))profiles['C:'+name]={position:['','fore','back','either'][Math.floor(random()*4)],courtPreference:['','baseline','net','either'][Math.floor(random()*4)],restPreference:['','rest','continuous','flexible'][Math.floor(random()*4)]};

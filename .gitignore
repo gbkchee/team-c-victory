@@ -7,3 +7,6 @@ node_modules/
 *.zip
 *.png
 C-team-kakao.html
+
+functions/shared/
+.firebase/

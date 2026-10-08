@@ -1,6 +1,6 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
-import { collection, doc, getDocs, getFirestore, onSnapshot, runTransaction, serverTimestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
+import { collection, doc, getDocs, getFirestore, onSnapshot, runTransaction, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js';
 
 const app=initializeApp({
@@ -81,10 +81,14 @@ async function flush(id){
  try{
   while(queue.has(id)){
    const raw=queue.get(id);queue.delete(id);
-   const batch=writeBatch(db);
-   batch.set(doc(refs.profiles,id),{profile:cloudProfile(raw),updatedAt:serverTimestamp()});
-   if(teamOf(id)==='C')batch.set(doc(refs.traits,id),{items:raw.traits,updatedAt:serverTimestamp()});
-   await batch.commit();
+   const fields=pendingFields.get(id)?new Set(pendingFields.get(id)):null;
+   await runTransaction(db,async transaction=>{
+    const target=doc(refs.profiles,id),existing=await transaction.get(target);
+    const patch=fields?Object.fromEntries([...fields].filter(key=>key!=='traits').map(key=>[key,raw[key]])):cloudProfile(raw);
+    const profile=cloudProfile(window.PLAYER_PROFILE_MODEL.cleanProfile({...existing.data()?.profile,...patch},teamOf(id)));
+    if(!fields||Object.keys(patch).length)transaction.set(target,{profile,updatedAt:serverTimestamp()});
+    if(teamOf(id)==='C'&&(!fields||fields.has('traits')))transaction.set(doc(refs.traits,id),{items:raw.traits,updatedAt:serverTimestamp()});
+   });
    await addSuggestions(raw,id);
   }
  }catch(error){
@@ -95,7 +99,8 @@ async function flush(id){
 state.saveProfile=(id,raw,fields=null)=>{
  if(!window.PLAYER_PROFILES.has(id))return;
  const profile=window.PLAYER_PROFILE_MODEL.cleanProfile(raw,teamOf(id));
- if(fields){const existing=pendingFields.get(id)||new Set();for(const field of fields)existing.add(field);pendingFields.set(id,existing);}else pendingFields.delete(id);
+ const wasFull=pending.has(id)&&!pendingFields.has(id);
+ if(fields&&!wasFull){const existing=pendingFields.get(id)||new Set();for(const field of fields)existing.add(field);pendingFields.set(id,existing);}else pendingFields.delete(id);
  pending.set(id,profile);queue.set(id,profile);
  notifyStatus(ready?'ready':'connecting');
  return flush(id);
@@ -110,6 +115,7 @@ async function migrate(){
   const profile=window.PLAYER_PROFILE_MODEL.cleanProfile(raw,teamOf(id),localProfile.keywords||[]);
   await createIfMissing(refs.profiles,id,{profile:cloudProfile(profile)});
   if(teamOf(id)==='C')await createIfMissing(refs.traits,id,{items:profile.traits});
+  await addSuggestions(profile,id);
  }
  const snapshots=await Promise.all(Object.values(refs).map(ref=>getDocs(ref)));
  Object.keys(refs).forEach((key,index)=>{records[key]=new Map(snapshots[index].docs.map(item=>[item.id,item.data()]));});
