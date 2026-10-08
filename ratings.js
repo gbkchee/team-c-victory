@@ -225,8 +225,12 @@ if(typeof document!=='undefined')(() => {
   const quick=el('div','keyword-suggestions');quick.setAttribute('aria-label',title+' 빠른 추가');
   for(const text of [...new Set(suggestions)]){
    const selected=items.includes(text),button=el('button','keyword-suggestion',selected?'✓ '+text:'＋ '+text);button.type='button';
-   button.disabled=selected||total>=20;button.dataset.selected=String(selected);
-   button.addEventListener('click',()=>addItem(text,false));quick.append(button);
+   button.disabled=!selected&&total>=20;button.dataset.selected=String(selected);button.setAttribute('aria-pressed',String(selected));
+   button.addEventListener('click',()=>{
+    const active=document.activeElement;
+    if(editor.contains(active)&&active.type==='text')active.blur();
+    if(selected)removeItem(text);else addItem(text,false);
+   });quick.append(button);
   }
   section.append(list,form,help,status,el('p','keyword-recommendation-label','추천 · 추가하기 전에는 기록되지 않아요'),quick);refresh();return section;
  }
@@ -237,7 +241,8 @@ if(typeof document!=='undefined')(() => {
    addItem:(text,clearDraft)=>{
     if(profile(current).traits.length>=20||profile(current).traits.includes(text))return;
     update({traits:[...profile(current).traits,text]});if(clearDraft)$('profile-trait-text').value='';renderTraits();
-    $('profile-trait-status').textContent=profile(current).traits.length>=20?'최대 20개까지 추가할 수 있어요. 삭제하면 다시 추가할 수 있어요.':'특징을 추가했습니다.';$('profile-trait-text').focus();
+    $('profile-trait-status').textContent=profile(current).traits.length>=20?'최대 20개까지 추가할 수 있어요. 삭제하면 다시 추가할 수 있어요.':'특징을 추가했습니다.';
+    if(clearDraft)$('profile-trait-text').focus({preventScroll:true});
    },
    removeItem:text=>{update({traits:profile(current).traits.filter(item=>item!==text)});renderTraits();$('profile-trait-status').textContent='특징을 삭제했습니다.';}
   });
@@ -257,7 +262,8 @@ if(typeof document!=='undefined')(() => {
     addItem:(text,clearDraft)=>{
      const all=profile(current).keywords;if(all.length>=20||all.some(item=>item.kind===kind&&item.text===text))return;
      update({keywords:[...all,{kind,text}]});if(clearDraft)$('profile-keyword-text-'+kind).value='';renderKeywords();
-     $('profile-keyword-status-'+kind).textContent=profile(current).keywords.length>=20?'최대 20개까지 추가할 수 있어요. 삭제하면 다시 추가할 수 있어요.':'키워드를 추가했습니다.';$('profile-keyword-text-'+kind).focus();
+     $('profile-keyword-status-'+kind).textContent=profile(current).keywords.length>=20?'최대 20개까지 추가할 수 있어요. 삭제하면 다시 추가할 수 있어요.':'키워드를 추가했습니다.';
+     if(clearDraft)$('profile-keyword-text-'+kind).focus({preventScroll:true});
     },
     removeItem:text=>{update({keywords:profile(current).keywords.filter(item=>item.kind!==kind||item.text!==text)});renderKeywords();$('profile-keyword-status-'+kind).textContent='키워드를 삭제했습니다.';}
    });(kind==='note'?features:groups).append(section);

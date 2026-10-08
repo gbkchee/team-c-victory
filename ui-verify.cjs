@@ -187,15 +187,33 @@ test('모바일 상세 직접 접속과 화면 크기 변경에서도 입력 초
  one.resize(true);assert.equal(one.$('ratings-panel').open,false);assert.equal(one.$('player-detail-page').hidden,false);assert.equal(one.$('profile-keyword-text-note').value,'입력 중인 특징');
  one.$('rating-back').click();await one.advance(0);assert.equal(one.$('player-detail-page').hidden,true);assert.equal(new URLSearchParams(one.location.hash.slice(1)).has('player'),false);assert.equal(one.$('main-content').hidden,false);
 });
-test('상대 특징은 첫 항목이고 기존 강점 메모를 숨기며 새 특징을 양쪽 팀에 저장할 수 있다',async()=>{
+test('특징·관찰 추천을 키보드 없이 선택·해제하고 입력 초안과 저장 값을 유지한다',async()=>{
  const store=firestoreFixture(),{blankDocuments}=require('./reset-test-data.cjs');for(const [path,value] of blankDocuments({seconds:1}))store.entries.set(path,value);
  store.entries.get('playerProfilesV2/A:펩시').profile.legacyStrengths=['예전 강점 메모'];
  const one=browser(store,{mobile:true});await one.flush();one.open('A:펩시');
  assert.deepEqual(one.$('opponent-profile-section').children.map(node=>node.id),['opponent-features','opponent-profile-fields','opponent-keywords']);assert.equal(one.$('opponent-features').querySelector('h3').textContent,'특징');
  assert.ok(!one.$('player-profile-editor').textContent.includes('기존 강점 메모'));assert.ok(!one.$('player-profile-editor').textContent.includes('예전 강점 메모'));assert.ok(!one.$('player-profile-editor').textContent.includes('기타 특징'));
- for(const text of ['탑스핀','베이스라인 긴 공'])one.clickText('opponent-features','＋ '+text);await one.flush();
+ const assertNoKeyboardFocus=()=>assert.notEqual(one.document.activeElement?.type,'text');
+ let draft=one.$('profile-keyword-text-note');draft.value='작성 중인 특징';draft.focus();
+ for(const text of ['탑스핀','베이스라인 긴 공']){one.clickText('opponent-features','＋ '+text);assertNoKeyboardFocus();}await one.flush();assertNoKeyboardFocus();
+ assert.equal(one.$('profile-keyword-text-note').value,'작성 중인 특징');
  const opponent=store.entries.get('playerProfilesV2/A:펩시').profile;assert.deepEqual(opponent.keywords,[{kind:'note',text:'탑스핀'},{kind:'note',text:'베이스라인 긴 공'}]);assert.deepEqual(opponent.legacyStrengths,['예전 강점 메모']);
- one.$('rating-back').click();await one.advance(0);one.open('C:우디');for(const text of ['탑스핀','베이스라인 긴 공'])one.clickText('team-traits','＋ '+text);await one.flush();assert.deepEqual(store.entries.get('playerTraits/C:우디').items,['탑스핀','베이스라인 긴 공']);
+ one.clickText('opponent-features','✓ 탑스핀');assertNoKeyboardFocus();await one.flush();assertNoKeyboardFocus();
+ assert.deepEqual(store.entries.get('playerProfilesV2/A:펩시').profile.keywords,[{kind:'note',text:'베이스라인 긴 공'}]);
+ assert.ok(!one.$('opponent-features').querySelectorAll('.keyword-chip').some(node=>node.textContent.includes('탑스핀')));
+ for(const [kind,text] of [['pattern','서브 후 네트 접근'],['weak','몸쪽 공']]){
+  one.clickText('opponent-keywords','＋ '+text);assertNoKeyboardFocus();
+  const selected=one.$('opponent-keywords').querySelectorAll('.keyword-suggestion').find(node=>node.textContent==='✓ '+text);assert.equal(selected.getAttribute('aria-pressed'),'true');
+  one.clickText('opponent-keywords','✓ '+text);assertNoKeyboardFocus();await one.flush();assertNoKeyboardFocus();
+  assert.ok(!store.entries.get('playerProfilesV2/A:펩시').profile.keywords.some(item=>item.kind===kind&&item.text===text));
+ }
+ one.$('rating-back').click();await one.advance(0);one.open('C:우디');draft=one.$('profile-trait-text');draft.value='작성 중인 특징';draft.focus();
+ for(const text of ['탑스핀','베이스라인 긴 공']){one.clickText('team-traits','＋ '+text);assertNoKeyboardFocus();}await one.flush();assertNoKeyboardFocus();
+ assert.deepEqual(store.entries.get('playerTraits/C:우디').items,['탑스핀','베이스라인 긴 공']);assert.equal(one.$('profile-trait-text').value,'작성 중인 특징');
+ one.clickText('team-traits','✓ 탑스핀');assertNoKeyboardFocus();await one.flush();assertNoKeyboardFocus();assert.deepEqual(store.entries.get('playerTraits/C:우디').items,['베이스라인 긴 공']);
+ assert.ok(!one.$('team-traits').querySelectorAll('.keyword-chip').some(node=>node.textContent.includes('탑스핀')));
+ assert.ok(one.$('team-traits').querySelectorAll('.keyword-suggestion').some(node=>node.textContent==='＋ 탑스핀'&&!node.disabled));
+ one.submit('profile-trait-text','직접 입력한 특징');assert.equal(one.document.activeElement,one.$('profile-trait-text'));assert.equal(one.$('profile-trait-text').value,'');
 });
 
 test('상대 두 명만 선택하고 조 변경·체크리스트·출전표 이동을 지원한다',async()=>{
@@ -214,10 +232,15 @@ test('키워드 개수·글자 수·중복 안내와 전체 한도·삭제 후 �
  const one=browser(store,{mobile:true});await one.flush();one.open('C:우디');
  let input=one.$('profile-trait-text');input.value='x'.repeat(41);input.dispatchEvent({type:'input'});assert.equal(input.getAttribute('aria-invalid'),'true');assert.ok(one.$('profile-trait-status').textContent.includes('40자'));
  one.submit('profile-trait-text','탑스핀');input=one.$('profile-trait-text');input.value='탑스핀';input.dispatchEvent({type:'input'});assert.ok(one.$('profile-trait-status').textContent.includes('이미 등록'));
- for(let i=0;i<19;i++)one.submit('profile-trait-text','특징 '+i);assert.equal(one.$('profile-trait-text').disabled,true);assert.ok(one.$('team-traits').querySelectorAll('.keyword-suggestion').every(node=>node.disabled));
+ for(let i=0;i<19;i++)one.submit('profile-trait-text','특징 '+i);assert.equal(one.$('profile-trait-text').disabled,true);assert.ok(one.$('team-traits').querySelectorAll('.keyword-suggestion').every(node=>node.disabled===(node.dataset.selected==='false')));
+ one.clickText('team-traits','✓ 탑스핀');assert.equal(one.window.PLAYER_PROFILES.get('C','우디').traits.length,19);assert.equal(one.$('profile-trait-text').disabled,false);
+ one.clickText('team-traits','＋ 탑스핀');assert.equal(one.$('profile-trait-text').disabled,true);
  one.$('team-traits').querySelector('.keyword-remove').click();assert.equal(one.$('profile-trait-text').disabled,false);
- one.$('rating-back').click();await one.advance(0);one.open('A:펩시');for(let i=0;i<20;i++)one.submit('profile-keyword-text-pattern','패턴 '+i);
+ one.$('rating-back').click();await one.advance(0);one.open('A:펩시');one.submit('profile-keyword-text-pattern','서브 후 네트 접근');for(let i=0;i<19;i++)one.submit('profile-keyword-text-pattern','패턴 '+i);
  for(const kind of ['note','pattern','weak'])assert.equal(one.$('profile-keyword-text-'+kind).disabled,true);assert.ok(one.$('opponent-features').textContent.includes('20/20'));
+ assert.ok(one.$('opponent-keywords').querySelectorAll('.keyword-suggestion').every(node=>node.disabled===(node.dataset.selected==='false')));
+ one.clickText('opponent-keywords','✓ 서브 후 네트 접근');for(const kind of ['note','pattern','weak'])assert.equal(one.$('profile-keyword-text-'+kind).disabled,false);
+ one.clickText('opponent-keywords','＋ 서브 후 네트 접근');for(const kind of ['note','pattern','weak'])assert.equal(one.$('profile-keyword-text-'+kind).disabled,true);
  one.$('opponent-keywords').querySelector('.keyword-remove').click();for(const kind of ['note','pattern','weak'])assert.equal(one.$('profile-keyword-text-'+kind).disabled,false);
 });
 test('최초 공유 연결 실패 후 재시도하며 입력값과 텍스트 초안을 보존한다',async()=>{
