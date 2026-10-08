@@ -40,6 +40,7 @@
    if(Number.isInteger(status)&&status>=400&&status<=599)details.push('HTTP '+status);
    const hint=/recaptcha-error$/.test(code)?'reCAPTCHA 실행에 실패했어요. 등록 도메인과 점수 기반 웹 키인지 확인해 주세요.'
     :/fetch-network-error$/.test(code)?'앱 확인 서버에 연결하지 못했어요. 네트워크나 브라우저의 콘텐츠 차단을 확인해 주세요.'
+    :status===400?'앱 확인 요청이 거절됐어요. App Check 등록 키와 웹 키 설정을 확인한 뒤 새로고침해 주세요.'
     :/throttled$|initial-throttle$/.test(code)?'앞선 앱 확인 오류로 재시도가 잠시 제한됐어요. 잠시 후 새로고침해 주세요.'
     :status===403?'Firebase가 앱 확인 요청을 거절했어요.'
     :'앱 확인에 실패했어요.';

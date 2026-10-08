@@ -36,6 +36,8 @@ Gemini API 비밀 키를 HTML·JavaScript·채팅에 넣지 않습니다. Fireba
 
 reCAPTCHA 공개 사이트 키를 `gemini-config.js`에 입력했습니다. 키 생성 후에도 Firebase App Check에 같은 키를 등록하고 Firebase AI Logic을 설정해야 Gemini를 호출할 수 있습니다. 실제 Gemini 호출과 Firebase 콘솔의 설정 상태는 아직 확인하지 않았습니다. 선수 입력·공유·페어 추천·관찰 기반 기본 공략은 AI 설정과 별개로 계속 동작합니다.
 
+App Check에서 `appCheck/initial-throttle · HTTP 400`이 표시되면 앱 확인 토큰 교환 요청이 실패한 상태입니다. 이 코드는 첫 HTTP 실패 직후에도 발생하므로 오래 기다리면 해결된다는 뜻은 아닙니다. 현재 코드는 `ReCaptchaEnterpriseProvider`를 사용하므로 App Check의 등록 제공자도 Enterprise여야 합니다. SDK는 오류 응답 본문을 전달하지 않으므로 코드만으로 거절 원인을 확정할 수 없습니다. PC 크롬의 개발자 도구 → Network에서 AI 버튼을 누르고, `exchangeRecaptchaEnterpriseToken` 요청의 Response에 있는 `error.message`를 확인합니다. 해당 메시지에 따라 등록 키·웹 키·도메인 등 실제 실패 설정을 수정한 뒤 새로고침합니다. [공식 SDK의 오류·재시도 처리](https://github.com/firebase/firebase-js-sdk/blob/main/packages/app-check/src/providers.ts)
+
 | 앱 설정 | 값 |
 | --- | --- |
 | 공급자 | Firebase AI Logic · Gemini Developer API |

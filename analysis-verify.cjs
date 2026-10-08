@@ -96,10 +96,12 @@ test('Gemini 구조화 응답, 제한·차단·잘못된 JSON과 SDK 오류를 �
  assert.deepEqual(ai.parseResponse({text:()=>JSON.stringify(validResult),candidates:[{finishReason:'STOP'}]}),validResult);
  for(const response of [{promptFeedback:{blockReason:'SAFETY'}},{candidates:[{finishReason:'MAX_TOKENS'}]},{text:()=>'{broken'}])assert.throws(()=>ai.parseResponse(response),AnalysisError);
  for(const [error,code] of [[{status:403},'failed-precondition'],[{message:'[429 Too Many Requests]'},'resource-exhausted'],[{code:'appCheck/recaptcha-error'},'failed-precondition'],[{code:'permission-denied'},'permission-denied'],[{name:'TimeoutError'},'deadline-exceeded'],[{},'unavailable']])assert.equal(ai.normalizeError(error).code,code);
- for(const httpStatus of [403,429]){
+ for(const httpStatus of [400,403,429]){
   const error=ai.normalizeError({code:'appCheck/throttled',customData:{httpStatus},message:'AppCheck: private error details 429'});
   assert.equal(error.reason,'app-check');assert.match(error.message,/appCheck\/throttled/);assert.ok(error.message.includes('HTTP '+httpStatus));assert.ok(!error.message.includes('private'));assert.ok(error.message.length<=250);assert.equal(ai.normalizeError(error),error);
  }
+ const initial=ai.normalizeError({code:'appCheck/initial-throttle',customData:{httpStatus:400}});
+ assert.equal(initial.reason,'app-check');assert.match(initial.message,/App Check 등록 키/);assert.match(initial.message,/HTTP 400/);assert.ok(!initial.message.includes('잠시 후'));
 });
 
 test('우리팀 입력과 숨긴 강점 기록은 상대 분석 캐시를 바꾸지 않는다',async()=>{
