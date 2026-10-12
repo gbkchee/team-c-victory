@@ -107,7 +107,7 @@ if(typeof document!=='undefined')(() => {
   const currentGeneration=generation,profiles=window.PLAYER_PROFILES.all();
   timer=setTimeout(()=>{
    try{
-    const instance=new Worker('pairing-worker.js');worker=instance;instance.onmessage=event=>receiveRecommendations(event.data);
+    const instance=new Worker('pairing-worker.js?v=20261012-5');worker=instance;instance.onmessage=event=>receiveRecommendations(event.data);
     instance.onerror=()=>{instance.terminate();if(currentGeneration!==generation)return;if(worker===instance)worker=null;fallback();};
     instance.postMessage({generation:currentGeneration,profiles,options});
    }catch{fallback();}

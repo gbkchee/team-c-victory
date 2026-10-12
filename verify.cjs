@@ -47,6 +47,15 @@ const assertFreePairCap=plan=>{
  const counts=new Map();for(const match of plan.matches){const key=[...match.pair].sort().join('/');counts.set(key,(counts.get(key)||0)+1);}
  assert.ok([...counts.values()].every(count=>count<=3),'자유 조합의 같은 페어는 최대 3경기');
 };
+const assertEvenDistribution=plan=>{
+ const times=[...new Set(data.schedule.map(match=>match.time))].sort();
+ const rows=Object.keys(data.teams.C).map(name=>({name,bits:times.map(time=>Number(plan.matches.some(match=>match.time===time&&match.pair.includes(name))))}));
+ for(const {name,bits} of rows){assert.equal(bits.reduce((sum,on)=>sum+on,0),5);assert.ok(!/111|000/.test(bits.join('')),name+'의 3연속 출전 또는 3타임 연속 대기');}
+ for(let through=1;through<=times.length;through++){
+  const counts=rows.map(({bits})=>bits.slice(0,through).reduce((sum,on)=>sum+on,0));
+  assert.ok(Math.max(...counts)-Math.min(...counts)<=1,times[through-1]+'까지 선수 간 출전 횟수 차이는 최대 1경기');
+ }
+};
 assert.equal(pairing.partitions(data).length,90);
 const fixture={};Object.keys(data.teams.C).forEach((name,i)=>fixture['C:'+name]={position:i%2?'fore':'back',courtPreference:i%2?'net':'baseline',partnerRoles:[i%2?'cover':'attack'],restPreference:i%3===0?'rest':i%3===1?'continuous':'flexible'});
 for(const mode of ['fixed','free','partial']){
@@ -57,6 +66,7 @@ for(const mode of ['fixed','free','partial']){
   assert.deepEqual(pairing.restViolations(data,plan.matches,fixture),[]);
   assert.deepEqual(pairing.opponentViolations(data,plan.matches),[]);
   assertFreePairCap(plan);
+  assertEvenDistribution(plan);
   const keys=new Set(plan.matches.map(match=>pairing.pairKey(match.pair)));
   assert.ok(mode==='fixed'?keys.size===4:keys.size>4);
   if(mode==='partial')assert.ok(plan.matches.filter(match=>match.pair.includes('우디')).every(match=>match.pair.includes('꿉')));
@@ -79,15 +89,17 @@ for(let trial=0;trial<12;trial++){
   assert.deepEqual(pairing.restViolations(data,plan.matches,profiles),[]);
   assert.deepEqual(pairing.opponentViolations(data,plan.matches),[]);
   assertFreePairCap(plan);
+  assertEvenDistribution(plan);
  }
 }
 // Regressions: resting players cannot be assigned a late three-game run, including with a fixed partner who prefers continuous play.
-for(const scenario of ['blank','rest','mixed']){
- const profiles=Object.fromEntries(Object.keys(data.teams.C).map(name=>['C:'+name,{restPreference:scenario==='rest'?'rest':scenario==='mixed'?(['우디','한치'].includes(name)?'rest':'continuous'):''}]));
+for(const scenario of ['blank','rest','mixed','continuous']){
+ const profiles=Object.fromEntries(Object.keys(data.teams.C).map(name=>['C:'+name,{restPreference:scenario==='rest'?'rest':scenario==='continuous'?'continuous':scenario==='mixed'?(['우디','한치'].includes(name)?'rest':'continuous'):''}]));
  for(const mode of ['fixed','free','partial'])for(const plan of pairing.generate(data,profiles,{mode,fixedPairs:[['우디','한치']]})){
   assert.deepEqual(pairing.restViolations(data,plan.matches,profiles),[]);
   assert.deepEqual(pairing.opponentViolations(data,plan.matches),[]);
   assertFreePairCap(plan);
+  assertEvenDistribution(plan);
  }
 }
 const triple=[{time:'14:30',endTime:'15:00',pair:['우디','한치']},{time:'15:00',endTime:'15:30',pair:['우디','한치']},{time:'15:30',endTime:'16:00',pair:['우디','한치']}];
@@ -97,7 +109,14 @@ assert.deepEqual(pairing.restViolations(data,triple.map((match,index)=>index===2
 const strong=pairing.generate(data,{}, {mode:'free'}).at(-1);
 assert.ok(strong.matches.filter(match=>match.pair.includes('우디')).every(match=>match.pair.some(name=>name!=='우디'&&data.teams.C[name].tier==='thirty')));
 const oldPlan={...normal,algorithmVersion:'pairing-v1',strategy:'stamina'};assert.deepEqual(pairing.validatePlan(data,oldPlan),[]);
+// The reported front-loaded/back-loaded layout stays readable as an old confirmed plan.
+const clusters=[['냉면','만두'],['우디','한치'],['쏘오리','숭'],['꿉','기른지']],sequence=[3,0,3,0,3,0,3,0,3,0,2,1,2,1,2,1,2,1,2,1];
+const clustered={...normal,algorithmVersion:'pairing-v3',fixedPairs:clusters.map(pair=>({pair})),matches:data.schedule.map((slot,index)=>({...slot,pair:clusters[sequence[index]]}))};
+assert.deepEqual(pairing.validatePlan(data,clustered),[]);
+assert.ok(pairing.validatePlan(data,{...clustered,algorithmVersion:pairing.algorithmVersion}).some(message=>message.includes('최대 2타임')));
+const allContinuous=Object.fromEntries(Object.keys(data.teams.C).map(name=>['C:'+name,{restPreference:'continuous'}]));
+for(const plan of pairing.generate(data,allContinuous,{mode:'partial',fixedPairs:clusters.slice(0,2)}))assertEvenDistribution(plan);
 // Repetition alone must reject a new free plan, while old confirmed plans stay readable.
 const repeated={...normal,mode:'free',fixedPairs:[]};assert.ok(pairing.validatePlan(data,repeated).some(error=>error.includes('최대 3경기')));
 assert.deepEqual(pairing.validatePlan(data,{...repeated,algorithmVersion:'pairing-v2'}),[]);
-console.log('PASS: 세 운영 모드·밸런스 2안·강강 1안, 자유 페어 최대 3경기, 휴식 선수 최대 2연속, 상대 조별 1~2경기, 고정 유지·결정적 추천');
+console.log('PASS: 세 운영 모드·밸런스 2안·강강 1안, 자유 페어 최대 3경기, 전원 출전·휴식 최대 2타임, 누적 출전 차이 최대 1경기, 상대 조별 1~2경기, 고정 유지·결정적 추천');

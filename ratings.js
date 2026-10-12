@@ -231,7 +231,7 @@ if(typeof document!=='undefined')(() => {
   );
   renderTraits();
   const preferences=el('div','profile-fields profile-fields-group');
-  preferences.append(choiceField('경기·휴식 선호','restPreference',restPreferences));fields.append(preferences);
+  preferences.append(choiceField('경기·휴식 선호','restPreference',restPreferences,false,'출전과 휴식은 모두 최대 2타임으로 고르게 배치해요. 이 선호는 분산 정도가 같은 후보를 고를 때만 참고해요.'));fields.append(preferences);
  }
 
  function suggestionDeletion(button,kind,text,statusId){

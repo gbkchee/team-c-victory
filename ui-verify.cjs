@@ -185,7 +185,7 @@ test('운영 방식만으로 밸런스 2안·강강 1안을 비교하고 선택�
  assert.equal(new URLSearchParams(one.location.hash.slice(1)).has('strategy'),false);
  const sharedHash=one.location.hash,two=browser(store,{hash:sharedHash});await two.flush();await two.advance();assert.ok(two.$('selected-plan-label').textContent.includes('강강 조합'));
  await Promise.all(one.$('confirm-lineup').click());await one.flush();const saved=clone(store.entries.get('teamLineups/C'));
- assert.equal(saved.strategy,'win');assert.equal(saved.algorithmVersion,'pairing-v3');assert.equal(one.$('confirmed-pairs-block').hidden,false);
+ assert.equal(saved.strategy,'win');assert.equal(saved.algorithmVersion,'pairing-v4');assert.equal(one.$('confirmed-pairs-block').hidden,false);
  assert.equal(one.window.PAIRING_MODEL.opponentViolations(one.window.BOARD_DATA,saved.matches).length,0);
  one.$('pair-options').querySelectorAll('button')[1].click();assert.ok(one.$('selected-plan-label').textContent.includes('밸런스 2안'));assert.equal(one.$('confirmed-pairs-block').hidden,true);
  assert.deepEqual(store.entries.get('teamLineups/C').matches,saved.matches);
@@ -204,6 +204,23 @@ test('AI는 버튼으로만 호출하고 선택이 바뀐 뒤 늦은 결과를 �
  one.select('opponent2','초코');release({status:'ready',result:{summary:'늦은 이전 결과',responses:[],cautions:[],tactics:[]}});await one.flush();assert.ok(!one.$('analysis-result').textContent.includes('늦은 이전 결과'));assert.equal(one.$('ai-analyze').disabled,false);
  store.api.analyze=async request=>{calls++;assert.ok(request.opponentPlayerIds.includes('D:아르(시트: 야르)'));return {status:'ready',cached:true,result:{summary:'새 선택 분석',responses:[{title:'패턴',action:'확인',basis:'관찰'}],cautions:[{title:'주의',action:'확인',basis:'관찰'}],tactics:[{title:'초반 확인',action:'로브 대처를 확인하세요.',basis:'입력 기록'}]}};};
  await Promise.all(one.$('ai-analyze').click());assert.equal(calls,2);assert.ok(one.$('analysis-result').textContent.includes('새 선택 분석'));assert.ok(one.$('analysis-ai-status').textContent.includes('팀원이 생성한 분석'));
+});
+test('기존 몰린 확정표는 보존하고 새 분산 추천안을 명시적으로 확정해 교체한다',async()=>{
+ const store=firestoreFixture(),data=require('./data.js'),profileModel=require('./profile-model.js'),{blankDocuments}=require('./reset-test-data.cjs');
+ for(const [path,value] of blankDocuments({seconds:1}))store.entries.set(path,value);
+ for(const name of Object.keys(data.teams.C))store.entries.get('playerProfilesV2/C:'+name).profile.restPreference='continuous';
+ const pairs=[['냉면','만두'],['우디','한치'],['쏘오리','숭'],['꿉','기른지']],sequence=[3,0,3,0,3,0,3,0,3,0,2,1,2,1,2,1,2,1,2,1];
+ const matches=data.schedule.map((slot,index)=>({...slot,pair:pairs[sequence[index]]}));
+ const profileVersion=profileModel.profileVersion(Object.keys(data.teams.C).map(name=>({id:'C:'+name,tier:data.teams.C[name].tier,profile:{...store.entries.get('playerProfilesV2/C:'+name).profile,traits:[]}})));
+ store.entries.set('teamLineups/C',{id:'old-confirmed',title:'이전 확정표',description:'',mode:'fixed',strategy:'balance',fixedPairs:pairs.map(pair=>({pair})),matches,reasons:[],algorithmVersion:'pairing-v3',profileVersion,revision:1});
+ const one=browser(store,{hash:'#page=strategy'});await one.flush();await one.advance();
+ one.$('view-confirmed').click();assert.ok(one.$('lineup-status').textContent.includes('이전 편성 기준'));assert.deepEqual(store.entries.get('teamLineups/C').matches,matches);
+ one.$('view-draft').click();await one.advance();assert.ok(one.$('strategy-pairs').textContent.includes('출전 횟수 차이는 최대 1경기'));assert.deepEqual(store.entries.get('teamLineups/C').matches,matches);
+ await Promise.all(one.$('confirm-lineup').click());await one.flush();const saved=store.entries.get('teamLineups/C');assert.equal(saved.algorithmVersion,'pairing-v4');assert.equal(saved.revision,2);assert.notDeepEqual(saved.matches,matches);
+ const times=[...new Set(data.schedule.map(match=>match.time))].sort(),rows=Object.keys(data.teams.C).map(name=>times.map(time=>Number(saved.matches.some(match=>match.time===time&&match.pair.includes(name)))));
+ for(const row of rows)assert.ok(!/111|000/.test(row.join('')));
+ for(let through=1;through<=times.length;through++){const counts=rows.map(row=>row.slice(0,through).reduce((sum,on)=>sum+on,0));assert.ok(Math.max(...counts)-Math.min(...counts)<=1);}
+ one.open('C:냉면');assert.ok(one.$('team-profile-fields').textContent.includes('선호는 분산 정도가 같은 후보를 고를 때만 참고'));
 });
 test('초기화 후 오래된 브라우저 입력을 서버에 다시 이관하지 않는다',async()=>{
  const store=firestoreFixture(),{blankDocuments}=require('./reset-test-data.cjs');
