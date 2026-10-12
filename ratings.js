@@ -331,7 +331,7 @@ if(typeof document!=='undefined')(() => {
     if(selected)removeItem(text);else addItem(text,false);
    });
    if(custom){
-    const item=el('span','keyword-custom-suggestion'),remove=el('button','suggestion-delete','삭제');remove.type='button';
+    const item=el('span','keyword-custom-suggestion'),remove=el('button','suggestion-delete','삭제');item.dataset.selected=String(selected);remove.type='button';
     remove.setAttribute('aria-label',title+' '+text+' 공용 추천에서 삭제');remove.title='공용 추천에서 삭제 · 선수에게 선택한 기록은 유지';
     remove.addEventListener('click',()=>{void deletion.remove();});item.append(button,remove);quick.append(item);
    }else quick.append(button);

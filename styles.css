@@ -268,9 +268,11 @@ body.player-detail-open > .skip-link { display: none; }
 .keyword-suggestion:disabled, .keyword-suggestion[aria-disabled="true"] { opacity: .55; }
 .keyword-suggestion[data-selected="true"] { opacity: 1; border-color: var(--navy); background: var(--white); color: var(--navy); }
 .keyword-suggestion[data-custom="true"] { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; touch-action: pan-y; }
-.keyword-custom-suggestion { display: inline-flex; max-width: 100%; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
-.keyword-custom-suggestion > .keyword-suggestion { min-width: 0; overflow-wrap: anywhere; border-radius: 10px 0 0 10px; }
-.suggestion-delete { flex-shrink: 0; min-width: 44px; min-height: 44px; padding: 6px 10px; border: 1px solid #e5e7eb; border-left: 0; border-radius: 0 10px 10px 0; background: #f3f4f6; color: #b63730; font-size: 12px; }
+.keyword-custom-suggestion { display: inline-flex; align-items: stretch; min-height: 44px; max-width: 100%; border: 1px solid #e5e7eb; border-radius: 10px; background: #f3f4f6; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.keyword-custom-suggestion[data-selected="true"] { border-color: var(--navy); background: var(--white); }
+.keyword-custom-suggestion:hover, .keyword-custom-suggestion:focus-within { border-color: var(--navy); }
+.keyword-custom-suggestion > .keyword-suggestion { min-width: 0; min-height: 42px; border: 0; border-radius: 9px 0 0 9px; background: transparent; overflow-wrap: anywhere; }
+.keyword-custom-suggestion > .suggestion-delete { flex-shrink: 0; min-width: 44px; min-height: 42px; padding: 6px 10px; border: 0; border-left: 1px solid; border-left-color: inherit; border-radius: 0 9px 9px 0; background: transparent; color: #b63730; font-size: 12px; line-height: 1.4; white-space: nowrap; appearance: none; }
 .suggestion-delete:hover, .suggestion-delete:focus-visible { background: #fff1ef; }
 .keyword-suggestion.suggestion-holding { border-color: #d9473d; background: #fff1ef; color: #d9473d; }
 .keyword-delete-help { margin: 10px 0 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
