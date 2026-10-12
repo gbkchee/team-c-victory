@@ -9,7 +9,7 @@
  const keywordSuggestions={
   pattern:['서브 후 네트 접근','적극적인 포칭','크로스 랠리 위주','다운더라인 공격','로브 자주 사용','슬라이스로 낮게 연결'],
   weak:['몸쪽 공','높은 백핸드','낮은 발리','빠른 서브 리턴','로브 대처','짧은 공 처리','포핸드','백핸드'],
-  note:['왼손잡이','키가 큼','슬라이스 서브','로브 잘 함','탑스핀','베이스라인 긴 공']
+  note:['왼손잡이','키가 큼','슬라이스 서브','로브 잘 함','탑스핀','베이스라인 긴 공','발빠름','발느림','서브강함','서브약함','체력약함']
  };
  const traitSuggestions=[...keywordSuggestions.note];
  const cleanText=text=>typeof text==='string'?text.normalize('NFC').trim().replace(/\s+/g,' '):'';

@@ -516,7 +516,7 @@ test('우리팀과 상대팀은 같은 특징 추천을 공유하며 양쪽에�
  const store=firestoreFixture(),{blankDocuments}=require('./reset-test-data.cjs');for(const [path,value] of blankDocuments({seconds:1}))store.entries.set(path,value);
  const one=browser(store),two=browser(store);await one.flush();one.open('C:우디');two.open('A:펩시');
  const suggestions=(view,id)=>view.$(id).querySelectorAll('.keyword-suggestion').map(node=>node.textContent.slice(2));
- const defaults=['왼손잡이','키가 큼','슬라이스 서브','로브 잘 함','탑스핀','베이스라인 긴 공'];
+ const defaults=['왼손잡이','키가 큼','슬라이스 서브','로브 잘 함','탑스핀','베이스라인 긴 공','발빠름','발느림','서브강함','서브약함','체력약함'];
  assert.deepEqual(suggestions(one,'team-traits'),defaults);assert.deepEqual(suggestions(two,'opponent-features'),defaults);
  one.submit('profile-trait-text','우리팀에서 등록한 특징');await one.flush();assert.ok(suggestionButton(two,'opponent-features','우리팀에서 등록한 특징'));
  two.clickText('opponent-features','＋ 우리팀에서 등록한 특징');await two.flush();assert.deepEqual(store.entries.get('playerTraits/C:우디').items,['우리팀에서 등록한 특징']);assert.ok(store.entries.get('playerProfilesV2/A:펩시').profile.keywords.some(item=>item.kind==='note'&&item.text==='우리팀에서 등록한 특징'));

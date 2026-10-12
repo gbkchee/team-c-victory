@@ -3,9 +3,12 @@ const {test}=require('node:test'),assert=require('node:assert/strict');
 const data=require('./data.js'),model=require('./profile-model.js');
 const ai=require('./gemini-analysis.js'),{createService,createFirestoreStore,AnalysisError}=ai;
 const reference=require('./tactics-data.js'),matchup=require('./app.js');
-test('모든 기본 상대 입력에 조사한 자료가 연결되고 자유 메모의 부정 표현은 추정하지 않는다',()=>{
+test('자료가 있는 기본 상대 입력을 연결하고 관찰용 특징과 자유 메모의 부정 표현은 추정하지 않는다',()=>{
+ const observationOnly=['발빠름','발느림','서브강함','서브약함','체력약함'];
  for(const [kind,terms] of Object.entries(model.keywordSuggestions))for(const text of terms){
-  const rule=reference.match(kind,text);assert.ok(rule,kind+' · '+text);assert.ok(rule.response);assert.ok(rule.sourceIds.length);
+  const rule=reference.match(kind,text);
+  if(kind==='note'&&observationOnly.includes(text)){assert.equal(rule,null);continue;}
+  assert.ok(rule,kind+' · '+text);assert.ok(rule.response);assert.ok(rule.sourceIds.length);
   for(const id of rule.sourceIds)assert.ok(reference.sources[id]?.url.startsWith('https://'));
  }
  for(const rule of reference.rules)for(const id of rule.sourceIds)assert.ok(reference.sources[id],rule.id+' · '+id);
