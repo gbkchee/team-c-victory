@@ -5,7 +5,7 @@
 ## 선수 입력과 추천 연결
 
 1. Firebase 콘솔 **Authentication → 로그인 방법 → 익명**을 사용 설정합니다.
-2. **Firestore Database → 규칙**에 이 저장소의 최신 `firestore.rules` 전체 내용을 게시합니다. 새 Gemini v3 출력(요약·주의할 점·대응방안·공략할 상황)과 기존 v2의 호환 규칙도 포함합니다. 선택적 Gemini 분석을 계속 사용할 때 새 형식을 저장하려면 다시 게시해야 합니다. 선수 입력 규칙은 동일하며 사전 조사 자료 기반의 기본 분석에는 이번 규칙 변경이 필요하지 않습니다.
+2. **Firestore Database → 규칙**에 이 저장소의 최신 `firestore.rules` 전체 내용을 게시합니다. Gemini v3 출력(요약·주의할 점·대응방안·공략할 상황)과 기존 v2의 호환 규칙도 포함합니다. 직접 등록한 공용 추천의 롱프레스 삭제·재등록을 위해 `traitSuggestions`·`keywordSuggestions`의 삭제 표시와 갱신 시간 변경을 허용합니다. 이 기능을 사용할 때 규칙을 다시 게시해야 합니다. 선수 입력과 사전 조사 자료 기반 기본 분석의 규칙은 동일합니다.
 3. `main`을 원격에 푸시하고 GitHub Actions의 Pages 배포 성공을 확인합니다.
 4. 페이지 더 보기 메뉴에 **팀원과 실시간으로 공유 중입니다.**가 표시되는지 확인합니다.
 
@@ -30,7 +30,7 @@ firebase deploy --only firestore:rules --project team-c-victory
 3. 같은 웹 앱에 Firebase **App Check → reCAPTCHA Enterprise**를 등록합니다. 새 AI Logic 설정은 2026년 7월부터 App Check를 자동으로 강제합니다. [시작 안내](https://firebase.google.com/docs/ai-logic/get-started?platform=web)
 4. reCAPTCHA Enterprise에서 웹사이트용 **점수 기반 키**를 만들고 허용 도메인에 `gbkchee.github.io`를 등록합니다. 도메인에는 경로를 넣지 않습니다. Firebase App Check에 해당 **공개 사이트 키**를 등록합니다. [웹 App Check 설정](https://firebase.google.com/docs/app-check/web/recaptcha-enterprise-provider)
 5. 저장소의 `gemini-config.js`에 공개 사이트 키를 넣습니다. `appCheckSiteKey:''`의 빈 값만 변경하면 됩니다.
-6. 변경 사항을 커밋·푸시하고 **상대 페어 분석 → Gemini AI 분석**으로 확인합니다.
+6. 변경 사항을 커밋·푸시하고 **상대 페어 분석 → 분석하기**로 확인합니다.
 
 Gemini API 비밀 키를 HTML·JavaScript·채팅에 넣지 않습니다. Firebase AI Logic의 설정 과정이 사용하는 Gemini 키는 Firebase 프록시가 관리합니다. App Check 공개 사이트 키는 별개이며 웹 앱에 포함할 수 있습니다.
 

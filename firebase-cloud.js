@@ -66,10 +66,10 @@ function publishProfiles(){
  notifyStatus('ready');
 }
 function publishSuggestions(){
- const traits=[...new Set([...records.suggestions.values()].map(item=>item.text).filter(text=>typeof text==='string'))].sort();
+ const traits=[...new Set([...records.suggestions.values()].filter(item=>!item.deleted).map(item=>item.text).filter(text=>typeof text==='string'))].sort();
  emit('playertraitssuggestionschange',{suggestions:traits});
  const suggestions={};
- for(const item of records.keywords.values())if(Object.hasOwn(window.PLAYER_PROFILE_MODEL.keywordKinds,item.kind)&&typeof item.text==='string'){
+ for(const item of records.keywords.values())if(!item.deleted&&Object.hasOwn(window.PLAYER_PROFILE_MODEL.keywordKinds,item.kind)&&typeof item.text==='string'){
   (suggestions[item.kind]??=[]).push(item.text);
  }
  for(const kind of Object.keys(suggestions))suggestions[kind]=[...new Set(suggestions[kind])].sort();
@@ -93,6 +93,23 @@ async function addSuggestions(raw,id){
   }
  }
 }
+async function setSuggestionDeleted(kind,text,deleted){
+ const model=window.PLAYER_PROFILE_MODEL;
+ if(!ready||state.status!=='ready')throw new Error('팀 공유 저장소 연결 후 항목을 변경할 수 있어요.');
+ if(text!==model.cleanText(text)||!text||text.length>40||!(kind==='trait'||Object.hasOwn(model.keywordKinds,kind)))throw new Error('등록 항목을 확인해 주세요.');
+ const defaults=kind==='trait'?model.traitSuggestions:model.keywordSuggestions[kind];
+ if(defaults.includes(text)){if(deleted)throw new Error('기본 추천 항목은 삭제할 수 없어요.');return;}
+ const data=kind==='trait'?{text}:{kind,text},ref=kind==='trait'?refs.suggestions:refs.keywords,target=doc(ref,'s_'+model.fingerprint(data));
+ await runTransaction(db,async transaction=>{
+  const snapshot=await transaction.get(target),existing=snapshot.data();
+  if(!snapshot.exists()){if(!deleted)transaction.set(target,{...data,createdAt:serverTimestamp()});return;}
+  if(Boolean(existing.deleted)===deleted)return;
+  // Keep a deletion marker so profile saves and migration cannot recreate the suggestion.
+  transaction.set(target,{...existing,deleted,updatedAt:serverTimestamp()});
+ });
+}
+state.deleteSuggestion=(kind,text)=>setSuggestionDeleted(kind,text,true);
+state.registerSuggestion=(kind,text)=>setSuggestionDeleted(kind,text,false);
 async function flush(id){
  if(!ready||writing.has(id))return;
  writing.add(id);

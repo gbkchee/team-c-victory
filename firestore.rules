@@ -110,7 +110,14 @@ service cloud.firestore {
         && request.resource.data.kind in ['pattern', 'weak', 'note']
         && request.resource.data.text is string && request.resource.data.text.size() > 0
         && request.resource.data.text.size() <= 40 && request.resource.data.createdAt == request.time;
-      allow update, delete: if false;
+      allow update: if validSuggestionVisibilityChange();
+      allow delete: if false;
+    }
+    function validSuggestionVisibilityChange() {
+      return signedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deleted', 'updatedAt'])
+        && request.resource.data.deleted is bool
+        && request.resource.data.updatedAt == request.time;
     }
     match /teamLineups/{team} {
       allow read: if signedIn();
@@ -263,12 +270,13 @@ service cloud.firestore {
 
     match /traitSuggestions/{suggestionId} {
       allow read: if signedIn();
-      allow create, update: if signedIn()
+      allow create: if signedIn()
         && request.resource.data.keys().hasOnly(['text', 'createdAt'])
         && request.resource.data.text is string
         && request.resource.data.text.size() > 0
         && request.resource.data.text.size() <= 40
         && request.resource.data.createdAt == request.time;
+      allow update: if validSuggestionVisibilityChange();
       allow delete: if false;
     }
   }

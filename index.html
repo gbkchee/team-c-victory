@@ -49,9 +49,9 @@
 <div id="team-profile-fields" class="profile-fields"></div>
 </section>
 <section id="opponent-profile-section" hidden aria-label="상대 선수 관찰">
-<div id="opponent-features" class="opponent-features"></div>
 <div id="opponent-profile-fields" class="profile-fields"></div>
 <div id="opponent-keywords" class="opponent-keywords"></div>
+<div id="opponent-features" class="opponent-features"></div>
 </section>
 <button id="profile-reset" type="button" class="profile-reset"></button>
 <p id="profile-save-status" class="muted small" role="status"></p>
@@ -113,7 +113,7 @@
 </details>
 </section>
 <section id="page-analysis" class="page-panel" role="tabpanel" aria-labelledby="tab-analysis" hidden>
-<div class="analysis-introduction"><h2>상대 페어 분석</h2><p>상대 조와 두 선수를 선택하면<br>기본 관찰 요약이 바로 표시돼요.</p></div>
+<div class="analysis-introduction"><h2>상대 페어 분석</h2><p>상대 조와 두 선수를 선택한 뒤 분석하기를 눌러 주세요.<br>AI가 연결되어 있으면 AI 분석을, 아니면 기본 관찰 요약을 보여드려요.</p></div>
 <section class="analysis-selection-panel">
 <h3>상대 페어 선택</h3>
 <fieldset class="analysis-field"><legend>상대 페어</legend>
@@ -122,9 +122,9 @@
 </fieldset>
 <p class="muted small">상대 조를 바꾸면 상대 선수 두 명이 비워져요.<br>같은 선수의 중복 선택과 러브끼리 페어는 선택할 수 없어요.</p>
 <p id="analysis-selection-status" class="analysis-selection-status" role="status"></p>
+<div id="analysis-ai-panel" class="analysis-ai-panel"><button id="ai-analyze" class="primary-button" type="button" aria-controls="analysis-result" disabled>분석하기</button><p id="analysis-ai-status" class="muted small" role="status"></p></div>
 </section>
-<div id="analysis-result" aria-live="polite"></div>
-<section id="analysis-ai-panel" class="analysis-ai-panel"><h3>AI 상세 분석</h3><p class="muted">관찰 기록을 바탕으로 더 자세한 운영 제안을 확인해요.</p><button id="ai-analyze" class="primary-button" type="button" disabled>AI 상세 분석</button><p id="analysis-ai-status" class="muted small" role="status"></p></section>
+<div id="analysis-result" aria-live="polite" hidden></div>
 </section>
 <footer class="friendly-note"><p class="friendly-title">어차피 우승은 C조</p><p class="friendly-tagline">2026 TENET</p></footer>
 <noscript>이 전략보드에는 JavaScript가 필요합니다. JavaScript를 허용하는 브라우저에서 열어주세요.</noscript>

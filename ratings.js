@@ -198,7 +198,7 @@ if(typeof document!=='undefined')(() => {
  });
  function choiceField(title,field,options,multiple=false,help='',stack=false){
   const group=el('fieldset','profile-field'),legend=el('legend','',title),choices=el('div','profile-choices'+(stack?' profile-choices-stack':''));
-  const steps=person(current).team==='C'?{position:'01',courtPreference:'02',style:'03',partnerRoles:'04',restPreference:'06'}:{style:'02'};
+  const steps=person(current).team==='C'?{position:'01',courtPreference:'02',style:'03',partnerRoles:'04',restPreference:'06'}:{style:'01'};
   legend.dataset.step=steps[field];group.dataset.field=field;
   group.append(legend,el('p','muted small',multiple?'여러 개 선택':'하나 선택'));
   const inputs=[];
@@ -234,6 +234,39 @@ if(typeof document!=='undefined')(() => {
   preferences.append(choiceField('경기·휴식 선호','restPreference',restPreferences));fields.append(preferences);
  }
 
+ function suggestionDeletion(button,kind,text,statusId){
+  const playerId=current;let timer=null,origin=null,suppressClick=false,deleting=false;
+  const cancel=()=>{clearTimeout(timer);timer=null;button.classList.remove('suggestion-holding');};
+  async function removeSuggestion(){
+   cancel();if(deleting||document.hidden||!editorOpen||current!==playerId||!button.isConnected)return;
+   suppressClick=true;deleting=true;
+   const report=(message,error=false)=>{if(editorOpen&&current===playerId){const status=$(statusId);if(status){status.textContent=message;status.dataset.state=error?'error':'';}}};
+   report('등록 항목을 삭제하고 있습니다.');
+   try{
+    const cloud=window.PLAYER_PROFILE_CLOUD;
+    if(!cloud?.deleteSuggestion)throw new Error('팀 공유 저장소 연결 후 항목을 삭제할 수 있어요.');
+    await cloud.deleteSuggestion(kind,text);
+    report('공용 추천에서 삭제했습니다. 선수에게 선택한 기록은 유지됩니다.');
+   }catch(error){report(error.code==='permission-denied'?'항목을 삭제하지 못했습니다. 최신 Firestore 규칙을 적용해 주세요.':error.message||'항목을 삭제하지 못했습니다. 다시 시도해 주세요.',true);}
+   finally{deleting=false;}
+  }
+  button.dataset.custom='true';button.title='길게 눌러 등록 항목 삭제 · 키보드 Delete 키로도 삭제할 수 있어요';
+  button.addEventListener('pointerdown',event=>{
+   if(event.isPrimary===false||(event.button!==undefined&&event.button!==0))return;
+   cancel();suppressClick=false;origin={x:event.clientX,y:event.clientY};button.classList.add('suggestion-holding');
+   timer=setTimeout(removeSuggestion,650);
+  });
+  button.addEventListener('pointermove',event=>{if(timer&&origin&&Math.hypot(event.clientX-origin.x,event.clientY-origin.y)>10){suppressClick=true;cancel();}});
+  for(const type of ['pointerup','pointercancel','pointerleave','lostpointercapture'])button.addEventListener(type,()=>{if(type==='pointercancel')suppressClick=true;cancel();});
+  button.addEventListener('blur',cancel);
+  button.addEventListener('contextmenu',event=>{event.preventDefault();});
+  button.addEventListener('keydown',event=>{
+   if(event.key==='Delete'||event.key==='Backspace'){event.preventDefault();void removeSuggestion();}
+   else if(event.key==='Escape')cancel();
+   else if(event.key==='Enter'||event.key===' ')suppressClick=false;
+  });
+  return ()=>{const suppress=suppressClick||deleting;suppressClick=false;return suppress;};
+ }
  function keywordEditor({title,step,items,total,own,kind,draft,suggestions,addItem,removeItem}){
   const prefix=own?'profile-trait':'profile-keyword',suffix=own?'':'-'+kind;
   const section=el('section','keyword-section'),heading=el('div','profile-field-heading'),name=el('h3','',title);
@@ -265,19 +298,26 @@ if(typeof document!=='undefined')(() => {
    event.preventDefault();refresh();const value=cleanText(input.value);
    if(total>=20||value.length>40||items.includes(value))return;
    if(!value){status.textContent='키워드를 입력하세요.';return;}
-   addItem(value,true);
+   const registeringPlayer=current;addItem(value,true);
+   const cloud=window.PLAYER_PROFILE_CLOUD;
+   if(cloud?.status==='ready')void cloud.registerSuggestion?.(own?'trait':kind,value).catch(error=>{
+    const target=editorOpen&&current===registeringPlayer?$(status.id):null;if(target){target.textContent='선수 기록은 추가했지만 공용 항목 등록에 실패했습니다. '+(error.message||'다시 시도해 주세요.');target.dataset.state='error';}
+   });
   });
   const quick=el('div','keyword-suggestions');quick.setAttribute('aria-label',title+' 빠른 추가');
   for(const text of [...new Set(suggestions)]){
    const selected=items.includes(text),button=el('button','keyword-suggestion',selected?'✓ '+text:'＋ '+text);button.type='button';
-   button.disabled=!selected&&total>=20;button.dataset.selected=String(selected);button.setAttribute('aria-pressed',String(selected));
-   button.addEventListener('click',()=>{
+   const custom=!(own?traitSuggestions:keywordSuggestions[kind]).includes(text),atLimit=!selected&&total>=20;
+   button.disabled=atLimit&&!custom;button.dataset.selected=String(selected);button.setAttribute('aria-pressed',String(selected));button.setAttribute('aria-disabled',String(atLimit));
+   const suppressClick=custom?suggestionDeletion(button,own?'trait':kind,text,status.id):()=>false;
+   button.addEventListener('click',event=>{
+    if(suppressClick()||atLimit){event.preventDefault?.();return;}
     const active=document.activeElement;
     if(editor.contains(active)&&active.type==='text')active.blur();
     if(selected)removeItem(text);else addItem(text,false);
    });quick.append(button);
   }
-  section.append(list,form,help,status,el('p','keyword-recommendation-label','추천 · 추가하기 전에는 기록되지 않아요'),quick);refresh();return section;
+  section.append(list,form,help,status,el('p','keyword-recommendation-label','추천 · 추가하기 전에는 기록되지 않아요'),quick,el('p','keyword-delete-help','직접 등록한 추천 항목은 길게 눌러 삭제할 수 있어요.'));refresh();return section;
  }
  function renderTraits(){
   const draft=$('profile-trait-text')?.value||'',parent=$('team-profile-fields');$('team-traits')?.remove();
@@ -300,10 +340,11 @@ if(typeof document!=='undefined')(() => {
  function renderKeywords(){
   const drafts=Object.fromEntries(Object.keys(keywordKinds).map(kind=>[kind,$('profile-keyword-text-'+kind)?.value||'']));
   const groups=$('opponent-keywords'),features=$('opponent-features');groups.replaceChildren();features.replaceChildren();
-  const total=profile(current).keywords.length,limit=el('div','opponent-keyword-limit');limit.append(el('span','','전체 키워드 · 3개 항목 합산'),el('strong','',total+'/20'));features.append(limit);
-  for(const [kind,title] of Object.entries(keywordKinds)){
+  const total=profile(current).keywords.length,limit=el('div','opponent-keyword-limit');limit.append(el('span','','전체 키워드 · 3개 항목 합산'),el('strong','',total+'/20'));groups.append(limit);
+  for(const kind of ['pattern','weak','note']){
+   const title=kind==='note'?'추가 특징':keywordKinds[kind];
    const items=profile(current).keywords.filter(item=>item.kind===kind).map(item=>item.text);
-   const section=keywordEditor({title,step:{note:'01',pattern:'03',weak:'04'}[kind],items,total,own:false,kind,draft:drafts[kind],suggestions:[...keywordSuggestions[kind],...(sharedKeywordSuggestions[kind]||[])],
+   const section=keywordEditor({title,step:{pattern:'02',weak:'03',note:'04'}[kind],items,total,own:false,kind,draft:drafts[kind],suggestions:[...keywordSuggestions[kind],...(sharedKeywordSuggestions[kind]||[])],
     addItem:(text,clearDraft)=>{
      const all=profile(current).keywords;if(all.length>=20||all.some(item=>item.kind===kind&&item.text===text))return;
      update({keywords:[...all,{kind,text}]});if(clearDraft)$('profile-keyword-text-'+kind).value='';renderKeywords();
