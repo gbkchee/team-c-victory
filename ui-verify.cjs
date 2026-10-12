@@ -118,6 +118,13 @@ test('새 입력 화면, 기존 데이터 이관, 20개 제한과 두 기기 실
  for(let i=0;i<20;i++)one.submit('profile-trait-text','특징 '+i);assert.ok(one.$('profile-trait-status').textContent.includes('20개'));await one.flush();assert.equal(one.window.PLAYER_PROFILES.get('C','우디').traits.length,20);assert.equal(two.window.PLAYER_PROFILES.get('C','우디').traits.length,20);
  assert.ok(one.storage.has('courtside.player-profiles.v3'));assert.equal(one.$('ratings-panel').open,true);one.$('rating-close').click();assert.equal(one.$('ratings-panel').open,false);
  one.open('A:펩시');one.submit('profile-keyword-text-pattern','서브 후 네트 접근');await one.flush();two.open('A:동글');assert.ok(two.$('opponent-keywords').querySelectorAll('button').some(node=>node.textContent==='＋ 서브 후 네트 접근'));
+ one.submit('profile-keyword-text-note','카드에 표시할 특징');await one.flush();
+ for(const view of [one,two]){
+  const card=view.$('player-roster').querySelectorAll('.roster-player').find(node=>node.dataset.player==='A:펩시');
+  const row=card.querySelectorAll('.roster-highlight').find(node=>node.querySelector('.roster-highlight-label').textContent==='특징');
+  assert.ok(row.textContent.includes('카드에 표시할 특징'));assert.ok(card.getAttribute('aria-description').includes('카드에 표시할 특징'));
+ }
+ const unselected=two.$('player-roster').querySelectorAll('.roster-player').find(node=>node.dataset.player==='A:동글');assert.ok(!unselected.textContent.includes('카드에 표시할 특징'));
  // Editing different fields concurrently must merge instead of losing either change.
  one.open('C:숭');two.open('C:숭');one.choose('position','back');two.choose('courtPreference','baseline');await one.flush();
  assert.equal(store.entries.get('playerProfilesV2/C:숭').profile.position,'back');assert.equal(store.entries.get('playerProfilesV2/C:숭').profile.courtPreference,'baseline');

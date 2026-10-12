@@ -424,7 +424,7 @@ if(typeof document!=='undefined')(() => {
   const highlights=el('span','roster-highlights');
   const rows=player.team==='C'
    ? [['리턴 자리',positions[info.position],'strong'],['편한 위치',courtPreferences[info.courtPreference],'note'],['특징',info.traits.join(', ')||'아직 입력 전','note']]
-   :[['패턴',info.keywords.filter(item=>item.kind==='pattern').map(item=>item.text).join(', ')||'정보 없음','strong'],['상황',info.keywords.filter(item=>item.kind==='weak').map(item=>item.text).join(', ')||'정보 없음','weak']];
+   :[['패턴',info.keywords.filter(item=>item.kind==='pattern').map(item=>item.text).join(', ')||'정보 없음','strong'],['상황',info.keywords.filter(item=>item.kind==='weak').map(item=>item.text).join(', ')||'정보 없음','weak'],['특징',info.keywords.filter(item=>item.kind==='note').map(item=>item.text).join(', ')||'아직 입력 전','note']];
   for(const [title,text,kind] of rows){
    const row=el('span','roster-highlight roster-highlight-'+kind),value=el('span','roster-highlight-value',text);
    value.title=text;row.append(el('span','roster-highlight-label',title),value);highlights.append(row);
