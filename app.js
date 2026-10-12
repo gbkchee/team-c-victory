@@ -226,7 +226,7 @@ if(typeof document!=='undefined')(() => {
   container.setAttribute('aria-busy',String(loading));
   const start=$('ai-analyze');start.replaceChildren();
   if(loading){const spinner=el('img','ai-spinner');spinner.src='assets/ai-spinner.svg';spinner.width=16;spinner.height=16;spinner.alt='';start.append(spinner);}
-  start.append(el('span','',loading?'AI 분석 중':active?.status==='error'?'다시 시도':'분석하기'));
+  start.append(el('span','',loading?'AI 분석 중':active?.status==='error'?'다시 시도':'분석하기 🧑‍🔬'));
   start.disabled=!input||(aiAvailable&&cloud.pendingCount>0)||loading;
   const status=$('analysis-ai-status');status.textContent=active?.error?active.error+' 기본 관찰 요약을 표시합니다.':active?.message||'';
   $('analysis-ai-panel').dataset.status=active?.status||'idle';

@@ -106,6 +106,9 @@ function suggestionButton(view,section,text){
  assert.ok(button,'Suggestion missing: '+text);return button;
 }
 function pointerEvent(button,type,detail={}){button.dispatchEvent({type,button:0,isPrimary:true,clientX:0,clientY:0,preventDefault(){},...detail});}
+function touchEvent(button,type,touches=[{clientX:0,clientY:0}]){
+ const event={type,touches,defaultPrevented:false,preventDefault(){this.defaultPrevented=true;}};button.dispatchEvent(event);return event;
+}
 test('새 입력 화면, 기존 데이터 이관, 20개 제한과 두 기기 실시간 공유',async()=>{
  const store=firestoreFixture(),one=browser(store,{saved:{'courtside.player-profiles.v3':JSON.stringify({'C:우디':{position:'fore',confidentSkills:['serve'],traits:['왼손잡이']}})}});
  await one.flush();assert.equal(one.window.PLAYER_PROFILE_CLOUD.status,'ready');assert.equal(store.entries.size>=39,true);
@@ -411,6 +414,7 @@ test('등록한 특징을 길게 눌러 공용 추천에서 삭제하며 선수 
  await one.advance(1);pointerEvent(button,'pointerup');button.click();await one.flush();
  for(const view of [one,two])assert.ok(!view.$('team-traits').querySelectorAll('.keyword-suggestion').some(node=>node.textContent.includes('등록 삭제 테스트')));
  for(const name of ['우디','숭'])assert.deepEqual(store.entries.get('playerTraits/C:'+name).items,['등록 삭제 테스트']);
+ assert.ok(one.$('profile-trait-status').textContent.includes('선수 기록은 위의 × 버튼'));
  assert.equal(two.$('profile-trait-text').value,'아직 등록하지 않은 특징');assert.equal(two.document.activeElement,two.$('profile-trait-text'));assert.equal(two.document.activeElement.selectionStart,3);
  const [path,deleted]=[...store.entries].find(([path,item])=>path.startsWith('traitSuggestions/')&&item.text==='등록 삭제 테스트');assert.equal(deleted.deleted,true);
  one.choose('restPreference','rest');await one.flush();assert.equal(store.entries.get(path).deleted,true);
@@ -428,6 +432,80 @@ test('상대 선수의 공용 등록 항목은 종류별로 삭제하고 롱프�
  assert.deepEqual(store.entries.get('playerProfilesV2/A:동글').profile,before);assert.equal(store.entries.get('playerProfilesV2/A:펩시').profile.keywords.filter(item=>item.text==='같은 이름의 관찰').length,3);
  const pattern=two.$('opponent-keywords').querySelectorAll('.keyword-suggestion').find(node=>node.textContent==='＋ 같은 이름의 관찰');pattern.dispatchEvent({type:'keydown',key:'Delete',preventDefault(){}});await two.flush();
  assert.equal(two.$('opponent-keywords').querySelectorAll('.keyword-suggestion').filter(node=>node.textContent.includes('같은 이름의 관찰')).length,1);
+});
+test('Safari 터치 롱프레스는 포인터 취소 후에도 삭제하고 합성 클릭으로 선수 선택을 바꾸지 않는다',async()=>{
+ const store=firestoreFixture(),one=browser(store,{mobile:true});await one.flush();one.open('A:펩시');one.submit('profile-keyword-text-note','사파리 터치 테스트');await one.flush();
+ const before=clone(store.entries.get('playerProfilesV2/A:펩시').profile),button=suggestionButton(one,'opponent-features','사파리 터치 테스트');
+ pointerEvent(button,'pointerdown',{pointerType:'touch'});touchEvent(button,'touchstart');await one.advance(500);
+ pointerEvent(button,'pointercancel',{pointerType:'touch'});pointerEvent(button,'pointerleave',{pointerType:'touch'});button.dispatchEvent({type:'blur'});await one.advance(150);
+ assert.ok(!one.$('opponent-features').querySelectorAll('.keyword-suggestion').some(node=>node.textContent.includes('사파리 터치 테스트')));
+ assert.equal(touchEvent(button,'touchend',[]).defaultPrevented,true);button.click();await one.flush();assert.deepEqual(store.entries.get('playerProfilesV2/A:펩시').profile,before);
+});
+test('Safari 짧은 터치는 선택만 토글하고 스크롤·터치 취소·두 손가락 터치는 삭제하지 않는다',async()=>{
+ const store=firestoreFixture(),one=browser(store,{mobile:true});await one.flush();one.open('C:우디');one.submit('profile-trait-text','사파리 취소 테스트');await one.flush();
+ let button=suggestionButton(one,'team-traits','사파리 취소 테스트');touchEvent(button,'touchstart');await one.advance(100);assert.equal(touchEvent(button,'touchend',[]).defaultPrevented,false);button.click();await one.flush();
+ assert.deepEqual(store.entries.get('playerTraits/C:우디').items,[]);button=suggestionButton(one,'team-traits','사파리 취소 테스트');
+ touchEvent(button,'touchstart');touchEvent(button,'touchmove',[{clientX:0,clientY:20}]);await one.advance(650);assert.equal(touchEvent(button,'touchend',[]).defaultPrevented,true);button.click();await one.flush();assert.deepEqual(store.entries.get('playerTraits/C:우디').items,[]);
+ touchEvent(button,'touchstart');touchEvent(button,'touchcancel',[]);await one.advance(650);assert.ok(suggestionButton(one,'team-traits','사파리 취소 테스트'));
+ touchEvent(button,'touchstart',[{clientX:0,clientY:0},{clientX:10,clientY:10}]);await one.advance(650);assert.ok(suggestionButton(one,'team-traits','사파리 취소 테스트'));
+});
+test('공용 추천 삭제 버튼은 바로 삭제하며 선수 기록과 입력 초안을 보존하고 실패를 안내한다',async()=>{
+ const store=firestoreFixture(),transaction=store.api.runTransaction;let denied=false;
+ store.api.runTransaction=(...args)=>denied?Promise.reject({code:'permission-denied'}):transaction(...args);
+ const one=browser(store);await one.flush();one.open('C:우디');one.submit('profile-trait-text','버튼 삭제 테스트');await one.flush();
+ const input=one.$('profile-trait-text');input.value='입력 초안';
+ let button=suggestionButton(one,'team-traits','버튼 삭제 테스트'),remove=button.parentNode.querySelector('.suggestion-delete');assert.ok(remove);assert.equal(remove.getAttribute('aria-label'),'특징 버튼 삭제 테스트 공용 추천에서 삭제');
+ denied=true;remove.click();await one.flush();
+ assert.ok(suggestionButton(one,'team-traits','버튼 삭제 테스트'));assert.ok(one.$('profile-trait-status').textContent.includes('Firestore 규칙'));
+ denied=false;remove.click();await one.flush();assert.ok(!one.$('team-traits').querySelectorAll('.keyword-suggestion').some(node=>node.textContent.includes('버튼 삭제 테스트')));
+ assert.deepEqual(store.entries.get('playerTraits/C:우디').items,['버튼 삭제 테스트']);assert.equal(one.$('profile-trait-text').value,'입력 초안');
+ assert.notEqual(suggestionButton(one,'team-traits','탑스핀').parentNode.className,'keyword-custom-suggestion');
+});
+test('예전 ID와 중복 문서로 등록된 공용 추천을 모두 삭제하고 새 ID로 다시 생성하지 않는다',async()=>{
+ const store=firestoreFixture(),text='예전에 등록한 특징';
+ store.entries.set('traitSuggestions/s_legacy_first',{text,createdAt:{seconds:1}});store.entries.set('traitSuggestions/s_legacy_duplicate',{text,createdAt:{seconds:2}});
+ const one=browser(store),two=browser(store);await one.flush();one.open('C:우디');two.open('C:숭');
+ const canonical='traitSuggestions/s_'+one.window.PLAYER_PROFILE_MODEL.fingerprint({text});assert.equal(store.entries.has(canonical),false);
+ const button=suggestionButton(one,'team-traits',text);button.parentNode.querySelector('.suggestion-delete').click();await one.flush();
+ for(const path of ['traitSuggestions/s_legacy_first','traitSuggestions/s_legacy_duplicate'])assert.equal(store.entries.get(path).deleted,true);
+ for(const view of [one,two])assert.ok(!view.$('team-traits').querySelectorAll('.keyword-suggestion').some(node=>node.textContent.includes(text)));
+ // Existing player records must not recreate a deleted legacy suggestion during migration.
+ store.entries.get('playerTraits/C:우디').items=[text];store.broadcast();await one.flush();
+ one.choose('restPreference','rest');await one.flush();const reopened=browser(store);await reopened.flush();reopened.open('C:우디');
+ assert.equal(store.entries.has(canonical),false);assert.ok(!reopened.$('team-traits').querySelectorAll('.keyword-suggestion').some(node=>node.textContent.includes(text)));
+ // Explicit registration restores every duplicate so the list remains consistent.
+ two.submit('profile-trait-text',text);await two.flush();for(const path of ['traitSuggestions/s_legacy_first','traitSuggestions/s_legacy_duplicate'])assert.equal(store.entries.get(path).deleted,false);
+ assert.ok(suggestionButton(one,'team-traits',text));
+});
+test('상대 추천도 실제 문서 ID와 중복을 찾아 종류별로 삭제하고 없는 항목에는 완료를 표시하지 않는다',async()=>{
+ const store=firestoreFixture(),text='이전 등록 관찰';
+ for(const [id,kind] of [['old-note','note'],['other-note','note'],['old-pattern','pattern']])store.entries.set('keywordSuggestions/'+id,{kind,text,createdAt:{seconds:1}});
+ const one=browser(store);await one.flush();one.open('A:펩시');
+ suggestionButton(one,'opponent-features',text).parentNode.querySelector('.suggestion-delete').click();await one.flush();
+ assert.equal(store.entries.get('keywordSuggestions/old-note').deleted,true);assert.equal(store.entries.get('keywordSuggestions/other-note').deleted,true);assert.equal(store.entries.get('keywordSuggestions/old-pattern').deleted,undefined);
+ assert.ok(!one.$('opponent-features').querySelectorAll('.keyword-suggestion').some(node=>node.textContent.includes(text)));assert.ok(suggestionButton(one,'opponent-keywords',text));
+ store.entries.delete('keywordSuggestions/old-pattern');suggestionButton(one,'opponent-keywords',text).parentNode.querySelector('.suggestion-delete').click();await one.flush();
+ assert.ok(one.$('profile-keyword-status-pattern').textContent.includes('찾지 못했습니다'));assert.ok(!one.$('profile-keyword-status-pattern').textContent.includes('공용 추천에서 삭제했습니다'));
+ await assert.rejects(one.window.PLAYER_PROFILE_CLOUD.deleteSuggestion('note','존재하지 않는 항목'),/찾지 못했습니다/);
+});
+test('우리팀과 상대팀은 같은 특징 추천을 공유하며 양쪽에서 등록·선택·삭제·재등록한다',async()=>{
+ const store=firestoreFixture(),{blankDocuments}=require('./reset-test-data.cjs');for(const [path,value] of blankDocuments({seconds:1}))store.entries.set(path,value);
+ const one=browser(store),two=browser(store);await one.flush();one.open('C:우디');two.open('A:펩시');
+ const suggestions=(view,id)=>view.$(id).querySelectorAll('.keyword-suggestion').map(node=>node.textContent.slice(2));
+ const defaults=['왼손잡이','키가 큼','슬라이스 서브','로브 잘 함','탑스핀','베이스라인 긴 공'];
+ assert.deepEqual(suggestions(one,'team-traits'),defaults);assert.deepEqual(suggestions(two,'opponent-features'),defaults);
+ one.submit('profile-trait-text','우리팀에서 등록한 특징');await one.flush();assert.ok(suggestionButton(two,'opponent-features','우리팀에서 등록한 특징'));
+ two.clickText('opponent-features','＋ 우리팀에서 등록한 특징');await two.flush();assert.deepEqual(store.entries.get('playerTraits/C:우디').items,['우리팀에서 등록한 특징']);assert.ok(store.entries.get('playerProfilesV2/A:펩시').profile.keywords.some(item=>item.kind==='note'&&item.text==='우리팀에서 등록한 특징'));
+ two.submit('profile-keyword-text-note','상대팀에서 등록한 특징');await two.flush();assert.ok(suggestionButton(one,'team-traits','상대팀에서 등록한 특징'));assert.deepEqual(suggestions(one,'team-traits'),suggestions(two,'opponent-features'));
+ suggestionButton(two,'opponent-features','우리팀에서 등록한 특징').parentNode.querySelector('.suggestion-delete').click();await two.flush();
+ for(const [view,id] of [[one,'team-traits'],[two,'opponent-features']])assert.ok(!suggestions(view,id).includes('우리팀에서 등록한 특징'));
+ const deleted=[...store.entries].filter(([path,item])=>(path.startsWith('traitSuggestions/')||path.startsWith('keywordSuggestions/'))&&item.text==='우리팀에서 등록한 특징');assert.equal(deleted.length,2);for(const [,item] of deleted)assert.equal(item.deleted,true);
+ // Selected records remain separate from the common suggestion list.
+ assert.deepEqual(store.entries.get('playerTraits/C:우디').items,['우리팀에서 등록한 특징']);assert.ok(store.entries.get('playerProfilesV2/A:펩시').profile.keywords.some(item=>item.text==='우리팀에서 등록한 특징'));
+ one.choose('position','fore');two.choose('style','attack');await one.flush();assert.ok(!suggestions(one,'team-traits').includes('우리팀에서 등록한 특징'));assert.ok(!suggestions(two,'opponent-features').includes('우리팀에서 등록한 특징'));
+ one.open('C:숭');one.submit('profile-trait-text','우리팀에서 등록한 특징');await one.flush();for(const [path] of deleted)assert.equal(store.entries.get(path).deleted,false);assert.ok(suggestionButton(two,'opponent-features','우리팀에서 등록한 특징'));
+ // Deleting from our team also works when the item exists only in the opponent collection.
+ suggestionButton(one,'team-traits','상대팀에서 등록한 특징').parentNode.querySelector('.suggestion-delete').click();await one.flush();assert.ok(!suggestions(two,'opponent-features').includes('상대팀에서 등록한 특징'));
 });
 test('짧은 누름·스크롤·취소·다른 선수로 이동 시 등록 항목을 삭제하지 않고 기본 추천을 보호한다',async()=>{
  const store=firestoreFixture(),one=browser(store);await one.flush();one.open('C:우디');one.submit('profile-trait-text','취소 테스트');await one.flush();
@@ -452,7 +530,7 @@ test('상대 두 명만 선택하고 세 분석 영역·조 변경·출전표 �
  assert.equal(one.$('our-player1'),null);assert.ok(one.$('analysis-selection-status').textContent.includes('상대 조'));
  one.clickText('analysis-teams','A조');one.select('opponent1','펩시');assert.ok(one.$('analysis-selection-status').textContent.includes('한 명'));
  one.select('opponent2','동글');assert.equal(one.$('analysis-selection-status').hidden,true);
- assert.equal(one.$('analysis-result').hidden,true);assert.equal(one.$('analysis-result').children.length,0);assert.equal(one.$('ai-analyze').textContent,'분석하기');
+ assert.equal(one.$('analysis-result').hidden,true);assert.equal(one.$('analysis-result').children.length,0);assert.equal(one.$('ai-analyze').textContent,'분석하기 🧑‍🔬');
  await Promise.all(one.$('ai-analyze').click());await one.flush();
  for(const title of ['상대 페어 한눈에 보기','주의할 점','대응방안','공략할 상황'])assert.ok(one.$('analysis-result').textContent.includes(title));
  assert.equal(one.$('ai-analyze').disabled,false);

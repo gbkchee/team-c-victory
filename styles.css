@@ -268,6 +268,10 @@ body.player-detail-open > .skip-link { display: none; }
 .keyword-suggestion:disabled, .keyword-suggestion[aria-disabled="true"] { opacity: .55; }
 .keyword-suggestion[data-selected="true"] { opacity: 1; border-color: var(--navy); background: var(--white); color: var(--navy); }
 .keyword-suggestion[data-custom="true"] { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; touch-action: pan-y; }
+.keyword-custom-suggestion { display: inline-flex; max-width: 100%; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.keyword-custom-suggestion > .keyword-suggestion { min-width: 0; overflow-wrap: anywhere; border-radius: 10px 0 0 10px; }
+.suggestion-delete { flex-shrink: 0; min-width: 44px; min-height: 44px; padding: 6px 10px; border: 1px solid #e5e7eb; border-left: 0; border-radius: 0 10px 10px 0; background: #f3f4f6; color: #b63730; font-size: 12px; }
+.suggestion-delete:hover, .suggestion-delete:focus-visible { background: #fff1ef; }
 .keyword-suggestion.suggestion-holding { border-color: #d9473d; background: #fff1ef; color: #d9473d; }
 .keyword-delete-help { margin: 10px 0 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
 .editor-footer { gap: 6px; padding: 28px 20px max(28px,env(safe-area-inset-bottom)); margin: 0; }

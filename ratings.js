@@ -235,7 +235,7 @@ if(typeof document!=='undefined')(() => {
  }
 
  function suggestionDeletion(button,kind,text,statusId){
-  const playerId=current;let timer=null,origin=null,suppressClick=false,deleting=false;
+  const playerId=current;let timer=null,origin=null,suppressClick=false,deleting=false,touching=false;
   const cancel=()=>{clearTimeout(timer);timer=null;button.classList.remove('suggestion-holding');};
   async function removeSuggestion(){
    cancel();if(deleting||document.hidden||!editorOpen||current!==playerId||!button.isConnected)return;
@@ -246,26 +246,40 @@ if(typeof document!=='undefined')(() => {
     const cloud=window.PLAYER_PROFILE_CLOUD;
     if(!cloud?.deleteSuggestion)throw new Error('팀 공유 저장소 연결 후 항목을 삭제할 수 있어요.');
     await cloud.deleteSuggestion(kind,text);
-    report('공용 추천에서 삭제했습니다. 선수에게 선택한 기록은 유지됩니다.');
+    report('공용 추천에서 삭제했습니다. 선수 기록은 위의 × 버튼으로 삭제할 수 있어요.');
    }catch(error){report(error.code==='permission-denied'?'항목을 삭제하지 못했습니다. 최신 Firestore 규칙을 적용해 주세요.':error.message||'항목을 삭제하지 못했습니다. 다시 시도해 주세요.',true);}
    finally{deleting=false;}
   }
-  button.dataset.custom='true';button.title='길게 눌러 등록 항목 삭제 · 키보드 Delete 키로도 삭제할 수 있어요';
+  button.dataset.custom='true';button.title='길게 누르거나 옆의 삭제 버튼으로 공용 추천 삭제';
+  function startPress(x,y){
+   cancel();suppressClick=false;origin={x,y};button.classList.add('suggestion-holding');timer=setTimeout(removeSuggestion,650);
+  }
+  function movePress(x,y){if(timer&&origin&&Math.hypot(x-origin.x,y-origin.y)>10){suppressClick=true;cancel();}}
   button.addEventListener('pointerdown',event=>{
-   if(event.isPrimary===false||(event.button!==undefined&&event.button!==0))return;
-   cancel();suppressClick=false;origin={x:event.clientX,y:event.clientY};button.classList.add('suggestion-holding');
-   timer=setTimeout(removeSuggestion,650);
+   if(event.pointerType==='touch'||event.isPrimary===false||(event.button!==undefined&&event.button!==0))return;
+   startPress(event.clientX,event.clientY);
   });
-  button.addEventListener('pointermove',event=>{if(timer&&origin&&Math.hypot(event.clientX-origin.x,event.clientY-origin.y)>10){suppressClick=true;cancel();}});
-  for(const type of ['pointerup','pointercancel','pointerleave','lostpointercapture'])button.addEventListener(type,()=>{if(type==='pointercancel')suppressClick=true;cancel();});
-  button.addEventListener('blur',cancel);
+  button.addEventListener('pointermove',event=>{if(event.pointerType!=='touch')movePress(event.clientX,event.clientY);});
+  for(const type of ['pointerup','pointercancel','pointerleave','lostpointercapture'])button.addEventListener(type,event=>{if(event.pointerType==='touch')return;if(type==='pointercancel')suppressClick=true;cancel();});
+  // Safari may cancel pointer events for a native long-press while the touch is still held.
+  button.addEventListener('touchstart',event=>{
+   if(event.touches.length!==1){suppressClick=true;cancel();return;}
+   touching=true;startPress(event.touches[0].clientX,event.touches[0].clientY);
+  },{passive:true});
+  button.addEventListener('touchmove',event=>{
+   if(event.touches.length!==1){suppressClick=true;cancel();return;}
+   movePress(event.touches[0].clientX,event.touches[0].clientY);
+  },{passive:true});
+  button.addEventListener('touchend',event=>{if(suppressClick||deleting)event.preventDefault();touching=false;cancel();},{passive:false});
+  button.addEventListener('touchcancel',()=>{touching=false;suppressClick=true;cancel();},{passive:true});
+  button.addEventListener('blur',()=>{if(!touching)cancel();});
   button.addEventListener('contextmenu',event=>{event.preventDefault();});
   button.addEventListener('keydown',event=>{
    if(event.key==='Delete'||event.key==='Backspace'){event.preventDefault();void removeSuggestion();}
    else if(event.key==='Escape')cancel();
    else if(event.key==='Enter'||event.key===' ')suppressClick=false;
   });
-  return ()=>{const suppress=suppressClick||deleting;suppressClick=false;return suppress;};
+  return {remove:removeSuggestion,suppressClick:()=>{const suppress=suppressClick||deleting;suppressClick=false;return suppress;}};
  }
  function keywordEditor({title,step,items,total,own,kind,draft,suggestions,addItem,removeItem}){
   const prefix=own?'profile-trait':'profile-keyword',suffix=own?'':'-'+kind;
@@ -309,15 +323,20 @@ if(typeof document!=='undefined')(() => {
    const selected=items.includes(text),button=el('button','keyword-suggestion',selected?'✓ '+text:'＋ '+text);button.type='button';
    const custom=!(own?traitSuggestions:keywordSuggestions[kind]).includes(text),atLimit=!selected&&total>=20;
    button.disabled=atLimit&&!custom;button.dataset.selected=String(selected);button.setAttribute('aria-pressed',String(selected));button.setAttribute('aria-disabled',String(atLimit));
-   const suppressClick=custom?suggestionDeletion(button,own?'trait':kind,text,status.id):()=>false;
+   const deletion=custom?suggestionDeletion(button,own?'trait':kind,text,status.id):null;
    button.addEventListener('click',event=>{
-    if(suppressClick()||atLimit){event.preventDefault?.();return;}
+    if(deletion?.suppressClick()||atLimit){event.preventDefault?.();return;}
     const active=document.activeElement;
     if(editor.contains(active)&&active.type==='text')active.blur();
     if(selected)removeItem(text);else addItem(text,false);
-   });quick.append(button);
+   });
+   if(custom){
+    const item=el('span','keyword-custom-suggestion'),remove=el('button','suggestion-delete','삭제');remove.type='button';
+    remove.setAttribute('aria-label',title+' '+text+' 공용 추천에서 삭제');remove.title='공용 추천에서 삭제 · 선수에게 선택한 기록은 유지';
+    remove.addEventListener('click',()=>{void deletion.remove();});item.append(button,remove);quick.append(item);
+   }else quick.append(button);
   }
-  section.append(list,form,help,status,el('p','keyword-recommendation-label','추천 · 추가하기 전에는 기록되지 않아요'),quick,el('p','keyword-delete-help','직접 등록한 추천 항목은 길게 눌러 삭제할 수 있어요.'));refresh();return section;
+  section.append(list,form,help,status,el('p','keyword-recommendation-label','추천 · 추가하기 전에는 기록되지 않아요'),quick,el('p','keyword-delete-help','직접 등록한 추천 항목은 길게 누르거나 옆의 삭제 버튼으로 공용 목록에서 제거할 수 있어요.'));refresh();return section;
  }
  function renderTraits(){
   const draft=$('profile-trait-text')?.value||'',parent=$('team-profile-fields');$('team-traits')?.remove();

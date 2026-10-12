@@ -11,7 +11,7 @@
   weak:['몸쪽 공','높은 백핸드','낮은 발리','빠른 서브 리턴','로브 대처','짧은 공 처리','포핸드','백핸드'],
   note:['왼손잡이','키가 큼','슬라이스 서브','로브 잘 함','탑스핀','베이스라인 긴 공']
  };
- const traitSuggestions=['왼손잡이','키가 큼','슬라이스 서브','로브 잘 함','탑스핀','베이스라인 긴 공','킥서브','네트에 자주 붙음','긴 랠리가 편함','파트너와 콜을 많이 함','초반에 몸이 늦게 풀림','안정적 연결','전술가','칭찬과 응원'];
+ const traitSuggestions=[...keywordSuggestions.note];
  const cleanText=text=>typeof text==='string'?text.normalize('NFC').trim().replace(/\s+/g,' '):'';
  function cleanTraits(raw){
   if(!Array.isArray(raw))return [];

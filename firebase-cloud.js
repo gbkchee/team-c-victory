@@ -66,13 +66,16 @@ function publishProfiles(){
  notifyStatus('ready');
 }
 function publishSuggestions(){
- const traits=[...new Set([...records.suggestions.values()].filter(item=>!item.deleted).map(item=>item.text).filter(text=>typeof text==='string'))].sort();
- emit('playertraitssuggestionschange',{suggestions:traits});
  const suggestions={};
  for(const item of records.keywords.values())if(!item.deleted&&Object.hasOwn(window.PLAYER_PROFILE_MODEL.keywordKinds,item.kind)&&typeof item.text==='string'){
   (suggestions[item.kind]??=[]).push(item.text);
  }
  for(const kind of Object.keys(suggestions))suggestions[kind]=[...new Set(suggestions[kind])].sort();
+ const features=[...records.suggestions.values(),...[...records.keywords.values()].filter(item=>item.kind==='note')];
+ const deleted=new Set(features.filter(item=>item.deleted).map(item=>item.text));
+ const sharedFeatures=[...new Set(features.filter(item=>!deleted.has(item.text)&&typeof item.text==='string').map(item=>item.text))].sort();
+ suggestions.note=sharedFeatures;
+ emit('playertraitssuggestionschange',{suggestions:sharedFeatures});
  emit('playerkeywordsuggestionschange',{suggestions});
 }
 async function createIfMissing(ref,id,data,timestamp='updatedAt'){
@@ -87,6 +90,9 @@ async function addSuggestions(raw,id){
   :raw.keywords.map(item=>({ref:refs.keywords,records:records.keywords,text:item.text,data:item}));
  for(const entry of entries){
   const key='s_'+model.fingerprint(entry.data);
+  const feature=entry.data.kind===undefined||entry.data.kind==='note';
+  const known=feature?[...records.suggestions.values(),...[...records.keywords.values()].filter(item=>item.kind==='note')]:[...entry.records.values()].filter(item=>item.kind===entry.data.kind);
+  if(known.some(item=>item.text===entry.text&&item.deleted))continue;
   if(!entry.records.has(key)){
    await createIfMissing(entry.ref,key,entry.data,'createdAt');
    entry.records.set(key,entry.data);
@@ -99,14 +105,33 @@ async function setSuggestionDeleted(kind,text,deleted){
  if(text!==model.cleanText(text)||!text||text.length>40||!(kind==='trait'||Object.hasOwn(model.keywordKinds,kind)))throw new Error('등록 항목을 확인해 주세요.');
  const defaults=kind==='trait'?model.traitSuggestions:model.keywordSuggestions[kind];
  if(defaults.includes(text)){if(deleted)throw new Error('기본 추천 항목은 삭제할 수 없어요.');return;}
- const data=kind==='trait'?{text}:{kind,text},ref=kind==='trait'?refs.suggestions:refs.keywords,target=doc(ref,'s_'+model.fingerprint(data));
- await runTransaction(db,async transaction=>{
-  const snapshot=await transaction.get(target),existing=snapshot.data();
-  if(!snapshot.exists()){if(!deleted)transaction.set(target,{...data,createdAt:serverTimestamp()});return;}
-  if(Boolean(existing.deleted)===deleted)return;
-  // Keep a deletion marker so profile saves and migration cannot recreate the suggestion.
-  transaction.set(target,{...existing,deleted,updatedAt:serverTimestamp()});
+ const data=kind==='trait'?{text}:{kind,text},sources=[{key:kind==='trait'?'suggestions':'keywords',data}];
+ if(kind==='trait')sources.push({key:'keywords',data:{kind:'note',text}});
+ else if(kind==='note')sources.push({key:'suggestions',data:{text}});
+ const collections=await Promise.all(sources.map(source=>getDocs(refs[source.key])));
+ const targets=sources.flatMap((source,index)=>collections[index].docs.filter(item=>item.data().text===text&&item.data().kind===source.data.kind).map(item=>({...source,id:item.id})));
+ const missing=()=>new Error('등록 항목을 찾지 못했습니다. 목록을 새로고침한 뒤 다시 시도해 주세요.');
+ if(deleted&&!targets.length)throw missing();
+ // Older suggestions used a different hash. Match the actual documents, including duplicates.
+ if(!targets.length)targets.push({...sources[0],id:'s_'+model.fingerprint(data)});
+ const updates=await runTransaction(db,async transaction=>{
+  const snapshots=await Promise.all(targets.map(target=>transaction.get(doc(refs[target.key],target.id)))),updates=[];
+  for(const [index,snapshot] of snapshots.entries()){
+   const existing=snapshot.data(),{key,id,data}=targets[index],target=doc(refs[key],id);
+   if(!snapshot.exists()){
+    if(!deleted){const value={...data,createdAt:serverTimestamp()};transaction.set(target,value);updates.push({key,id,value});}
+    continue;
+   }
+   if(existing.text!==text||existing.kind!==data.kind)continue;
+   const value=Boolean(existing.deleted)===deleted?existing:{...existing,deleted,updatedAt:serverTimestamp()};
+   if(value!==existing)transaction.set(target,value);
+   updates.push({key,id,value});
+  }
+  if(deleted&&!updates.length)throw missing();
+  return updates;
  });
+ for(const {key,id,value} of updates)records[key].set(id,value);
+ publishSuggestions();
 }
 state.deleteSuggestion=(kind,text)=>setSuggestionDeleted(kind,text,true);
 state.registerSuggestion=(kind,text)=>setSuggestionDeleted(kind,text,false);
