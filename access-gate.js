@@ -10,7 +10,7 @@
  function clearError(){for(const input of inputs)input.removeAttribute('aria-invalid');message('');}
  function loadScript(src,type){
   return new Promise((resolve,reject)=>{
-   const script=document.createElement('script');script.src=src;if(type)script.type=type;
+   const script=document.createElement('script');script.async=false;script.src=src;if(type)script.type=type;
    script.onload=resolve;script.onerror=()=>reject(new Error('App script failed to load'));document.head.append(script);
   });
  }
@@ -37,7 +37,8 @@
    for(const input of inputs)input.value='';
    if(hash!==codeHash){for(const input of inputs)input.setAttribute('aria-invalid','true');message('음… 다시 생각해 보세요.',true);window.dispatchEvent(new CustomEvent('teamentryinvalid'));return;}
    message('팀 전략보드를 불러오고 있습니다.');
-   try{for(const src of scripts)await loadScript(src);}
+   // Download together; async=false keeps classic scripts in dependency order.
+   try{await Promise.all(scripts.map(src=>loadScript(src)));}
    catch{loadFailed=true;button.textContent='다시 시도';message('화면을 불러오지 못했습니다. 다시 시도해 주세요.',true);return;}
    accepted=true;app.hidden=false;app.inert=false;app.removeAttribute('aria-hidden');gate.hidden=true;document.body.classList.remove('entry-open');
    window.dispatchEvent(new CustomEvent('teamentryready'));
@@ -53,7 +54,7 @@
   if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
   else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
  });
- focus(0);
+ gate.focus({preventScroll:true});
 })();
 
 (() => {

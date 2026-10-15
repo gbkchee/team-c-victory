@@ -118,7 +118,7 @@ test('직접 선수 링크도 답변 확인 뒤에 열리고 원래 선택을 �
  for(const mobile of [false,true]){
   const view=browser(firestoreFixture(),{hash:'#page=players&player=C%3A우디',mobile,enter:false});await view.flush();
   assert.equal(view.$('access-gate').hidden,false);assert.equal(view.document.body.classList.contains('entry-open'),true);
-  assert.notEqual(view.$('ratings-panel').open,true);assert.equal(view.document.activeElement,view.$('access-code-0'));
+  assert.notEqual(view.$('ratings-panel').open,true);assert.equal(view.document.activeElement,view.$('access-gate'));
   [...'testcv'].forEach((value,index)=>{view.$('access-code-'+index).value=value;});
   await Promise.all(view.$('access-form').dispatchEvent({type:'submit',preventDefault(){}}));await view.flush();
   assert.equal(view.$('access-gate').hidden,true);assert.equal(view.document.body.classList.contains('entry-open'),false);

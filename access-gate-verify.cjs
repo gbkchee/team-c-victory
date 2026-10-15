@@ -11,12 +11,12 @@ class Target {
  focus(){this.document.activeElement=this;}
  select(){}
 }
-function browser({motion=false,reduced=false,failScript='',secure=true,delayDigest=false}={}){
+function browser({motion=false,reduced=false,failScript='',secure=true,delayDigest=false,delayScripts=false}={}){
  const document=new Target(),window=new Target(),nodes=new Map(),frames=new Map(),timers=new Map(),media=new Target(),scripts=[];let sequence=0,entered=0,rejected=0,reloaded=false,release,timerNow=0;
  const classes=new Set(['entry-open']);document.body={classList:{remove:name=>classes.delete(name)}};
  for(const [,id] of html.matchAll(/\bid="([^"]+)"/g)){const node=new Target();node.document=document;nodes.set(id,node);}
  document.getElementById=id=>{assert.ok(nodes.has(id),'Element missing: '+id);return nodes.get(id);};
- document.createElement=()=>new Target();document.head={append(script){scripts.push(script);queueMicrotask(()=>failScript&&script.src.startsWith(failScript)?script.onerror():script.onload());}};
+ document.createElement=()=>new Target();document.head={append(script){scripts.push(script);if(!delayScripts)queueMicrotask(()=>failScript&&script.src.startsWith(failScript)?script.onerror():script.onload());}};
  nodes.get('team-app').hidden=true;nodes.get('team-app').inert=true;nodes.get('team-app').attributes['aria-hidden']='true';nodes.get('player-detail-page').hidden=true;
  media.matches=reduced;window.matchMedia=()=>media;window.location={hash:'#page=analysis&team=D&p1=아르&p2=스노',reload(){reloaded=true;}};
  if(motion){window.requestAnimationFrame=callback=>{const id=++sequence;frames.set(id,callback);return id;};window.cancelAnimationFrame=id=>frames.delete(id);}
@@ -35,7 +35,11 @@ test('minimal entry keeps the court, six code slots, and entry button',()=>{
  assert.match(intro,/>코드 입력</);assert.match(intro,/>입장하기 /);
  assert.equal((intro.match(/class="access-code-digit"/g)||[]).length,6);assert.match(intro,/viewBox="0 0 941 1672"/);
  assert.doesNotMatch(intro,/어디서 오셨어요|답변 입력|C조 아닌|C조 전용|스파이 OUT|코드 문의/);assert.match(source,/const codeHash='[a-f0-9]{64}'/);
- assert.deepEqual([...html.matchAll(/<script\b[^>]*src="([^"]+)"/g)].map(match=>match[1]),['access-gate.js?v=20261015-5']);
+ assert.deepEqual([...html.matchAll(/<script\b[^>]*src="([^"]+)"/g)].map(match=>match[1]),['access-gate.js?v=20261015-6']);
+});
+test('entry focuses the dialog without opening an input keyboard',()=>{
+ const view=browser();assert.equal(view.document.activeElement,view.nodes.get('access-gate'));
+ assert.match(html,/<section id="access-gate"[^>]*tabindex="-1"/);assert.doesNotMatch(html,/\bautofocus\b/);
 });
 test('empty, partial, and wrong answers cannot load app data or Firebase',async()=>{
  const view=browser();assert.equal(view.scripts.length,0);
@@ -55,6 +59,17 @@ test('correct answer loads dependencies once, enters, and preserves the selected
  assert.equal(view.document.activeElement,view.nodes.get('main-content'));assert.equal(view.nodes.get('access-code-0').value,'');
  await view.submit(answer);assert.equal(view.entered(),1);assert.equal(view.scripts.length,10);
  assert.equal(browser().nodes.get('access-gate').hidden,false);
+});
+test('all core downloads start together, preserve execution order, and finish before entry',async()=>{
+ const view=browser({delayScripts:true}),entry=view.submit(answer);
+ for(let i=0;i<100&&view.scripts.length===0;i++)await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(view.scripts.length,9);assert.ok(view.scripts.every(script=>script.async===false));
+ assert.equal(view.nodes.get('team-app').hidden,true);
+ // Network completion order can differ from the scripts' execution order.
+ for(const script of view.scripts.slice(1).reverse())script.onload();
+ await Promise.resolve();assert.equal(view.entered(),0);assert.equal(view.scripts.length,9);
+ view.scripts[0].onload();await entry;
+ assert.equal(view.entered(),1);assert.equal(view.scripts.length,10);assert.equal(view.scripts.at(-1).type,'module');
 });
 test('authentication reveals a directly linked player dialog and focuses its heading',async()=>{
  const view=browser();view.window.addEventListener('teamentryready',()=>{view.nodes.get('ratings-panel').open=true;});
