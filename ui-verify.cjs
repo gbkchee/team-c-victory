@@ -8,7 +8,8 @@ class EventTarget {
  dispatchEvent(event){event.target??=this;const results=[];for(const entry of [...(this.listeners.get(event.type)||[])]){if(entry.once)this.listeners.set(event.type,this.listeners.get(event.type).filter(item=>item!==entry));results.push(entry.callback(event));}return results;}
 }
 class Element extends EventTarget {
- constructor(tag,document){super();this.tagName=tag.toUpperCase();this.document=document;this.children=[];this.parentNode=null;this.attributes={};this.dataset={};this.className='';this.id='';this.value='';this.disabled=false;this.hidden=false;this._text='';this.classList={add:name=>{this.className+=' '+name;},remove:name=>{this.className=this.className.split(' ').filter(item=>item!==name).join(' ');}};}
+ constructor(tag,document){super();this.tagName=tag.toUpperCase();this.document=document;this.children=[];this.parentNode=null;this.attributes={};this.dataset={};this.className='';this.id='';this.value='';this.disabled=false;this.hidden=false;this._text='';this.classList={add:name=>{this.className+=' '+name;},remove:name=>{this.className=this.className.split(' ').filter(item=>item!==name).join(' ');},contains:name=>this.className.split(' ').includes(name)};}
+ removeAttribute(key){delete this.attributes[key];}
  setAttribute(key,value){this.attributes[key]=String(value);if(key==='id')this.id=value;if(key==='class')this.className=value;if(key==='value')this.value=value;if(key==='hidden'||key==='disabled')this[key]=true;if(key.startsWith('data-'))this.dataset[key.slice(5).replace(/-([a-z])/g,(_,c)=>c.toUpperCase())]=value;}
  getAttribute(key){return this.attributes[key];}
  append(...nodes){for(const node of nodes){node.remove();node.parentNode=this;this.children.push(node);}}
@@ -39,9 +40,9 @@ function documentFixture(){
  for(const match of read('index.html').matchAll(/<\/?([a-z][\w-]*)\b([^>]*)>|([^<]+)/gi)){
   if(match[3]){stack.at(-1)._text+=match[3].trim();continue;}
   if(match[0].startsWith('</')){if(stack.length>1)stack.pop();continue;}
-  const tag=match[1].toLowerCase();if(tag==='body'||tag==='html'||tag==='head')continue;
+  const tag=match[1].toLowerCase();if(tag==='body'){for(const attribute of match[2].matchAll(/([\w-]+)(?:="([^"]*)")?/g))document.body.setAttribute(attribute[1],attribute[2]??'');continue;}if(tag==='html'||tag==='head')continue;
   const node=document.createElement(tag);for(const attribute of match[2].matchAll(/([\w-]+)(?:="([^"]*)")?/g))node.setAttribute(attribute[1],attribute[2]??'');
-  stack.at(-1).append(node);if(!voidTags.has(tag))stack.push(node);
+  stack.at(-1).append(node);if(!voidTags.has(tag)&&!match[0].endsWith('/>'))stack.push(node);
  }
  return document;
 }
@@ -60,7 +61,7 @@ function firestoreFixture(){
  };
  return {entries,api,broadcast};
 }
-function browser(store,{saved={},hash='',siteKey='fixture-public-site-key',mobile=false,fragmentDelay=0}={}){
+function browser(store,{saved={},hash='',siteKey='fixture-public-site-key',mobile=false,fragmentDelay=0,enter=true}={}){
  const document=documentFixture(),window=new EventTarget(),storage=new Map(Object.entries(saved)),timers=new Map();let clock=0,sequence=0;
  let locationHash=hash;
  const location={get hash(){return locationHash;},set hash(value){changeFragment(value,false);},href:'https://gbkchee.github.io/team-c-victory/'+hash,replace:value=>changeFragment(value,true)};
@@ -89,6 +90,10 @@ function browser(store,{saved={},hash='',siteKey='fixture-public-site-key',mobil
   postMessage(message){context.setTimeout(()=>{if(!this.stopped)this.onmessage({data:{generation:message.generation,plans:window.PAIRING_MODEL.generate(window.BOARD_DATA,message.profiles,message.options)}});},0);}
  };
  vm.createContext(context);for(const file of ['data.js','profile-model.js','ratings.js','pairing-model.js','tactics-data.js','gemini-config.js','gemini-analysis.js','app.js'])vm.runInContext(read(file),context,{filename:file});
+ document.head={append:script=>queueMicrotask(()=>script.onload())};
+ const entryHash=crypto.createHash('sha256').update('testcv').digest('hex');
+ vm.runInContext(read('access-gate.js').replace(/const codeHash='[^']*'/,"const codeHash='"+entryHash+"'"),context,{filename:'access-gate.js'});
+ if(enter){[...'testcv'].forEach((value,index)=>{document.getElementById('access-code-'+index).value=value;});document.getElementById('access-form').dispatchEvent({type:'submit',preventDefault(){}});}
  window.GEMINI_CONFIG={...window.GEMINI_CONFIG,appCheckSiteKey:siteKey};
  vm.runInContext(read('firebase-cloud.js').replace(/^import .*;\n/gm,'').replace(/\bimport\(/g,'fixtureImport('),context,{filename:'firebase-cloud.js'});
  const flush=async()=>{for(let i=0;i<2500;i++)await Promise.resolve();};
@@ -109,6 +114,19 @@ function pointerEvent(button,type,detail={}){button.dispatchEvent({type,button:0
 function touchEvent(button,type,touches=[{clientX:0,clientY:0}]){
  const event={type,touches,defaultPrevented:false,preventDefault(){this.defaultPrevented=true;}};button.dispatchEvent(event);return event;
 }
+test('직접 선수 링크도 답변 확인 뒤에 열리고 원래 선택을 유지한다',async()=>{
+ for(const mobile of [false,true]){
+  const view=browser(firestoreFixture(),{hash:'#page=players&player=C%3A우디',mobile,enter:false});await view.flush();
+  assert.equal(view.$('access-gate').hidden,false);assert.equal(view.document.body.classList.contains('entry-open'),true);
+  assert.notEqual(view.$('ratings-panel').open,true);assert.equal(view.document.activeElement,view.$('access-code-0'));
+  [...'testcv'].forEach((value,index)=>{view.$('access-code-'+index).value=value;});
+  await Promise.all(view.$('access-form').dispatchEvent({type:'submit',preventDefault(){}}));await view.flush();
+  assert.equal(view.$('access-gate').hidden,true);assert.equal(view.document.body.classList.contains('entry-open'),false);
+  assert.equal(view.$('team-app').inert,false);assert.equal(new URLSearchParams(view.location.hash.slice(1)).get('player'),'C:우디');
+  assert.equal(mobile?!view.$('player-detail-page').hidden:view.$('ratings-panel').open,true);
+  assert.equal(view.document.activeElement,view.$('rating-player-info'));
+ }
+});
 test('새 입력 화면, 기존 데이터 이관, 20개 제한과 두 기기 실시간 공유',async()=>{
  const store=firestoreFixture(),one=browser(store,{saved:{'courtside.player-profiles.v3':JSON.stringify({'C:우디':{position:'fore',confidentSkills:['serve'],traits:['왼손잡이']}})}});
  await one.flush();assert.equal(one.window.PLAYER_PROFILE_CLOUD.status,'ready');assert.equal(store.entries.size>=39,true);

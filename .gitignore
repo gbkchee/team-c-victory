@@ -6,6 +6,7 @@ node_modules/
 *.log
 *.zip
 *.png
+!assets/entry-minimi.png
 C-team-kakao.html
 
 .firebase/
