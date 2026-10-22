@@ -481,9 +481,7 @@ body[data-page="strategy"] main { padding: 24px; }
 .player-partners-title { font-size: 14px; }.player-partners-description { margin: 5px 0 18px; font-size: 11px; color: #587383; line-height: 1.6; }.recommendation-players { gap: 10px; margin-bottom: 0; }
 .schedule-shortcut { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 20px; padding: 20px; border: 1px solid #d2dfe6; border-radius: 16px; background: white; }.schedule-shortcut h3 { margin: 0; font-size: 14px; }.schedule-shortcut p { margin: 6px 0 0; color: #587383; font-size: 11px; }.schedule-shortcut button { font-size: 12px; }
 .schedule-management { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 12px 4px; border: 0; background: transparent; font-size: 12px; color: #587383; }
-.schedule-modal-open { overflow: hidden; }
 .schedule-dialog { width: min(928px,calc(100vw - 48px)); max-width: none; max-height: calc(100dvh - 48px); padding: 0; border: 0; border-radius: 18px; background: white; color: #002d40; box-shadow: 0 18px 56px #001e3540; overflow: hidden; }
-.schedule-dialog[open] { display: flex; flex-direction: column; }.schedule-dialog::backdrop { background: #002d4070; }
 .schedule-dialog-header { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; padding: 20px 24px; border-bottom: 1px solid #e8eff3; }.schedule-title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }.schedule-title-row h2 { font-size: 22px; line-height: 1.5; }#schedule-dialog-badge { padding: 4px 9px; border-radius: 6px; background: #f0f5fc; color: #587383; font-size: 11px; font-weight: 700; }#schedule-dialog-subtitle { margin: 4px 0 0; color: #587383; font-size: 12px; }
 #schedule-close { display: grid; place-items: center; flex-shrink: 0; width: 32px; min-height: 32px; padding: 6px; border: 0; background: transparent; }
 .schedule-scroll { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 24px; }
@@ -567,3 +565,14 @@ body[data-page] .page-tabs { height: 61px; }body[data-page] .page-tab { font-siz
 .schedule-dialog .matrix-match,.schedule-dialog .matrix-match:hover { border: 0; background: transparent; box-shadow: none; }
 .schedule-dialog .matrix-match:not(.drag-source):not(.drop-valid):not(.drop-invalid):focus-visible { outline: none; }
 .schedule-dialog .matrix-match.drop-valid { outline: 3px solid #29724e; background: #e5f6ec; }.schedule-dialog .matrix-match.drop-invalid { outline: 3px solid #b73a36; background: #fff0ef; }
+
+/* Schedule routes use the document scroll, including during drag exchanges. */
+body[data-page="schedule"] main { max-width: 976px; padding: 0 24px 32px; }
+.schedule-dialog { width: 100%; max-width: none; max-height: none; border-radius: 0; box-shadow: none; overflow: visible; }
+.schedule-dialog:not([hidden]) { display: flex; flex-direction: column; }
+.schedule-dialog .schedule-scroll { overflow: visible; overscroll-behavior: auto; }
+.schedule-dialog-header { gap: 16px; }
+#schedule-close { flex-shrink: 0; min-height: 44px; padding: 8px 12px; width: auto; font-size: 13px; }
+.schedule-dialog-footer { position: sticky; bottom: 0; z-index: 10; background: white; box-shadow: 0 -5px 16px #002d4008; }
+.official-team-line[data-team="C"] { padding: 5px; border-radius: 5px; background: #edf5f8; border: 0; }
+@media(max-width:700px) { body[data-page="schedule"] main { padding: 0 8px 20px; }.schedule-dialog { width: 100%; max-height: none; border-radius: 0; }.schedule-dialog-header { padding: 16px 8px; }.schedule-dialog-footer { padding: 12px 8px; } }

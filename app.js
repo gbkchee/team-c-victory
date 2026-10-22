@@ -59,15 +59,17 @@ if(typeof document!=='undefined')(() => {
   const q=navigation.params();let fixed=[],sharedPairs=null;
   try{const parsed=JSON.parse(q.get('fixed')||'[]');if(Array.isArray(parsed)&&parsed.length<=20&&parsed.every(item=>pairing.legalPair(data,item)))fixed=parsed;}catch{}
   try{sharedPairs=canonicalPairs(JSON.parse(q.get('pairs')||'null'));}catch{}
-  const legacyVariant=q.has('strategy')?(q.get('strategy')==='win'?2:Math.min(1,Number(q.get('variant')||0))):Number(q.get('variant')||0);
-  state={page:['players','strategy','analysis'].includes(q.get('page'))?q.get('page'):'players',
-   mode:['free','partial'].includes(q.get('mode'))?q.get('mode'):'free',fixedPairs:fixed,variant:Math.max(0,Math.min(1,legacyVariant)||0),sharedPairs,
+  const legacyVariant=q.has('strategy')?(q.get('strategy')==='win'?2:Math.min(4,Number(q.get('variant')||0))):Number(q.get('variant')||0);
+  state={page:['players','strategy','analysis','schedule'].includes(q.get('page'))?q.get('page'):'players',
+   schedule:q.get('schedule')==='edit'?'edit':'shared',origin:['players','strategy','analysis'].includes(q.get('origin'))?q.get('origin'):'strategy',
+   mode:['free','partial'].includes(q.get('mode'))?q.get('mode'):'free',fixedPairs:fixed,variant:Math.max(0,Math.min(4,legacyVariant)||0),sharedPairs,
    view:['draft','confirmed'].includes(q.get('view'))?q.get('view'):'auto',filter:['A','B','D'].includes(q.get('filter'))?q.get('filter'):'all',team:['A','B','D'].includes(q.get('team'))?q.get('team'):'',
    p1:q.get('p1')||'',p2:q.get('p2')||''};
   [state.p1,state.p2]=cleanPair(state.team,state.p1,state.p2);
  }
  function writeHash(push=false){
   const q=new URLSearchParams({page:state.page,mode:state.mode,variant:String(state.variant),view:state.view,filter:state.filter});
+  if(state.page==='schedule'){q.set('schedule',state.schedule);q.set('origin',state.origin);}
   if(state.mode==='partial')q.set('fixed',JSON.stringify(state.fixedPairs));
   const shared=pendingSharedPairs||canonicalPairs(selectedPlan)||state.sharedPairs;if(shared)q.set('pairs',JSON.stringify(shared));
   for(const key of ['team','p1','p2'])if(state[key])q.set(key,state[key]);
@@ -183,6 +185,7 @@ if(typeof document!=='undefined')(() => {
   }
   if(editedPlans.size||confirmedDraft)confirmationMessage='선수 정보 또는 운영 조건이 변경되어 저장하지 않은 경기 교환 초안을 비웠습니다. 확정표는 유지됩니다.';
   requestKey=key;generation++;visibleRecommendation=0;plans=[];selectedPlan=null;pendingSharedPairs=null;nextCursor=null;cursorExcludePairs=[];hasMore=false;searchLimited=false;editedPlans.clear();confirmedDraft=null;recommendationError='';
+  if(scheduleSession){scheduleSession.requestKey=requestKey;scheduleSession.edits=new Map();scheduleSession.confirmedDraft=null;}
   selectionTargetKey=compositionKey(state.sharedPairs);
   requestRecommendations({action:'initial',initial:true,sharedPairs:state.sharedPairs});
  }
@@ -234,6 +237,7 @@ if(typeof document!=='undefined')(() => {
  }
  function renderPage(){
   document.body.dataset.page=state.page;
+  $('site-header').hidden=state.page==='schedule'||document.body.classList.contains('player-detail-open');$('schedule-dialog').hidden=state.page!=='schedule';
   document.querySelector('.brand img').src=state.page==='players'?'assets/roster-club-emblem.svg':state.page==='strategy'?'assets/pair-main-diamond.svg':'assets/club-emblem.svg';
   const brandImage=document.querySelector('.brand img');brandImage.width=state.page==='strategy'?12:28;brandImage.height=state.page==='strategy'?12:28;const menuImage=$('menu-toggle').querySelector('img');menuImage.src=state.page==='analysis'?'assets/analysis-ellipsis.svg':state.page==='strategy'?'assets/pair-main-menu.svg':'assets/ellipsis.svg';menuImage.width=state.page==='analysis'?44:state.page==='strategy'?22:24;menuImage.height=menuImage.width;
   closeMenu();for(const tab of tabs){const selected=tab.dataset.page===state.page;tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;$(tab.getAttribute('aria-controls')).hidden=!selected;}$('share').hidden=state.page==='players';
@@ -265,29 +269,38 @@ if(typeof document!=='undefined')(() => {
  $('view-confirmed').addEventListener('click',showConfirmed);
  $('view-draft').addEventListener('click',()=>{state.view='draft';render();});
  $('confirm-lineup').addEventListener('click',async()=>{
-  const plan=activePlan(),cloud=window.PLAYER_PROFILE_CLOUD,edit=activeEdit(),sourceView=view(),sourceKey=draftKey();
+  const plan=activePlan(),cloud=window.PLAYER_PROFILE_CLOUD,edit=activeEdit(),sourceView=view(),sourceKey=draftKey(),savingSession=scheduleSession;
   if(!plan||savingLineup||cloud?.status!=='ready'||cloud.pendingCount>0||!cloud.lineupReady||(!edit&&sourceView!=='draft')||(sourceView==='draft'&&(calculating||plan.profileVersion!==cVersion())))return;
   const expectedRevision=edit?edit.baseRevision:lineupRevision();savingLineup=true;
   $('confirm-lineup').disabled=true;confirmationMessage='팀 출전표를 저장하고 있습니다.';$('lineup-status').textContent=confirmationMessage;
-  try{await cloud.saveLineup(plan,expectedRevision);if(sourceView==='confirmed'){if(confirmedDraft===edit)confirmedDraft=null;}else if(editedPlans.get(sourceKey)===edit)editedPlans.delete(sourceKey);confirmationMessage='팀 공통 출전표로 확정했습니다.';state.view='confirmed';}
-  catch(error){confirmationMessage=error.message;}finally{savingLineup=false;}renderStrategy();writeHash();if(confirmationMessage==='팀 공통 출전표로 확정했습니다.'&&$('schedule-dialog').open)closeSchedule(true);
+  try{await cloud.saveLineup(plan,expectedRevision);if(sourceView==='confirmed'){if(confirmedDraft===edit)confirmedDraft=null;}else if(editedPlans.get(sourceKey)===edit)editedPlans.delete(sourceKey);confirmationMessage='팀 공통 출전표로 확정했습니다.';if(savingSession)savingSession.committed=true;if(!savingSession||scheduleSession===savingSession)state.view='confirmed';}
+  catch(error){confirmationMessage=error.message;}finally{savingLineup=false;}renderStrategy();writeHash();if(confirmationMessage==='팀 공통 출전표로 확정했습니다.'&&state.page==='schedule'&&scheduleSession===savingSession)closeSchedule(true);
  });
- let visibleRecommendation=0,scheduleReadOnly=false,scheduleEmpty=false,scheduleSession=null,scheduleTrigger=null;
- function openSchedule(shared,trigger,editShared=false){
-  if($('schedule-dialog').open)closeSchedule(false);
-  const previousView=state.view;scheduleTrigger=trigger;scheduleReadOnly=shared;scheduleEmpty=shared&&!confirmed();
-  state.view=shared||editShared?'confirmed':'draft';
-  const key=draftKey();scheduleSession={previousView,view:view(),key,requestKey,edit:editedPlans.get(key),confirmedDraft,committed:false};
-  renderStrategy();$('schedule-dialog').showModal();document.body.classList.add('schedule-modal-open');$('schedule-close').focus();
+ let visibleRecommendation=0,scheduleReadOnly=false,scheduleEmpty=false,scheduleSession=null,scheduleTrigger=null,scheduleReturn=null;
+ function beginScheduleSession(shared,previousView=state.view){
+  scheduleReadOnly=shared;scheduleEmpty=shared&&!confirmed();
+  scheduleSession={previousView,requestKey,edits:new Map(editedPlans),confirmedDraft,committed:false};
  }
- function closeSchedule(committed=false){if(savingLineup)return;if(officialRecordEditor)$('official-record-dialog').close();if(scheduleSession)scheduleSession.committed=committed;clearDrag();$('schedule-dialog').close();finishScheduleSession();}
+ function openSchedule(shared,trigger,editShared=false){
+  if(state.page==='schedule')return;
+  writeHash();const returnTo={hash:navigation.params().toString(),scroll:window.scrollY||0,visibleRecommendation};
+  scheduleReturn=returnTo;scheduleTrigger=trigger;const previousView=state.view;
+  state.origin=state.page;state.page='schedule';state.schedule=shared?'shared':'edit';state.view=shared||editShared?'confirmed':'draft';
+  beginScheduleSession(shared,previousView);renderPage();renderStrategy();
+  const entry={...navigation.state(),teamcScheduleEntry:true,teamcScheduleReturn:returnTo};
+  writeHash(true);navigation.write(navigation.params(),{state:entry});window.scrollTo(0,0);$('schedule-close').focus();
+ }
+ function closeSchedule(committed=false){
+  if(savingLineup)return;if(scheduleSession)scheduleSession.committed=committed;
+  if(navigation.state()?.teamcScheduleEntry){navigation.back();return;}
+  const origin=state.origin,previousView=scheduleSession?.previousView;finishScheduleSession();state.page=origin;if(!committed&&previousView)state.view=previousView;render();window.scrollTo(0,0);
+ }
  function finishScheduleSession(){
   const session=scheduleSession;if(!session)return;scheduleSession=null;
-  if(session&&!session.committed&&session.requestKey===requestKey){if(session.view==='confirmed')confirmedDraft=session.confirmedDraft;else if(session.edit)editedPlans.set(session.key,session.edit);else editedPlans.delete(session.key);}
-  if(session&&!session.committed&&session.requestKey===requestKey)state.view=session.previousView;document.body.classList.remove('schedule-modal-open');scheduleReadOnly=false;scheduleEmpty=false;renderStrategy();writeHash();if(scheduleTrigger?.isConnected)scheduleTrigger.focus();else if(scheduleTrigger?.classList.contains('pair-option-select'))[...$('pair-options').querySelectorAll('.pair-option')].find(card=>card.dataset.selected==='true')?.querySelector('.pair-option-select')?.focus();scheduleTrigger=null;
+  if(officialRecordEditor)$('official-record-dialog').close();clearDrag();
+  if(!session.committed&&session.requestKey===requestKey){confirmedDraft=session.confirmedDraft;editedPlans.clear();for(const [key,edit] of session.edits)editedPlans.set(key,edit);}
+  scheduleReadOnly=false;scheduleEmpty=false;
  }
- $('schedule-dialog').addEventListener('close',()=>{if(!$('schedule-dialog').open)finishScheduleSession();});
- $('schedule-dialog').addEventListener('cancel',event=>{event.preventDefault();closeSchedule(false);});
  for(const id of ['schedule-close','schedule-cancel'])$(id).addEventListener('click',()=>closeSchedule(false));
  for(const id of ['open-team-schedule','open-team-schedule-bottom'])$(id).addEventListener('click',()=>openSchedule(true,$(id)));
  $('open-schedule-management').addEventListener('click',()=>openSchedule(false,$('open-schedule-management'),Boolean(confirmed())));
@@ -304,7 +317,7 @@ if(typeof document!=='undefined')(() => {
   $('schedule-guide-title').textContent=read?'전체 공식 경기와 출전 기록을 함께 확인하세요':'드래그로 페어를 교환하세요';
   $('schedule-guide-text').textContent=read?(confirmed()?'C조 편성은 읽기 전용입니다. 경기를 눌러 각 팀의 실제 출전 선수를 기록하세요.':'C조는 원본 추천 1의 예정 편성입니다. 경기를 눌러 실제 출전을 별도로 기록하세요. 기본 표는 자동 저장하지 않습니다.'):'모바일은 셀을 길게 누른 뒤 이동하세요. 같은 시간 중복 출전은 적용하지 않습니다.';
   $('schedule-cancel').hidden=read;$('schedule-confirm').hidden=read;$('schedule-confirm').disabled=$('confirm-lineup').disabled;
-  $('schedule-footer-title').textContent='확정하면 팀 서버에 저장하고 팝업을 닫아요';
+  $('schedule-footer-title').textContent='확정하면 팀 서버에 저장하고 이전 화면으로 돌아가요';
   $('schedule-footer-description').textContent='확정 전 편집은 초안이며, 취소하면 팀 출전표는 바뀌지 않아요.';
   $('schedule-save-status').textContent=confirmationMessage||'';
  }
@@ -372,7 +385,7 @@ if(typeof document!=='undefined')(() => {
   if(drag.pointerId!==undefined&&drag.node.hasPointerCapture?.(drag.pointerId))drag.node.releasePointerCapture(drag.pointerId);
  }
  function moveDragGhost(drag){if(drag.ghost&&Number.isFinite(drag.x)&&Number.isFinite(drag.y))drag.ghost.setAttribute('style','left:'+drag.x+'px;top:'+Math.max(70,drag.y-12)+'px');}
- function activateDrag(drag){if(scheduleDrag!==drag||!currentDragPlan(drag)){clearDrag();return;}drag.active=true;if(drag.pointerId!==undefined||drag.touchId!==undefined){const match=currentDragPlan(drag).matches.find(item=>String(item.id)===String(drag.id));drag.ghost=el('div','schedule-drag-ghost');drag.ghost.setAttribute('aria-hidden','true');drag.ghost.append(el('strong','',match.pair.map(displayName).join(' × ')),el('span','',match.team+'조'));($('schedule-dialog').open?$('schedule-dialog'):document.body).append(drag.ghost);moveDragGhost(drag);}drag.node.classList.add('drag-source');document.body.classList.add('schedule-dragging');$('schedule-drag-status').textContent='교환할 경기 위로 옮겨 놓으세요.';}
+ function activateDrag(drag){if(scheduleDrag!==drag||!currentDragPlan(drag)){clearDrag();return;}drag.active=true;if(drag.pointerId!==undefined||drag.touchId!==undefined){const match=currentDragPlan(drag).matches.find(item=>String(item.id)===String(drag.id));drag.ghost=el('div','schedule-drag-ghost');drag.ghost.setAttribute('aria-hidden','true');drag.ghost.append(el('strong','',match.pair.map(displayName).join(' × ')),el('span','',match.team+'조'));document.body.append(drag.ghost);moveDragGhost(drag);}drag.node.classList.add('drag-source');document.body.classList.add('schedule-dragging');$('schedule-drag-status').textContent='교환할 경기 위로 옮겨 놓으세요.';}
  function dragPreview(target){
   if(!scheduleDrag?.active)return null;
   for(const node of $('matches').querySelectorAll('.matrix-match')){node.classList.remove('drop-valid');node.classList.remove('drop-invalid');}
@@ -390,8 +403,8 @@ if(typeof document!=='undefined')(() => {
  }
  function edgeScroll(y){
   clearTimeout(dragScrollTimer);if(!scheduleDrag?.active||!Number.isFinite(y))return;
-  const scroller=$('schedule-dialog').open?$('schedule-scroll'):null,rect=scroller?.getBoundingClientRect(),top=rect?.top||0,bottom=rect?.bottom||(window.innerHeight||0),delta=y<top+64?-18:bottom&&y>bottom-64?18:0;if(!delta)return;
-  if(scroller){if(scroller.scrollBy)scroller.scrollBy({top:delta,behavior:'instant'});else scroller.scrollTop=(scroller.scrollTop||0)+delta;}else window.scrollBy?.({top:delta,behavior:'instant'});
+  const bottom=window.innerHeight||0,delta=y<64?-18:bottom&&y>bottom-64?18:0;if(!delta)return;
+  window.scrollBy?.({top:delta,behavior:'instant'});
   dragScrollTimer=setTimeout(()=>{if(!scheduleDrag?.active)return;if(!Number.isFinite(scheduleDrag.x)||!Number.isFinite(scheduleDrag.y))return;const target=dragCell(document.elementFromPoint?.(scheduleDrag.x,scheduleDrag.y));dragPreview(target);edgeScroll(scheduleDrag?.y??y);},50);
  }
  function installScheduleDrag(node,match){
@@ -574,10 +587,18 @@ if(typeof document!=='undefined')(() => {
  for(const [id,field] of [['opponent1','p1'],['opponent2','p2']])$(id).addEventListener('change',()=>{state[field]=$(id).value;[state.p1,state.p2]=cleanPair(state.team,state.p1,state.p2);renderAnalysis();writeHash();});
  for(const choice of $('analysis-teams').querySelectorAll('button'))choice.addEventListener('click',()=>{if(state.team!==choice.dataset.team){state.team=choice.dataset.team;state.p1='';state.p2='';}renderAnalysis();writeHash();});
  function render(){renderPage();calculate();renderStrategy();renderAnalysis();writeHash();}
- window.addEventListener('teamcroutechange',()=>{readHash();render();});
+ window.addEventListener('teamcroutechange',()=>{
+  const leaving=state.page==='schedule'&&navigation.params().get('page')!=='schedule',returnTo=leaving?navigation.state()?.teamcScheduleReturn:null;
+  const sessionReturn=leaving?scheduleReturn:null;
+  if(leaving)finishScheduleSession();readHash();
+  if(state.page==='schedule'&&!scheduleSession){scheduleReturn=navigation.state()?.teamcScheduleReturn||null;beginScheduleSession(state.schedule==='shared');}
+  if(leaving&&sessionReturn)visibleRecommendation=sessionReturn.visibleRecommendation;
+  render();
+  if(leaving){const restore=sessionReturn||returnTo;if(restore)window.scrollTo(0,restore.scroll||0);if(scheduleTrigger?.isConnected)scheduleTrigger.focus({preventScroll:true});else if(scheduleTrigger?.classList.contains('pair-option-select'))[...$('pair-options').querySelectorAll('.pair-option')].find(card=>!card.hidden)?.querySelector('.pair-option-select')?.focus({preventScroll:true});scheduleTrigger=null;scheduleReturn=null;}
+ });
  window.addEventListener('playerprofileschange',()=>{confirmationMessage='';if(selectedPlan?.profileVersion!==cVersion())state.sharedPairs=null;render();});
  window.addEventListener('playerprofilecloudstatuschange',()=>{renderStrategy();renderAnalysis();});
   window.addEventListener('teamlineupchange',render);
  $('share').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(navigation.href());$('share-status').textContent='현재 선택 링크를 복사했습니다.';$('share-fallback').hidden=true;}catch{$('share-fallback').hidden=false;$('share-url').value=navigation.href();$('share-url').focus();$('share-url').select();$('share-status').textContent='아래 링크를 복사해 공유하세요.';}});
- readHash();render();
+ readHash();calculate();if(state.page==='schedule'){scheduleReturn=navigation.state()?.teamcScheduleReturn||null;beginScheduleSession(state.schedule==='shared');}render();
 })();
