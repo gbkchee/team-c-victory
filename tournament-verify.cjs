@@ -5,7 +5,7 @@ const ids=(team,...names)=>names.map(name=>team+':'+name);
 function match(team,number){return model.matchesFor(data,team).find(row=>row.sides.some(side=>side.team===team&&side.number===number)).id;}
 function record(records,team,number,pair){return model.withRecord(records,match(team,number),team,pair);}
 function fullB(){
- const all=model.candidates(data,{},match('B',1),'B').pairs,rows=model.matchesFor(data,'B');
+ const all=model.candidates(data,{},match('B',1),'B').pairs.filter(pair=>!pair.includes('B:톡기')),rows=model.matchesFor(data,'B');
  function fill(index,records,remaining){
   if(index===20)return records;
   for(let i=0;i<remaining.length;i++){
@@ -46,13 +46,24 @@ test('같은 시간 두 코트 출전과 일반 팀 여섯 번째 출전을 금�
  assert.deepEqual(model.validateRecords(data,records),[]);
  assert.ok(model.validateRecords(data,record(records,'A',numbers[5],ids('A','펩시',partners[5]))).some(error=>error.includes('횟수')));
 });
-test('B조는 포티 포함 전원 최대 여섯 경기이며 7명으로 20개 고유 조합을 편성할 수 있다',()=>{
+test('B조는 포티 포함 전원 최대 여섯 경기이며 기존 7명의 20개 고유 조합을 유지한다',()=>{
  assert.ok(bComplete);assert.equal(Object.keys(bComplete).length,20);assert.deepEqual(model.validateRecords(data,bComplete),[]);
  const ledger=model.encodeTeam(data,bComplete,'B').appearances;
  assert.equal(ledger['B:새벽'].length,6);assert.equal(ledger['B:감자'].length,6);assert.equal(ledger['B:땡이'].length,5);assert.equal(model.playerCap(data,'B','B:새벽'),6);
  const modified={...data,teams:{...data.teams,B:{...data.teams.B,추가선수:{tier:'thirty'}}}};
  let records={};for(const [index,name] of ['감자','망빙','둡','몽','땡이','찹','추가선수'].entries())records=record(records,'B',[1,2,4,6,8,10,12][index],ids('B','새벽',name));
  assert.ok(model.validateRecords(modified,records).some(error=>error.includes('횟수')));
+});
+test('B조 톡기는 써티이며 기존 선수 모두와 페어 기록을 저장한다',async()=>{
+ assert.equal(data.teams.B['톡기'].tier,'thirty');
+ const target=match('B',1),pairs=model.candidates(data,{},target,'B').pairs;
+ assert.equal(pairs.length,27);assert.equal(pairs.filter(pair=>pair.includes('B:톡기')).length,7);
+ const f=firestore();await f.store.save(target,'B',ids('B','새벽','감자'),0,'user');
+ delete f.entries.get('tournamentObservations/B').appearances['B:톡기'];
+ await f.store.save(target,'B',ids('B','새벽','감자'),1,'user');
+ assert.deepEqual(f.entries.get('tournamentObservations/B').appearances['B:톡기'],[]);
+ await f.store.save(target,'B',ids('B','톡기','땡이'),2,'user');
+ assert.deepEqual(f.entries.get('tournamentObservations/B').appearances['B:톡기'],[1]);
 });
 test('후보는 고유 조합·동시간 선수·잔여 횟수를 반영하고 편집과 삭제 후 복구된다',()=>{
  const empty=model.candidates(data,{},match('A',4),'A');assert.equal(empty.count,27);assert.equal(empty.showPairs,false);assert.equal(empty.unknownCount,20);
@@ -69,7 +80,7 @@ test('후보 표시 임계값은 경기 시간이 아닌 실제 조합 수 5개 
   const output=model.candidates(data,records,missing[0].id,'B');
   assert.equal(output.showPairs,output.count<=5);assert.equal(output.conditional,true);assert.equal(output.knownCount,20-removeCount);assert.equal(output.unknownCount,removeCount);
  }
- const last=match('B',20),nineteen={...bComplete};delete nineteen[last];const one=model.candidates(data,nineteen,last,'B');assert.equal(one.count,1);assert.equal(one.showPairs,true);
+ const last=match('B',20),nineteen={...bComplete};delete nineteen[last];const one=model.candidates(data,nineteen,last,'B');assert.ok(one.pairs.some(pair=>model.pairKey(pair)===model.pairKey(bComplete[last].B)));assert.equal(one.showPairs,one.count<=5);
  const invalid=record(record({},'A',1,ids('A','펩시','동글')),'A',3,ids('A','동글','펩시'));
  const bad=model.candidates(data,invalid,match('A',20),'A');assert.ok(bad.errors.length);assert.equal(bad.showPairs,false);
 });

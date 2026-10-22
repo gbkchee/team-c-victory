@@ -13,7 +13,7 @@ function complete(team){
  const doubles=groups.filter(group=>group.length===2),singles=groups.filter(group=>group.length===1);
  // The eight-player schedule needs ten two-pair units. Two singles can share
  // a unit because their matches occur at different times.
- if(team!=='B'){
+ if(players.length===8){
   const units=[...doubles,...Array.from({length:singles.length/2},(_,index)=>[singles[index*2][0],singles[index*2+1][0]])];
   assert.equal(units.length,10);
   const rotating=players.slice(0,7),rounds=[];
@@ -54,6 +54,18 @@ async function main(){
  await store.save(first.id,'A',model.candidates(data,{},first.id,'A').pairs[0],0,'rules-test-user');
  await store.save(first.id,'A',null,1,'rules-test-user');
  console.log('PASS real store first save and clear: A');
+ // Seed the seven-player ledger with emulator admin access, then use normal rules.
+ const bFirst=model.matchesFor(data,'B')[0],legacyRecords={[bFirst.id]:{B:['B:새벽','B:감자']}};
+ const legacy={...model.encodeTeam(data,legacyRecords,'B'),changedSlot:'1',revision:1,updatedBy:'rules-test-user'};
+ delete legacy.appearances['B:톡기'];
+ const seeded=await fetch(base+'/tournamentObservations/B',{method:'PATCH',headers:{'content-type':'application/json',Authorization:'Bearer owner'},body:JSON.stringify({fields:encode(legacy).mapValue.fields})});
+ assert.equal(seeded.status,200);
+ await store.save(bFirst.id,'B',['B:새벽','B:감자'],1,'rules-test-user');
+ assert.deepEqual((await get('B')).appearances['B:톡기'],[]);
+ await store.save(bFirst.id,'B',['B:톡기','B:땡이'],2,'rules-test-user');
+ assert.deepEqual((await get('B')).appearances['B:톡기'],[1]);
+ const removed=await fetch(base+'/tournamentObservations/B',{method:'DELETE',headers:{Authorization:'Bearer owner'}});assert.equal(removed.status,200);
+ console.log('PASS legacy B ledger upgrade and new Tokki pair through real rules');
  for(const team of ['A','B','C','D']){
   const records=complete(team),matches=model.matchesFor(data,team);let revision=team==='A'?2:0;
   for(const match of matches){await store.save(match.id,team,records[match.id][team],revision,'rules-test-user');revision++;}

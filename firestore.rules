@@ -175,7 +175,7 @@ service cloud.firestore {
           + uses[members[6]].size() + (members.size() == 8 ? uses[members[7]].size() : 0)) == 2;
     }
     function observationLedgerChange(record, previous, player, number, pair, cap) {
-      let before = previous.appearances[player];
+      let before = previous.appearances.get(player, []);
       let after = record.appearances[player];
       return after is list && after.size() <= cap && after.toSet().size() == after.size()
         && after.removeAll([number]) == before.removeAll([number])
@@ -193,7 +193,10 @@ service cloud.firestore {
         && record.pairKeys.diff(previous.pairKeys).affectedKeys().hasOnly([slot])
         && observationPair(record, legalKeys)
         && record.pairKeys.values().toSet().size() == record.pairKeys.size()
-        && record.appearances.diff(previous.appearances).affectedKeys().hasOnly(oldPair.concat(pair))
+        && (record.appearances.diff(previous.appearances).affectedKeys().hasOnly(oldPair.concat(pair))
+          || (previous.appearances.get('B:톡기', null) == null
+            && record.appearances.get('B:톡기', null) == []
+            && record.appearances.diff(previous.appearances).affectedKeys().hasOnly(oldPair.concat(pair).concat(['B:톡기']))))
         && (oldPair.size() == 0 || (observationLedgerChange(record, previous, oldPair[0], number, pair, cap)
           && observationLedgerChange(record, previous, oldPair[1], number, pair, cap)))
         && (pair.size() == 0 || (observationLedgerChange(record, previous, pair[0], number, pair, cap)
@@ -203,11 +206,11 @@ service cloud.firestore {
     function validObservation(team, creating) {
       let record = request.resource.data;
       let members = team == 'A' ? ['A:펩시','A:동글','A:달래','A:찐빵','A:묭','A:룽지','A:송이','A:올리버']
-        : team == 'B' ? ['B:새벽','B:감자','B:망빙','B:둡','B:몽','B:땡이','B:찹']
+        : team == 'B' ? ['B:새벽','B:감자','B:망빙','B:둡','B:몽','B:톡기','B:땡이','B:찹']
         : team == 'C' ? ['C:냉면','C:쏘오리','C:우디','C:꿉','C:기른지','C:한치','C:숭','C:만두']
         : ['D:스노','D:미스트','D:무지','D:민민','D:펭귄','D:초코','D:아르(시트: 야르)','D:호동'];
       let legalKeys = team == 'A' ? ["A:동글|A:펩시","A:달래|A:펩시","A:찐빵|A:펩시","A:묭|A:펩시","A:룽지|A:펩시","A:송이|A:펩시","A:올리버|A:펩시","A:달래|A:동글","A:동글|A:찐빵","A:동글|A:묭","A:동글|A:룽지","A:동글|A:송이","A:동글|A:올리버","A:달래|A:찐빵","A:달래|A:묭","A:달래|A:룽지","A:달래|A:송이","A:달래|A:올리버","A:묭|A:찐빵","A:룽지|A:찐빵","A:송이|A:찐빵","A:올리버|A:찐빵","A:룽지|A:묭","A:묭|A:송이","A:묭|A:올리버","A:룽지|A:송이","A:룽지|A:올리버"]
-        : team == 'B' ? ["B:감자|B:새벽","B:망빙|B:새벽","B:둡|B:새벽","B:몽|B:새벽","B:땡이|B:새벽","B:새벽|B:찹","B:감자|B:망빙","B:감자|B:둡","B:감자|B:몽","B:감자|B:땡이","B:감자|B:찹","B:둡|B:망빙","B:망빙|B:몽","B:땡이|B:망빙","B:망빙|B:찹","B:둡|B:몽","B:둡|B:땡이","B:둡|B:찹","B:땡이|B:몽","B:몽|B:찹"]
+        : team == 'B' ? ["B:감자|B:새벽","B:망빙|B:새벽","B:둡|B:새벽","B:몽|B:새벽","B:땡이|B:새벽","B:새벽|B:찹","B:감자|B:망빙","B:감자|B:둡","B:감자|B:몽","B:감자|B:땡이","B:감자|B:찹","B:둡|B:망빙","B:망빙|B:몽","B:땡이|B:망빙","B:망빙|B:찹","B:둡|B:몽","B:둡|B:땡이","B:둡|B:찹","B:땡이|B:몽","B:몽|B:찹","B:새벽|B:톡기","B:감자|B:톡기","B:망빙|B:톡기","B:둡|B:톡기","B:몽|B:톡기","B:땡이|B:톡기","B:찹|B:톡기"]
         : team == 'C' ? ["C:냉면|C:쏘오리","C:냉면|C:우디","C:꿉|C:냉면","C:기른지|C:냉면","C:냉면|C:한치","C:냉면|C:숭","C:냉면|C:만두","C:쏘오리|C:우디","C:꿉|C:쏘오리","C:기른지|C:쏘오리","C:쏘오리|C:한치","C:숭|C:쏘오리","C:만두|C:쏘오리","C:꿉|C:우디","C:기른지|C:우디","C:우디|C:한치","C:숭|C:우디","C:만두|C:우디","C:기른지|C:꿉","C:꿉|C:숭","C:꿉|C:만두","C:기른지|C:한치","C:기른지|C:숭","C:기른지|C:만두","C:숭|C:한치","C:만두|C:한치","C:만두|C:숭"]
         : ["D:미스트|D:스노","D:무지|D:스노","D:민민|D:스노","D:스노|D:펭귄","D:스노|D:초코","D:스노|D:아르(시트: 야르)","D:스노|D:호동","D:무지|D:미스트","D:미스트|D:민민","D:미스트|D:펭귄","D:미스트|D:초코","D:미스트|D:아르(시트: 야르)","D:미스트|D:호동","D:무지|D:민민","D:무지|D:펭귄","D:무지|D:초코","D:무지|D:아르(시트: 야르)","D:무지|D:호동","D:민민|D:펭귄","D:민민|D:초코","D:민민|D:아르(시트: 야르)","D:민민|D:호동","D:초코|D:펭귄","D:아르(시트: 야르)|D:펭귄","D:펭귄|D:호동","D:아르(시트: 야르)|D:초코","D:초코|D:호동"];
       let otherSlots = team in ['A','C']

@@ -45,7 +45,7 @@ async function main(){
  const requireAdmin=createRequire(__dirname+'/admin-tools/package.json');
  const {initializeApp,applicationDefault}=requireAdmin('firebase-admin/app'),{getFirestore,FieldValue}=requireAdmin('firebase-admin/firestore');
  initializeApp({projectId:options.project,credential:applicationDefault()});const db=getFirestore();
- console.log(JSON.stringify({project:options.project,scope:options.scope,mode:options.execute?'초기화 실행':'대상 확인만',collections:await inspect(db,options.scope),blankProfiles:31,blankTraits:8,retain:['기본 선수 명단','공식 배정표','aiUsage·geminiAiUsage 일일 한도 기록']},null,2));
+ console.log(JSON.stringify({project:options.project,scope:options.scope,mode:options.execute?'초기화 실행':'대상 확인만',collections:await inspect(db,options.scope),blankProfiles:Object.values(data.teams).reduce((total,team)=>total+Object.keys(team).length,0),blankTraits:8,retain:['기본 선수 명단','공식 배정표','aiUsage·geminiAiUsage 일일 한도 기록']},null,2));
  if(!options.execute){console.log('이 실행에서는 데이터를 변경하지 않았습니다.');return;}
  await reset(db,options.scope,FieldValue.serverTimestamp());console.log('완료: 입력 초기화 및 테스트 데이터 정리. 웹페이지를 새로고침하세요.');
 }

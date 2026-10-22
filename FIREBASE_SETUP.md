@@ -17,7 +17,7 @@ firebase login
 firebase deploy --only firestore:rules --project team-c-victory
 ```
 
-컬렉션은 미리 만들지 않아도 됩니다. 첫 연결에서 선수 31명의 새 프로필과 C조 8명의 특징 문서를 준비합니다. 기존 기록은 의미가 같은 항목만 이관하며 이미 있는 새 서버 값은 덮어쓰지 않습니다.
+컬렉션은 미리 만들지 않아도 됩니다. 첫 연결에서 선수 32명의 새 프로필과 C조 8명의 특징 문서를 준비합니다. 기존 기록은 의미가 같은 항목만 이관하며 이미 있는 새 서버 값은 덮어쓰지 않습니다.
 
 연결 실패 시 더 보기 메뉴와 선수 팝업의 오류 코드를 확인합니다. `permission-denied`는 규칙, `auth/operation-not-allowed`는 익명 인증, `unavailable`은 네트워크를 먼저 확인합니다. 파일을 직접 열기보다 `npm start` 후 `http://localhost:8000` 또는 배포 주소로 접속합니다.
 
