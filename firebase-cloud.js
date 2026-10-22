@@ -9,7 +9,7 @@ const app=initializeApp({
 const auth=getAuth(app),db=getFirestore(app);
 const refs={profiles:collection(db,'playerProfilesV2'),traits:collection(db,'playerTraits'),suggestions:collection(db,'traitSuggestions'),keywords:collection(db,'keywordSuggestions')};
 const gemini=window.GEMINI_ANALYSIS,aiConfig=window.GEMINI_CONFIG;
-const state={status:'connecting',pendingCount:0,lineup:null,lineupReady:false,aiProvider:'Gemini',aiStatus:aiConfig?.appCheckSiteKey?'ready':'setup'};
+const state={status:'connecting',pendingCount:0,lineup:null,lineupReady:false,opponentRecords:{},opponentRecordsReady:false,opponentRecordsError:'',opponentRecordRevisions:{A:0,B:0,C:0,D:0},aiProvider:'Gemini',aiStatus:aiConfig?.appCheckSiteKey?'ready':'setup'};
 window.PLAYER_PROFILE_CLOUD=state;
 let started=false,ready=false,migrating=false,connection=0,subscriptionFailed=false;
 let profileSubscriptions=[];
@@ -173,7 +173,7 @@ state.saveProfile=(id,raw,fields=null)=>{
  return flush(id);
 };
 state.retry=()=>{
- if(ready&&!subscriptionFailed&&state.lineupReady&&state.status==='ready'){for(const id of queue.keys())void flush(id);return;}
+ if(ready&&!subscriptionFailed&&state.lineupReady&&state.status==='ready'){if(!state.opponentRecordsReady)state.retryOpponentRecords();for(const id of queue.keys())void flush(id);return;}
  connection++;
  for(const unsubscribe of profileSubscriptions)unsubscribe();
  profileSubscriptions=[];received.clear();started=false;ready=false;migrating=false;subscriptionFailed=false;state.lineupReady=false;
@@ -202,6 +202,7 @@ function start(){
  const activeConnection=++connection;
  (auth.currentUser?Promise.resolve():signInAnonymously(auth)).then(()=>{
   if(activeConnection!==connection)return;
+  subscribeOpponentRecords();
   for(const [key,ref] of Object.entries(refs))profileSubscriptions.push(onSnapshot(ref,snapshot=>{
    if(activeConnection!==connection)return;
    records[key]=new Map(snapshot.docs.map(item=>[item.id,item.data()]));received.add(key);
@@ -216,7 +217,7 @@ function start(){
 }
 state.saveLineup=async(plan,expectedRevision)=>{
  if(!ready||!state.lineupReady)throw new Error('팀 공유 저장소 연결 후 확정할 수 있습니다.');
- const errors=window.PAIRING_MODEL.validatePlan(window.BOARD_DATA,plan,plan.fixedPairs||[]);
+ const errors=window.PAIRING_MODEL.validateLineup(window.BOARD_DATA,plan,plan.fixedPairs||[]);
  if(errors.length)throw new Error(errors.join(' / '));
  const target=doc(db,'teamLineups','C');
  await runTransaction(db,async transaction=>{
@@ -224,6 +225,40 @@ state.saveLineup=async(plan,expectedRevision)=>{
   if(revision!==expectedRevision)throw new Error('다른 팀원이 출전표를 확정했습니다. 최신 확정표를 확인한 뒤 다시 선택해 주세요.');
   transaction.set(target,{...plan,revision:revision+1,confirmedAt:serverTimestamp(),confirmedBy:auth.currentUser.uid});
  });
+};
+// Actual observed sides are isolated from profile migration and planned C lineups.
+const opponentTeams=['A','B','C','D'],opponentDocuments=new Map(),opponentReceived=new Set(),opponentFailedTeams=new Set();
+let opponentSubscriptions=[];
+const tournament=window.TOURNAMENT_MODEL;
+const opponentStore=tournament?.createFirestoreStore({data:window.BOARD_DATA,db,doc,runTransaction,serverTimestamp});
+function publishOpponentRecords(){
+ const output={},revisions={A:0,B:0,C:0,D:0};
+ for(const [team,record] of opponentDocuments){
+  const decoded=tournament.decodeTeam(window.BOARD_DATA,team,record);
+  for(const [id,sides] of Object.entries(decoded))output[id]={...output[id],...sides};
+  revisions[team]=record?.revision||0;
+ }
+ state.opponentRecords=output;state.opponentRecordRevisions=revisions;
+ state.opponentRecordsReady=opponentReceived.size===4&&!opponentFailedTeams.size;if(!opponentFailedTeams.size)state.opponentRecordsError='';
+ emit('opponentrecordschange',{records:output,revisions});
+}
+function opponentFailed(error){
+ state.opponentRecordsReady=false;state.opponentRecordsError=error?.code||'invalid-record';
+ emit('opponentrecordschange',{records:state.opponentRecords,revisions:state.opponentRecordRevisions,error:state.opponentRecordsError});
+}
+function subscribeOpponentRecords(){
+ for(const unsubscribe of opponentSubscriptions)unsubscribe();
+ opponentSubscriptions=[];opponentReceived.clear();opponentFailedTeams.clear();state.opponentRecordsReady=false;state.opponentRecordsError='';
+ if(!tournament)return;
+ for(const team of opponentTeams)opponentSubscriptions.push(onSnapshot(doc(db,'tournamentObservations',team),snapshot=>{
+  try{opponentDocuments.set(team,snapshot.exists()?snapshot.data():null);opponentReceived.add(team);publishOpponentRecords();}
+  catch(error){opponentFailedTeams.add(team);opponentFailed(error);}
+ },error=>{opponentFailedTeams.add(team);opponentFailed(error);}));
+}
+state.retryOpponentRecords=()=>{if(auth.currentUser)subscribeOpponentRecords();};
+state.saveOpponentRecord=async(matchId,team,pair,expectedRevision)=>{
+ if(!state.opponentRecordsReady||!opponentStore)throw new Error('공유 경기 기록 연결 후 저장할 수 있습니다.');
+ return opponentStore.save(matchId,team,pair,expectedRevision,auth.currentUser?.uid);
 };
 let appCheck=null,ai=null,aiSDK=null,appCheckSDK=null;
 async function prepareGemini(){

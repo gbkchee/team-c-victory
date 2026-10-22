@@ -2,7 +2,7 @@
 // Shared-answer entry screen. The static host and Firestore rules remain separate access boundaries.
 (() => {
  const codeHash='e501dfe730fbd9a4ab4712fc78456302f08b2f8e7043bd077f251bf9b621824f';
- const scripts=['data.js','validation.js','profile-model.js?v=20261012-4','ratings.js?v=20261015-1','pairing-model.js?v=20261012-5','tactics-data.js','gemini-config.js?v=20261008-6Leej-Qt','gemini-analysis.js','app.js?v=20261012-5'];
+ const scripts=['data.js','validation.js','profile-model.js?v=20261012-4','ratings.js?v=20261015-1','pairing-model.js?v=20261022-19','tournament-model.js?v=20261022-20','tactics-data.js','gemini-config.js?v=20261008-6Leej-Qt','gemini-analysis.js','app.js?v=20261022-19'];
  const $=id=>document.getElementById(id),gate=$('access-gate'),form=$('access-form'),button=$('access-submit'),app=$('team-app'),status=$('access-status'),inputs=Array.from({length:6},(_,i)=>$('access-code-'+i));
  let busy=false,accepted=false,loadFailed=false;
  function message(text,error=false){status.textContent=text;status.dataset.error=String(error);}
@@ -43,7 +43,7 @@
    accepted=true;app.hidden=false;app.inert=false;app.removeAttribute('aria-hidden');gate.hidden=true;document.body.classList.remove('entry-open');
    window.dispatchEvent(new CustomEvent('teamentryready'));
    const target=$('ratings-panel').open||!$('player-detail-page').hidden?$('rating-player-info'):$('main-content');target.focus({preventScroll:true});
-   void loadScript('firebase-cloud.js?v=20261012-3','module').catch(()=>{$('cloud-status').textContent='공유 저장소를 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요.';});
+   void loadScript('firebase-cloud.js?v=20261022-19','module').catch(()=>{$('cloud-status').textContent='공유 저장소를 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요.';});
   }catch{message('코드를 확인하지 못했습니다. 다시 시도해 주세요.',true);}
   finally{busy=false;button.disabled=accepted;for(const input of inputs)input.disabled=accepted||loadFailed;if(!gate.hidden&&!loadFailed)focus(0);}
  });
@@ -59,8 +59,10 @@
 
 (() => {
  if(typeof window.requestAnimationFrame!=='function')return;
- const $=id=>document.getElementById(id),gate=$('access-gate'),farPlayer=$('entry-far-player'),nearPlayer=$('entry-near-player'),pose=$('entry-near-pose'),impact=$('entry-fall-impact'),ball=$('entry-rally-ball'),shadow=$('entry-ball-shadow');
- const trails=[0,1,2].map(i=>$('entry-trail-'+i)),reduced=window.matchMedia('(prefers-reduced-motion: reduce)'),leg=1.7;
+ const $=id=>document.getElementById(id),gate=$('access-gate'),app=$('team-app');
+ function animateRally(prefix,visible,allowFall){
+ const farPlayer=$(prefix+'-far-player'),nearPlayer=$(prefix+'-near-player'),pose=$(prefix+'-near-pose'),impact=$(prefix+'-fall-impact'),ball=$(prefix+'-rally-ball'),shadow=$(prefix+'-ball-shadow'),status=allowFall?gate:$('header-rally');
+ const trails=[0,1,2].map(i=>$(prefix+'-trail-'+i)),reduced=window.matchMedia('(prefers-reduced-motion: reduce)'),leg=1.7;
  function players(t){
   const farX=445+96*Math.sin(t*.72),nearX=468+145*Math.sin(t*.59+1.7);
   return {far:{x:Math.round(farX-398),y:Math.round(2*Math.sin(t*7))},near:{x:Math.round(nearX-573),y:Math.round(2*Math.sin(t*7+1))}};
@@ -79,7 +81,7 @@
  }
  let elapsed=.55,lastNow=null,lastFrame=-1,request=null,fall=null,recovery=null;
  function resetFall(){
-  fall=null;pose.removeAttribute('transform');impact.setAttribute('opacity','0');gate.dataset.reaction='idle';
+  fall=null;pose.removeAttribute('transform');impact.setAttribute('opacity','0');status.dataset.reaction='idle';
   if(recovery!==null)window.clearTimeout(recovery);recovery=null;
  }
  function falling(now){
@@ -98,7 +100,7 @@
  function stop(){if(request!==null)window.cancelAnimationFrame(request);request=null;lastNow=null;lastFrame=-1;resetFall();}
  function animate(now){
   request=null;
-  if(gate.hidden||document.hidden||reduced.matches)return;
+  if(!visible()||document.hidden||reduced.matches)return;
   if(lastNow!==null&&!fall)elapsed+=(now-lastNow)/1000;
   lastNow=now;
   const frame=Math.floor(elapsed*18);
@@ -106,16 +108,21 @@
   else if(frame!==lastFrame){render(frame/18);lastFrame=frame;}
   request=window.requestAnimationFrame(animate);
  }
- function sync(){stop();if(!gate.hidden&&!document.hidden&&!reduced.matches)request=window.requestAnimationFrame(animate);}
+ function sync(){stop();if(visible()&&!document.hidden&&!reduced.matches)request=window.requestAnimationFrame(animate);}
  function trip(){
-  if(gate.hidden)return;
-  resetFall();fall={started:null};gate.dataset.reaction='falling';
+  if(!allowFall||!visible())return;
+  resetFall();fall={started:null};status.dataset.reaction='falling';
   if(reduced.matches){pose.setAttribute('transform','rotate(90 573 1062)');impact.setAttribute('opacity','1');recovery=window.setTimeout(()=>{resetFall();},1300);return;}
   pose.setAttribute('transform','rotate(-6 573 1062)');
   if(request===null&&!document.hidden){lastNow=null;request=window.requestAnimationFrame(animate);}
  }
  render(elapsed);sync();
  reduced.addEventListener?.('change',sync);document.addEventListener('visibilitychange',sync);
- window.addEventListener('teamentryinvalid',trip);
- window.addEventListener('teamentryready',stop);window.addEventListener('pagehide',stop);window.addEventListener('pageshow',sync);
+ if(allowFall)window.addEventListener('teamentryinvalid',trip);
+ window.addEventListener('teamentryready',sync);window.addEventListener('pagehide',stop);window.addEventListener('pageshow',sync);
+ }
+ animateRally('entry',()=>!gate.hidden,true);
+ const avatars=$('team-avatars');
+ const pauseAvatars=()=>{avatars.dataset.paused=String(document.hidden);};
+ document.addEventListener('visibilitychange',pauseAvatars);window.addEventListener('pagehide',()=>{avatars.dataset.paused='true';});window.addEventListener('pageshow',pauseAvatars);pauseAvatars();
 })();

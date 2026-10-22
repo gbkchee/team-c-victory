@@ -124,9 +124,9 @@ service cloud.firestore {
       allow create, update: if signedIn() && team == 'C'
         && request.resource.data.keys().hasOnly(['id', 'title', 'description', 'matches', 'mode', 'strategy', 'fixedPairs', 'reasons', 'profileVersion', 'algorithmVersion', 'revision', 'confirmedAt', 'confirmedBy'])
         && request.resource.data.matches is list && request.resource.data.matches.size() == 20
-        && request.resource.data.mode in ['fixed', 'free', 'partial']
-        && request.resource.data.strategy in ['balance', 'win', 'stamina']
-        && request.resource.data.fixedPairs is list && request.resource.data.fixedPairs.size() <= 4
+        && request.resource.data.mode in ['free', 'partial']
+        && request.resource.data.strategy in ['balance', 'win', 'return', 'stamina']
+        && request.resource.data.fixedPairs is list && request.resource.data.fixedPairs.size() <= 20
         && request.resource.data.profileVersion is string && request.resource.data.profileVersion.size() == 16
         && request.resource.data.confirmedAt == request.time
         && request.resource.data.confirmedBy == request.auth.uid
@@ -135,6 +135,96 @@ service cloud.firestore {
           || (exists(/databases/$(database)/documents/teamLineups/C) && request.resource.data.revision == resource.data.revision + 1));
       allow delete: if false;
     }
+    // One team document stores observed sides by official number. A write may
+    // change only one slot and the corresponding player appearances.
+    function observationShape(record, members, legalSlots) {
+      return record.keys().hasOnly(['slots','pairKeys','appearances','changedSlot','revision','updatedAt','updatedBy'])
+        && record.slots is map && record.pairKeys is map && record.appearances is map
+        && record.changedSlot in legalSlots
+        && record.appearances.keys().hasAll(members) && record.appearances.keys().hasOnly(members)
+        && record.revision is int && record.updatedAt == request.time && record.updatedBy == request.auth.uid;
+    }
+    function observationPair(record, legalKeys) {
+      let slot = record.changedSlot;
+      let entry = record.slots.get(slot, {'players':[]});
+      let pair = entry.players;
+      let key = record.pairKeys.get(slot, '');
+      return entry is map && entry.keys().hasOnly(['players']) && pair is list
+        && ((!record.slots.keys().hasAny([slot]) && !record.pairKeys.keys().hasAny([slot])
+            && pair.size() == 0 && key == '')
+          || (record.slots.keys().hasAny([slot]) && record.pairKeys.keys().hasAny([slot])
+            && pair.size() == 2 && key in legalKeys
+            && key == pair[0] + '|' + pair[1]
+            && int(slot) in record.appearances[pair[0]]
+            && int(slot) in record.appearances[pair[1]]));
+    }
+    function observationCreate(record, members, legalKeys) {
+      let uses = record.appearances;
+      return record.revision == 1
+        && record.slots.size() == 1 && record.pairKeys.size() == 1
+        && record.slots.keys().hasAll([record.changedSlot])
+        && record.pairKeys.keys().hasAll([record.changedSlot])
+        && observationPair(record, legalKeys)
+        && uses[members[0]] is list && uses[members[1]] is list
+        && uses[members[2]] is list && uses[members[3]] is list
+        && uses[members[4]] is list && uses[members[5]] is list
+        && uses[members[6]] is list
+        && (members.size() == 7 || uses[members[7]] is list)
+        && (uses[members[0]].size() + uses[members[1]].size() + uses[members[2]].size()
+          + uses[members[3]].size() + uses[members[4]].size() + uses[members[5]].size()
+          + uses[members[6]].size() + (members.size() == 8 ? uses[members[7]].size() : 0)) == 2;
+    }
+    function observationLedgerChange(record, previous, player, number, pair, cap) {
+      let before = previous.appearances[player];
+      let after = record.appearances[player];
+      return after is list && after.size() <= cap && after.toSet().size() == after.size()
+        && after.removeAll([number]) == before.removeAll([number])
+        && (number in after) == pair.hasAny([player]);
+    }
+    function observationUpdate(record, legalKeys, cap, otherSlots) {
+      let slot = record.changedSlot;
+      let number = int(slot);
+      let previous = resource.data;
+      let oldPair = previous.slots.get(slot, {'players':[]}).players;
+      let pair = record.slots.get(slot, {'players':[]}).players;
+      let other = otherSlots.get(slot, '');
+      return record.revision == previous.revision + 1
+        && record.slots.diff(previous.slots).affectedKeys().hasOnly([slot])
+        && record.pairKeys.diff(previous.pairKeys).affectedKeys().hasOnly([slot])
+        && observationPair(record, legalKeys)
+        && record.pairKeys.values().toSet().size() == record.pairKeys.size()
+        && record.appearances.diff(previous.appearances).affectedKeys().hasOnly(oldPair.concat(pair))
+        && (oldPair.size() == 0 || (observationLedgerChange(record, previous, oldPair[0], number, pair, cap)
+          && observationLedgerChange(record, previous, oldPair[1], number, pair, cap)))
+        && (pair.size() == 0 || (observationLedgerChange(record, previous, pair[0], number, pair, cap)
+          && observationLedgerChange(record, previous, pair[1], number, pair, cap)))
+        && (other == '' || !pair.hasAny(record.slots.get(other, {'players':[]}).players));
+    }
+    function validObservation(team, creating) {
+      let record = request.resource.data;
+      let members = team == 'A' ? ['A:펩시','A:동글','A:달래','A:찐빵','A:묭','A:룽지','A:송이','A:올리버']
+        : team == 'B' ? ['B:새벽','B:감자','B:망빙','B:둡','B:몽','B:땡이','B:찹']
+        : team == 'C' ? ['C:냉면','C:쏘오리','C:우디','C:꿉','C:기른지','C:한치','C:숭','C:만두']
+        : ['D:스노','D:미스트','D:무지','D:민민','D:펭귄','D:초코','D:아르(시트: 야르)','D:호동'];
+      let legalKeys = team == 'A' ? ["A:동글|A:펩시","A:달래|A:펩시","A:찐빵|A:펩시","A:묭|A:펩시","A:룽지|A:펩시","A:송이|A:펩시","A:올리버|A:펩시","A:달래|A:동글","A:동글|A:찐빵","A:동글|A:묭","A:동글|A:룽지","A:동글|A:송이","A:동글|A:올리버","A:달래|A:찐빵","A:달래|A:묭","A:달래|A:룽지","A:달래|A:송이","A:달래|A:올리버","A:묭|A:찐빵","A:룽지|A:찐빵","A:송이|A:찐빵","A:올리버|A:찐빵","A:룽지|A:묭","A:묭|A:송이","A:묭|A:올리버","A:룽지|A:송이","A:룽지|A:올리버"]
+        : team == 'B' ? ["B:감자|B:새벽","B:망빙|B:새벽","B:둡|B:새벽","B:몽|B:새벽","B:땡이|B:새벽","B:새벽|B:찹","B:감자|B:망빙","B:감자|B:둡","B:감자|B:몽","B:감자|B:땡이","B:감자|B:찹","B:둡|B:망빙","B:망빙|B:몽","B:땡이|B:망빙","B:망빙|B:찹","B:둡|B:몽","B:둡|B:땡이","B:둡|B:찹","B:땡이|B:몽","B:몽|B:찹"]
+        : team == 'C' ? ["C:냉면|C:쏘오리","C:냉면|C:우디","C:꿉|C:냉면","C:기른지|C:냉면","C:냉면|C:한치","C:냉면|C:숭","C:냉면|C:만두","C:쏘오리|C:우디","C:꿉|C:쏘오리","C:기른지|C:쏘오리","C:쏘오리|C:한치","C:숭|C:쏘오리","C:만두|C:쏘오리","C:꿉|C:우디","C:기른지|C:우디","C:우디|C:한치","C:숭|C:우디","C:만두|C:우디","C:기른지|C:꿉","C:꿉|C:숭","C:꿉|C:만두","C:기른지|C:한치","C:기른지|C:숭","C:기른지|C:만두","C:숭|C:한치","C:만두|C:한치","C:만두|C:숭"]
+        : ["D:미스트|D:스노","D:무지|D:스노","D:민민|D:스노","D:스노|D:펭귄","D:스노|D:초코","D:스노|D:아르(시트: 야르)","D:스노|D:호동","D:무지|D:미스트","D:미스트|D:민민","D:미스트|D:펭귄","D:미스트|D:초코","D:미스트|D:아르(시트: 야르)","D:미스트|D:호동","D:무지|D:민민","D:무지|D:펭귄","D:무지|D:초코","D:무지|D:아르(시트: 야르)","D:무지|D:호동","D:민민|D:펭귄","D:민민|D:초코","D:민민|D:아르(시트: 야르)","D:민민|D:호동","D:초코|D:펭귄","D:아르(시트: 야르)|D:펭귄","D:펭귄|D:호동","D:아르(시트: 야르)|D:초코","D:초코|D:호동"];
+      let otherSlots = team in ['A','C']
+        ? {'1':'2','2':'1','4':'5','5':'4','6':'7','7':'6','8':'9','9':'8','10':'11','11':'10','12':'13','13':'12','14':'15','15':'14','16':'17','17':'16','19':'20','20':'19'}
+        : {'2':'3','3':'2','4':'5','5':'4','6':'7','7':'6','8':'9','9':'8','10':'11','11':'10','12':'13','13':'12','14':'15','15':'14','17':'18','18':'17'};
+      let legalSlots = ['1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','19','20'];
+      return observationShape(record, members, legalSlots)
+        && (creating ? observationCreate(record, members, legalKeys)
+          : observationUpdate(record, legalKeys, team == 'B' ? 6 : 5, otherSlots));
+    }
+    match /tournamentObservations/{team} {
+      allow read: if signedIn() && team in ['A','B','C','D'];
+      allow create: if signedIn() && team in ['A','B','C','D'] && validObservation(team, true);
+      allow update: if signedIn() && team in ['A','B','C','D'] && validObservation(team, false);
+      allow delete: if false;
+    }
+
     match /matchupAnalyses/{analysisKey} {
       allow read: if signedIn();
       allow write: if false;

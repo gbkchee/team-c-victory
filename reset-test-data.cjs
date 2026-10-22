@@ -24,7 +24,7 @@ function blankDocuments(timestamp){
  return documents;
 }
 async function inspect(db,scope){
- const collections=['playerProfiles','playerProfilesV2','playerTraits',...(scope==='all'?['traitSuggestions','keywordSuggestions','teamLineups','matchupAnalyses','geminiMatchupAnalyses']:[])];
+ const collections=['playerProfiles','playerProfilesV2','playerTraits',...(scope==='all'?['traitSuggestions','keywordSuggestions','teamLineups','matchupAnalyses','geminiMatchupAnalyses','tournamentObservations']:[])];
  const snapshots=await Promise.all(collections.map(name=>db.collection(name).get()));
  return Object.fromEntries(collections.map((name,index)=>[name,snapshots[index].size]));
 }
@@ -33,7 +33,7 @@ async function reset(db,scope,timestamp){
  const documents=blankDocuments(timestamp),batch=db.batch();
  for(const [path,value] of documents)batch.set(db.doc(path),value);
  await batch.commit();
- for(const collection of ['playerProfiles',...(scope==='all'?['traitSuggestions','keywordSuggestions','teamLineups','matchupAnalyses','geminiMatchupAnalyses']:[])])await db.recursiveDelete(db.collection(collection));
+ for(const collection of ['playerProfiles',...(scope==='all'?['traitSuggestions','keywordSuggestions','teamLineups','matchupAnalyses','geminiMatchupAnalyses','tournamentObservations']:[])])await db.recursiveDelete(db.collection(collection));
  for(const collection of ['playerProfilesV2','playerTraits']){
   const snapshot=await db.collection(collection).get();
   for(const document of snapshot.docs)if(!documents.has(document.ref.path))await db.recursiveDelete(document.ref);

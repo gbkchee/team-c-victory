@@ -7,6 +7,9 @@ node_modules/
 *.zip
 *.png
 !assets/entry-minimi.png
+!assets/entry-minimi-black-outfit.png
+!assets/team-avatar-atlas.png
+!assets/team-avatar-minimi-atlas.png
 C-team-kakao.html
 
 .firebase/

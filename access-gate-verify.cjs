@@ -35,7 +35,7 @@ test('minimal entry keeps the court, six code slots, and entry button',()=>{
  assert.match(intro,/>코드 입력</);assert.match(intro,/>입장하기 /);
  assert.equal((intro.match(/class="access-code-digit"/g)||[]).length,6);assert.match(intro,/viewBox="0 0 941 1672"/);
  assert.doesNotMatch(intro,/어디서 오셨어요|답변 입력|C조 아닌|C조 전용|스파이 OUT|코드 문의/);assert.match(source,/const codeHash='[a-f0-9]{64}'/);
- assert.deepEqual([...html.matchAll(/<script\b[^>]*src="([^"]+)"/g)].map(match=>match[1]),['access-gate.js?v=20261015-6']);
+ const scripts=[...html.matchAll(/<script\b[^>]*src="([^"]+)"/g)].map(match=>match[1]);assert.equal(scripts.length,1);assert.match(scripts[0],/^access-gate\.js\?v=\d{8}-\d+$/);
 });
 test('entry focuses the dialog without opening an input keyboard',()=>{
  const view=browser();assert.equal(view.document.activeElement,view.nodes.get('access-gate'));
@@ -53,23 +53,23 @@ test('empty, partial, and wrong answers cannot load app data or Firebase',async(
 });
 test('correct answer loads dependencies once, enters, and preserves the selected route',async()=>{
  const view=browser(),hash=view.window.location.hash;await view.submit(answer);
- assert.deepEqual(view.scripts.map(script=>script.src.split('?')[0]),['data.js','validation.js','profile-model.js','ratings.js','pairing-model.js','tactics-data.js','gemini-config.js','gemini-analysis.js','app.js','firebase-cloud.js']);
+ assert.deepEqual(view.scripts.map(script=>script.src.split('?')[0]),['data.js','validation.js','profile-model.js','ratings.js','pairing-model.js','tournament-model.js','tactics-data.js','gemini-config.js','gemini-analysis.js','app.js','firebase-cloud.js']);
  assert.equal(view.scripts.at(-1).type,'module');assert.equal(view.nodes.get('access-gate').hidden,true);assert.equal(view.nodes.get('team-app').hidden,false);
  assert.equal(view.nodes.get('team-app').inert,false);assert.equal(view.classes.has('entry-open'),false);assert.equal(view.window.location.hash,hash);
  assert.equal(view.document.activeElement,view.nodes.get('main-content'));assert.equal(view.nodes.get('access-code-0').value,'');
- await view.submit(answer);assert.equal(view.entered(),1);assert.equal(view.scripts.length,10);
+ await view.submit(answer);assert.equal(view.entered(),1);assert.equal(view.scripts.length,11);
  assert.equal(browser().nodes.get('access-gate').hidden,false);
 });
 test('all core downloads start together, preserve execution order, and finish before entry',async()=>{
  const view=browser({delayScripts:true}),entry=view.submit(answer);
  for(let i=0;i<100&&view.scripts.length===0;i++)await new Promise(resolve=>setImmediate(resolve));
- assert.equal(view.scripts.length,9);assert.ok(view.scripts.every(script=>script.async===false));
+ assert.equal(view.scripts.length,10);assert.ok(view.scripts.every(script=>script.async===false));
  assert.equal(view.nodes.get('team-app').hidden,true);
  // Network completion order can differ from the scripts' execution order.
  for(const script of view.scripts.slice(1).reverse())script.onload();
- await Promise.resolve();assert.equal(view.entered(),0);assert.equal(view.scripts.length,9);
+ await Promise.resolve();assert.equal(view.entered(),0);assert.equal(view.scripts.length,10);
  view.scripts[0].onload();await entry;
- assert.equal(view.entered(),1);assert.equal(view.scripts.length,10);assert.equal(view.scripts.at(-1).type,'module');
+ assert.equal(view.entered(),1);assert.equal(view.scripts.length,11);assert.equal(view.scripts.at(-1).type,'module');
 });
 test('authentication reveals a directly linked player dialog and focuses its heading',async()=>{
  const view=browser();view.window.addEventListener('teamentryready',()=>{view.nodes.get('ratings-panel').open=true;});
@@ -84,7 +84,7 @@ test('paste distributes six characters and Tab wraps within the form',()=>{
 });
 test('double submit cannot initialize two copies of the app',async()=>{
  const view=browser({delayDigest:true}),first=view.submit(answer);await view.submit(answer);assert.equal(view.scripts.length,0);
- view.release();await first;assert.equal(view.scripts.length,10);assert.equal(view.entered(),1);
+ view.release();await first;assert.equal(view.scripts.length,11);assert.equal(view.entered(),1);
 });
 test('failed core loading stays on the answer screen and offers a clean reload',async()=>{
  const view=browser({failScript:'data.js'});await view.submit(answer);assert.equal(view.nodes.get('access-gate').hidden,false);
@@ -96,10 +96,8 @@ test('Firebase load failure does not prevent entry to the local board',async()=>
 test('missing Web Crypto leaves the board hidden and reports a recoverable error',async()=>{
  const view=browser({secure:false});await view.submit(answer);assert.equal(view.scripts.length,0);assert.equal(view.nodes.get('team-app').hidden,true);assert.equal(view.nodes.get('access-submit').disabled,false);assert.match(view.nodes.get('access-status').textContent,/HTTPS/);
 });
-test('both avatars rally within the scene and animation stops after successful entry',async()=>{
- const view=browser({motion:true}),far=new Set(),near=new Set();
- for(let ms=0;ms<14000;ms+=83){view.advance(ms);far.add(view.nodes.get('entry-far-player').attributes.transform);near.add(view.nodes.get('entry-near-player').attributes.transform);const [x,y]=view.nodes.get('entry-rally-ball').attributes.transform.match(/-?\d+/g).map(Number);assert.ok(x>220&&x<740&&y>690&&y<1040);}
- assert.ok(far.size>20&&near.size>20);await view.submit(answer);assert.equal(view.frames.size,0);view.window.dispatchEvent({type:'pageshow'});assert.equal(view.frames.size,0);
+test('entry rally stops after successful entry while eight CSS avatars pause with page visibility',async()=>{
+ const view=browser({motion:true}),far=new Set();for(let ms=0;ms<14000;ms+=83){view.advance(ms);far.add(view.nodes.get('entry-far-player').attributes.transform);}assert.ok(far.size>20);await view.submit(answer);assert.equal(view.frames.size,0);view.window.dispatchEvent({type:'pagehide'});assert.equal(view.nodes.get('team-avatars').dataset.paused,'true');view.window.dispatchEvent({type:'pageshow'});assert.equal(view.nodes.get('team-avatars').dataset.paused,'false');
 });
 test('reduced motion and hidden tabs stop animation without disabling authentication',async()=>{
  const view=browser({motion:true,reduced:true});assert.equal(view.frames.size,0);
@@ -131,4 +129,8 @@ test('reduced motion shows a still fallen pose for incomplete input then restore
 test('entry clears the reduced-motion recovery timer',async()=>{
  const view=browser({motion:true,reduced:true});await view.submit('wrong!');assert.equal(view.timers.size,1);
  await view.submit(answer);assert.equal(view.timers.size,0);assert.equal(view.nodes.get('access-gate').dataset.reaction,'idle');assert.equal(view.nodes.get('access-gate').hidden,true);
+});
+
+test('entry background is plain and header reuses isolated avatar assets without shared IDs',()=>{
+ const intro=html.slice(html.indexOf('<section id="access-gate"'),html.indexOf('<div id="team-app"'));assert.match(intro,/<rect width="941" height="1672" fill="#fff"/);assert.doesNotMatch(intro,/<use href="#art"\/>\s*<rect x="155"/);assert.match(intro,/<use href="#art" clip-path="url\(#entry-card-frame\)"/);assert.match(html,/id="black-art" href="assets\/entry-minimi-black-outfit.png"/);assert.match(html,/id="team-avatars"/);assert.equal((html.match(/class="team-avatar"/g)||[]).length,8);assert.equal((html.match(/class="avatar-ball"/g)||[]).length,8);const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(match=>match[1]);assert.equal(new Set(ids).size,ids.length);
 });

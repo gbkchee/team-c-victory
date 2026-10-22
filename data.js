@@ -2468,5 +2468,809 @@ const data = {
   ]
 };
 
+// Official full tournament schedule; the C-team planning schedule above stays independent.
+data.tournamentSchedule=[
+  {
+    "id": "m01",
+    "time": "11:00",
+    "endTime": "11:30",
+    "court": 1,
+    "sides": [
+      {
+        "team": "A",
+        "number": 1
+      },
+      {
+        "team": "B",
+        "number": 1
+      }
+    ],
+    "teams": [
+      "A",
+      "B"
+    ]
+  },
+  {
+    "id": "m02",
+    "time": "11:00",
+    "endTime": "11:30",
+    "court": 2,
+    "sides": [
+      {
+        "team": "C",
+        "number": 1
+      },
+      {
+        "team": "D",
+        "number": 1
+      }
+    ],
+    "teams": [
+      "C",
+      "D"
+    ]
+  },
+  {
+    "id": "m03",
+    "time": "11:00",
+    "endTime": "11:30",
+    "court": 3,
+    "sides": [
+      {
+        "team": "A",
+        "number": 2
+      },
+      {
+        "team": "C",
+        "number": 2
+      }
+    ],
+    "teams": [
+      "A",
+      "C"
+    ]
+  },
+  {
+    "id": "m04",
+    "time": "11:30",
+    "endTime": "12:00",
+    "court": 1,
+    "sides": [
+      {
+        "team": "B",
+        "number": 2
+      },
+      {
+        "team": "D",
+        "number": 2
+      }
+    ],
+    "teams": [
+      "B",
+      "D"
+    ]
+  },
+  {
+    "id": "m05",
+    "time": "11:30",
+    "endTime": "12:00",
+    "court": 2,
+    "sides": [
+      {
+        "team": "A",
+        "number": 3
+      },
+      {
+        "team": "D",
+        "number": 3
+      }
+    ],
+    "teams": [
+      "A",
+      "D"
+    ]
+  },
+  {
+    "id": "m06",
+    "time": "11:30",
+    "endTime": "12:00",
+    "court": 3,
+    "sides": [
+      {
+        "team": "B",
+        "number": 3
+      },
+      {
+        "team": "C",
+        "number": 3
+      }
+    ],
+    "teams": [
+      "B",
+      "C"
+    ]
+  },
+  {
+    "id": "m07",
+    "time": "12:00",
+    "endTime": "12:30",
+    "court": 1,
+    "sides": [
+      {
+        "team": "A",
+        "number": 4
+      },
+      {
+        "team": "B",
+        "number": 4
+      }
+    ],
+    "teams": [
+      "A",
+      "B"
+    ]
+  },
+  {
+    "id": "m08",
+    "time": "12:00",
+    "endTime": "12:30",
+    "court": 2,
+    "sides": [
+      {
+        "team": "A",
+        "number": 5
+      },
+      {
+        "team": "B",
+        "number": 5
+      }
+    ],
+    "teams": [
+      "A",
+      "B"
+    ]
+  },
+  {
+    "id": "m09",
+    "time": "12:00",
+    "endTime": "12:30",
+    "court": 3,
+    "sides": [
+      {
+        "team": "C",
+        "number": 4
+      },
+      {
+        "team": "D",
+        "number": 4
+      }
+    ],
+    "teams": [
+      "C",
+      "D"
+    ]
+  },
+  {
+    "id": "m10",
+    "time": "12:00",
+    "endTime": "12:30",
+    "court": 4,
+    "sides": [
+      {
+        "team": "C",
+        "number": 5
+      },
+      {
+        "team": "D",
+        "number": 5
+      }
+    ],
+    "teams": [
+      "C",
+      "D"
+    ]
+  },
+  {
+    "id": "m11",
+    "time": "12:30",
+    "endTime": "13:00",
+    "court": 1,
+    "sides": [
+      {
+        "team": "A",
+        "number": 6
+      },
+      {
+        "team": "C",
+        "number": 6
+      }
+    ],
+    "teams": [
+      "A",
+      "C"
+    ]
+  },
+  {
+    "id": "m12",
+    "time": "12:30",
+    "endTime": "13:00",
+    "court": 2,
+    "sides": [
+      {
+        "team": "A",
+        "number": 7
+      },
+      {
+        "team": "C",
+        "number": 7
+      }
+    ],
+    "teams": [
+      "A",
+      "C"
+    ]
+  },
+  {
+    "id": "m13",
+    "time": "12:30",
+    "endTime": "13:00",
+    "court": 3,
+    "sides": [
+      {
+        "team": "B",
+        "number": 6
+      },
+      {
+        "team": "D",
+        "number": 6
+      }
+    ],
+    "teams": [
+      "B",
+      "D"
+    ]
+  },
+  {
+    "id": "m14",
+    "time": "12:30",
+    "endTime": "13:00",
+    "court": 4,
+    "sides": [
+      {
+        "team": "B",
+        "number": 7
+      },
+      {
+        "team": "D",
+        "number": 7
+      }
+    ],
+    "teams": [
+      "B",
+      "D"
+    ]
+  },
+  {
+    "id": "m15",
+    "time": "13:00",
+    "endTime": "13:30",
+    "court": 1,
+    "sides": [
+      {
+        "team": "A",
+        "number": 8
+      },
+      {
+        "team": "D",
+        "number": 8
+      }
+    ],
+    "teams": [
+      "A",
+      "D"
+    ]
+  },
+  {
+    "id": "m16",
+    "time": "13:00",
+    "endTime": "13:30",
+    "court": 2,
+    "sides": [
+      {
+        "team": "A",
+        "number": 9
+      },
+      {
+        "team": "D",
+        "number": 9
+      }
+    ],
+    "teams": [
+      "A",
+      "D"
+    ]
+  },
+  {
+    "id": "m17",
+    "time": "13:00",
+    "endTime": "13:30",
+    "court": 3,
+    "sides": [
+      {
+        "team": "B",
+        "number": 8
+      },
+      {
+        "team": "C",
+        "number": 8
+      }
+    ],
+    "teams": [
+      "B",
+      "C"
+    ]
+  },
+  {
+    "id": "m18",
+    "time": "13:00",
+    "endTime": "13:30",
+    "court": 4,
+    "sides": [
+      {
+        "team": "B",
+        "number": 9
+      },
+      {
+        "team": "C",
+        "number": 9
+      }
+    ],
+    "teams": [
+      "B",
+      "C"
+    ]
+  },
+  {
+    "id": "m19",
+    "time": "13:30",
+    "endTime": "14:00",
+    "court": 1,
+    "sides": [
+      {
+        "team": "A",
+        "number": 10
+      },
+      {
+        "team": "B",
+        "number": 10
+      }
+    ],
+    "teams": [
+      "A",
+      "B"
+    ]
+  },
+  {
+    "id": "m20",
+    "time": "13:30",
+    "endTime": "14:00",
+    "court": 2,
+    "sides": [
+      {
+        "team": "A",
+        "number": 11
+      },
+      {
+        "team": "B",
+        "number": 11
+      }
+    ],
+    "teams": [
+      "A",
+      "B"
+    ]
+  },
+  {
+    "id": "m21",
+    "time": "13:30",
+    "endTime": "14:00",
+    "court": 3,
+    "sides": [
+      {
+        "team": "C",
+        "number": 10
+      },
+      {
+        "team": "D",
+        "number": 10
+      }
+    ],
+    "teams": [
+      "C",
+      "D"
+    ]
+  },
+  {
+    "id": "m22",
+    "time": "13:30",
+    "endTime": "14:00",
+    "court": 4,
+    "sides": [
+      {
+        "team": "C",
+        "number": 11
+      },
+      {
+        "team": "D",
+        "number": 11
+      }
+    ],
+    "teams": [
+      "C",
+      "D"
+    ]
+  },
+  {
+    "id": "m23",
+    "time": "14:00",
+    "endTime": "14:30",
+    "court": 1,
+    "sides": [
+      {
+        "team": "A",
+        "number": 12
+      },
+      {
+        "team": "C",
+        "number": 12
+      }
+    ],
+    "teams": [
+      "A",
+      "C"
+    ]
+  },
+  {
+    "id": "m24",
+    "time": "14:00",
+    "endTime": "14:30",
+    "court": 2,
+    "sides": [
+      {
+        "team": "A",
+        "number": 13
+      },
+      {
+        "team": "C",
+        "number": 13
+      }
+    ],
+    "teams": [
+      "A",
+      "C"
+    ]
+  },
+  {
+    "id": "m25",
+    "time": "14:00",
+    "endTime": "14:30",
+    "court": 3,
+    "sides": [
+      {
+        "team": "B",
+        "number": 12
+      },
+      {
+        "team": "D",
+        "number": 12
+      }
+    ],
+    "teams": [
+      "B",
+      "D"
+    ]
+  },
+  {
+    "id": "m26",
+    "time": "14:00",
+    "endTime": "14:30",
+    "court": 4,
+    "sides": [
+      {
+        "team": "B",
+        "number": 13
+      },
+      {
+        "team": "D",
+        "number": 13
+      }
+    ],
+    "teams": [
+      "B",
+      "D"
+    ]
+  },
+  {
+    "id": "m27",
+    "time": "14:30",
+    "endTime": "15:00",
+    "court": 1,
+    "sides": [
+      {
+        "team": "A",
+        "number": 14
+      },
+      {
+        "team": "D",
+        "number": 14
+      }
+    ],
+    "teams": [
+      "A",
+      "D"
+    ]
+  },
+  {
+    "id": "m28",
+    "time": "14:30",
+    "endTime": "15:00",
+    "court": 2,
+    "sides": [
+      {
+        "team": "A",
+        "number": 15
+      },
+      {
+        "team": "D",
+        "number": 15
+      }
+    ],
+    "teams": [
+      "A",
+      "D"
+    ]
+  },
+  {
+    "id": "m29",
+    "time": "14:30",
+    "endTime": "15:00",
+    "court": 3,
+    "sides": [
+      {
+        "team": "B",
+        "number": 14
+      },
+      {
+        "team": "C",
+        "number": 14
+      }
+    ],
+    "teams": [
+      "B",
+      "C"
+    ]
+  },
+  {
+    "id": "m30",
+    "time": "14:30",
+    "endTime": "15:00",
+    "court": 4,
+    "sides": [
+      {
+        "team": "B",
+        "number": 15
+      },
+      {
+        "team": "C",
+        "number": 15
+      }
+    ],
+    "teams": [
+      "B",
+      "C"
+    ]
+  },
+  {
+    "id": "m31",
+    "time": "15:00",
+    "endTime": "15:30",
+    "court": 1,
+    "sides": [
+      {
+        "team": "A",
+        "number": 16
+      },
+      {
+        "team": "B",
+        "number": 16
+      }
+    ],
+    "teams": [
+      "A",
+      "B"
+    ]
+  },
+  {
+    "id": "m32",
+    "time": "15:00",
+    "endTime": "15:30",
+    "court": 2,
+    "sides": [
+      {
+        "team": "C",
+        "number": 16
+      },
+      {
+        "team": "D",
+        "number": 16
+      }
+    ],
+    "teams": [
+      "C",
+      "D"
+    ]
+  },
+  {
+    "id": "m33",
+    "time": "15:00",
+    "endTime": "15:30",
+    "court": 3,
+    "sides": [
+      {
+        "team": "A",
+        "number": 17
+      },
+      {
+        "team": "C",
+        "number": 17
+      }
+    ],
+    "teams": [
+      "A",
+      "C"
+    ]
+  },
+  {
+    "id": "m34",
+    "time": "15:30",
+    "endTime": "16:00",
+    "court": 1,
+    "sides": [
+      {
+        "team": "B",
+        "number": 17
+      },
+      {
+        "team": "D",
+        "number": 17
+      }
+    ],
+    "teams": [
+      "B",
+      "D"
+    ]
+  },
+  {
+    "id": "m35",
+    "time": "15:30",
+    "endTime": "16:00",
+    "court": 2,
+    "sides": [
+      {
+        "team": "A",
+        "number": 18
+      },
+      {
+        "team": "D",
+        "number": 18
+      }
+    ],
+    "teams": [
+      "A",
+      "D"
+    ]
+  },
+  {
+    "id": "m36",
+    "time": "15:30",
+    "endTime": "16:00",
+    "court": 3,
+    "sides": [
+      {
+        "team": "B",
+        "number": 18
+      },
+      {
+        "team": "C",
+        "number": 18
+      }
+    ],
+    "teams": [
+      "B",
+      "C"
+    ]
+  },
+  {
+    "id": "m37",
+    "time": "16:00",
+    "endTime": "16:30",
+    "court": 1,
+    "sides": [
+      {
+        "team": "A",
+        "number": 19
+      },
+      {
+        "team": "B",
+        "number": 19
+      }
+    ],
+    "teams": [
+      "A",
+      "B"
+    ]
+  },
+  {
+    "id": "m38",
+    "time": "16:00",
+    "endTime": "16:30",
+    "court": 2,
+    "sides": [
+      {
+        "team": "C",
+        "number": 19
+      },
+      {
+        "team": "D",
+        "number": 19
+      }
+    ],
+    "teams": [
+      "C",
+      "D"
+    ]
+  },
+  {
+    "id": "m39",
+    "time": "16:00",
+    "endTime": "16:30",
+    "court": 3,
+    "sides": [
+      {
+        "team": "A",
+        "number": 20
+      },
+      {
+        "team": "C",
+        "number": 20
+      }
+    ],
+    "teams": [
+      "A",
+      "C"
+    ]
+  },
+  {
+    "id": "m40",
+    "time": "16:30",
+    "endTime": "17:00",
+    "court": 1,
+    "sides": [
+      {
+        "team": "B",
+        "number": 20
+      },
+      {
+        "team": "D",
+        "number": 20
+      }
+    ],
+    "teams": [
+      "B",
+      "D"
+    ]
+  }
+];
+
 if(typeof module==='object'&&module.exports)module.exports=data;else root.BOARD_DATA=data;
 })(typeof window==='undefined'?globalThis:window);
