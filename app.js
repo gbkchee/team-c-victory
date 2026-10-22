@@ -288,7 +288,7 @@ if(typeof document!=='undefined')(() => {
  }
  $('schedule-dialog').addEventListener('close',()=>{if(!$('schedule-dialog').open)finishScheduleSession();});
  $('schedule-dialog').addEventListener('cancel',event=>{event.preventDefault();closeSchedule(false);});
- for(const id of ['schedule-close','schedule-cancel','schedule-readonly-close'])$(id).addEventListener('click',()=>closeSchedule(false));
+ for(const id of ['schedule-close','schedule-cancel'])$(id).addEventListener('click',()=>closeSchedule(false));
  for(const id of ['open-team-schedule','open-team-schedule-bottom'])$(id).addEventListener('click',()=>openSchedule(true,$(id)));
  $('open-schedule-management').addEventListener('click',()=>openSchedule(false,$('open-schedule-management'),Boolean(confirmed())));
  $('open-shared-composition').addEventListener('click',()=>openSchedule(false,$('open-shared-composition')));
@@ -299,14 +299,13 @@ if(typeof document!=='undefined')(() => {
   $('schedule-dialog-badge').textContent=read?(confirmed()?'C조 편성 확정본':'기본 출전표 · 추천 조합 1'):'미저장 초안';
   $('schedule-dialog-subtitle').textContent=read?(confirmed()?'팀원이 확정한 최신 공유 출전표':(plans[0]?'아직 확정된 출전표가 없어 추천 조합 1의 기본 출전표를 보여드립니다.':'공식 대진을 먼저 표시합니다. C조 기본 출전표는 준비 중입니다.')):(plan?(plans.findIndex(item=>compositionKey(item)===compositionKey(plan))<0?'공유받은 페어 구성':'추천 조합 '+(plans.findIndex(item=>compositionKey(item)===compositionKey(plan))+1)):'출전표 준비')+' · 확정 전에는 팀 출전표에 반영되지 않아요';
   $('schedule-empty').hidden=!empty;$('schedule-empty').textContent=empty?(cloud?.status!=='ready'?'팀 공유 저장소 연결 상태를 확인하고 있습니다. 연결 후 최신 확정표를 확인하세요.':!cloud?.lineupReady?'팀 출전표를 불러오고 있습니다.':'기본 출전표를 계산하고 있습니다. 잠시 기다려 주세요.') :'';
-  $('schedule-content').hidden=empty&&!read;$('schedule-shared-note').hidden=!read||empty;$('schedule-shared-note').querySelector('span').textContent=confirmed()?'서버에 저장된 최신 팀 출전표입니다.':'기본 출전표는 미확정 상태이며 자동 저장하지 않습니다.';
+  $('schedule-content').hidden=empty&&!read;$('schedule-footer').hidden=read;
   $('schedule-guide-icon').src='assets/'+(read?'schedule-users.svg':'schedule-move.svg');
   $('schedule-guide-title').textContent=read?'전체 공식 경기와 출전 기록을 함께 확인하세요':'드래그로 페어를 교환하세요';
-  $('schedule-guide-text').textContent=read?(confirmed()?'C조 편성은 읽기 전용입니다. 경기를 눌러 각 팀의 실제 출전 선수를 기록하세요.':'C조는 원본 추천 1의 예정 편성입니다. 경기를 눌러 실제 출전을 별도로 기록하세요. 기본 표는 자동 저장하지 않습니다.'):'모바일은 손잡이를 길게 누른 뒤 이동하세요. 같은 시간 중복 출전은 적용하지 않습니다.';
+  $('schedule-guide-text').textContent=read?(confirmed()?'C조 편성은 읽기 전용입니다. 경기를 눌러 각 팀의 실제 출전 선수를 기록하세요.':'C조는 원본 추천 1의 예정 편성입니다. 경기를 눌러 실제 출전을 별도로 기록하세요. 기본 표는 자동 저장하지 않습니다.'):'모바일은 셀을 길게 누른 뒤 이동하세요. 같은 시간 중복 출전은 적용하지 않습니다.';
   $('schedule-cancel').hidden=read;$('schedule-confirm').hidden=read;$('schedule-confirm').disabled=$('confirm-lineup').disabled;
-  $('schedule-readonly-close').hidden=!read;
-  $('schedule-footer-title').textContent=read?(confirmed()?'서버에 저장된 팀 공유 출전표':'추천 조합 1 · 기본 출전표'):'확정하면 팀 서버에 저장하고 팝업을 닫아요';
-  $('schedule-footer-description').textContent=read?'C조 편성은 변경하지 않습니다. 실제 출전 기록은 경기별로 별도 저장합니다.':'확정 전 편집은 초안이며, 취소하면 팀 출전표는 바뀌지 않아요.';
+  $('schedule-footer-title').textContent='확정하면 팀 서버에 저장하고 팝업을 닫아요';
+  $('schedule-footer-description').textContent='확정 전 편집은 초안이며, 취소하면 팀 출전표는 바뀌지 않아요.';
   $('schedule-save-status').textContent=confirmationMessage||'';
  }
  const collapsedPlayerCards=new Set();
@@ -367,12 +366,13 @@ if(typeof document!=='undefined')(() => {
  function dragCell(node){while(node&&node!==document){if(node.classList?.contains('matrix-match'))return node;node=node.parentNode;}return null;}
  function clearDrag(){
   if(!scheduleDrag)return;clearTimeout(scheduleDrag.timer);clearTimeout(dragScrollTimer);dragScrollTimer=null;
-  const drag=scheduleDrag;scheduleDrag=null;drag.node.draggable=true;
+  const drag=scheduleDrag;scheduleDrag=null;drag.node.draggable=true;drag.ghost?.remove();
   for(const node of $('matches').querySelectorAll('.matrix-match')){node.classList.remove('drag-source');node.classList.remove('drop-valid');node.classList.remove('drop-invalid');}
   document.body.classList.remove('schedule-dragging');
   if(drag.pointerId!==undefined&&drag.node.hasPointerCapture?.(drag.pointerId))drag.node.releasePointerCapture(drag.pointerId);
  }
- function activateDrag(drag){if(scheduleDrag!==drag||!currentDragPlan(drag)){clearDrag();return;}drag.active=true;drag.node.classList.add('drag-source');document.body.classList.add('schedule-dragging');$('schedule-drag-status').textContent='교환할 경기 위로 옮겨 놓으세요.';}
+ function moveDragGhost(drag){if(drag.ghost&&Number.isFinite(drag.x)&&Number.isFinite(drag.y))drag.ghost.setAttribute('style','left:'+drag.x+'px;top:'+Math.max(70,drag.y-12)+'px');}
+ function activateDrag(drag){if(scheduleDrag!==drag||!currentDragPlan(drag)){clearDrag();return;}drag.active=true;if(drag.pointerId!==undefined||drag.touchId!==undefined){const match=currentDragPlan(drag).matches.find(item=>String(item.id)===String(drag.id));drag.ghost=el('div','schedule-drag-ghost');drag.ghost.setAttribute('aria-hidden','true');drag.ghost.append(el('strong','',match.pair.map(displayName).join(' × ')),el('span','',match.team+'조'));($('schedule-dialog').open?$('schedule-dialog'):document.body).append(drag.ghost);moveDragGhost(drag);}drag.node.classList.add('drag-source');document.body.classList.add('schedule-dragging');$('schedule-drag-status').textContent='교환할 경기 위로 옮겨 놓으세요.';}
  function dragPreview(target){
   if(!scheduleDrag?.active)return null;
   for(const node of $('matches').querySelectorAll('.matrix-match')){node.classList.remove('drop-valid');node.classList.remove('drop-invalid');}
@@ -395,8 +395,8 @@ if(typeof document!=='undefined')(() => {
   dragScrollTimer=setTimeout(()=>{if(!scheduleDrag?.active)return;if(!Number.isFinite(scheduleDrag.x)||!Number.isFinite(scheduleDrag.y))return;const target=dragCell(document.elementFromPoint?.(scheduleDrag.x,scheduleDrag.y));dragPreview(target);edgeScroll(scheduleDrag?.y??y);},50);
  }
  function installScheduleDrag(node,match){
-  if(scheduleReadOnly)return;node.draggable=true;node.dataset.editable='true';node.title='끌어서 다른 경기와 페어 교환 · 모바일은 손잡이를 길게 누른 뒤 이동';
-  node.addEventListener('dragstart',event=>{if(event.target?.tagName==='IMG'){event.preventDefault();return;}if(scheduleDrag?.pointerId!==undefined){event.preventDefault();return;}clearDrag();const drag=dragSnapshot(match.id,node);scheduleDrag=drag;activateDrag(drag);if(!drag.active){event.preventDefault();return;}event.dataTransfer?.setData('text/plain',String(match.id));if(event.dataTransfer)event.dataTransfer.effectAllowed='move';});
+  if(scheduleReadOnly)return;node.draggable=true;node.dataset.editable='true';node.title='끌어서 다른 경기와 페어 교환 · 모바일은 셀을 길게 누른 뒤 이동';
+  node.addEventListener('dragstart',event=>{if(event.target?.tagName==='IMG'){event.preventDefault();return;}if(scheduleDrag?.pointerId!==undefined||scheduleDrag?.touchId!==undefined){event.preventDefault();return;}clearDrag();const drag=dragSnapshot(match.id,node);scheduleDrag=drag;activateDrag(drag);if(!drag.active){event.preventDefault();return;}event.dataTransfer?.setData('text/plain',String(match.id));if(event.dataTransfer)event.dataTransfer.effectAllowed='move';});
   node.addEventListener('dragover',event=>{if(!scheduleDrag?.active)return;scheduleDrag.x=event.clientX;scheduleDrag.y=event.clientY;const result=dragPreview(node);if(result){event.preventDefault();if(event.dataTransfer)event.dataTransfer.dropEffect='move';}else if(event.dataTransfer)event.dataTransfer.dropEffect='none';edgeScroll(event.clientY);});
   node.addEventListener('dragleave',event=>{if(scheduleDrag?.active&&!node.contains(event.relatedTarget))dragPreview(null);});
   node.addEventListener('drop',event=>{if(!scheduleDrag?.active)return;event.preventDefault();finishDrag(node);});
@@ -405,20 +405,23 @@ if(typeof document!=='undefined')(() => {
    if(event.pointerType!=='touch')return;if(event.isPrimary===false){clearDrag();return;}clearDrag();node.draggable=false;const drag={...dragSnapshot(match.id,node),pointerId:event.pointerId,x:event.clientX,y:event.clientY,startX:event.clientX,startY:event.clientY,active:false};scheduleDrag=drag;
    drag.timer=setTimeout(()=>{activateDrag(drag);if(drag.active){node.setPointerCapture?.(event.pointerId);}},350);
   });
+  node.addEventListener('touchstart',event=>{if(event.touches?.length!==1){clearDrag();return;}const touch=event.touches[0];clearDrag();node.draggable=false;const drag={...dragSnapshot(match.id,node),touchId:touch.identifier,x:touch.clientX,y:touch.clientY,startX:touch.clientX,startY:touch.clientY,active:false};scheduleDrag=drag;drag.timer=setTimeout(()=>activateDrag(drag),350);},{passive:true});
   node.addEventListener('lostpointercapture',event=>{if(scheduleDrag?.node===node&&scheduleDrag.pointerId!==undefined&&scheduleDrag.pointerId===event.pointerId){clearDrag();}});
   node.addEventListener('contextmenu',event=>{event.preventDefault();});
   node.addEventListener('selectstart',event=>{event.preventDefault();});
  }
- document.addEventListener('dragover',event=>{if(!scheduleDrag?.active||scheduleDrag.pointerId!==undefined||dragCell(event.target))return;scheduleDrag.x=event.clientX;scheduleDrag.y=event.clientY;dragPreview(null);if(event.dataTransfer)event.dataTransfer.dropEffect='none';edgeScroll(event.clientY);});
+ document.addEventListener('dragover',event=>{if(!scheduleDrag?.active||scheduleDrag.pointerId!==undefined||scheduleDrag.touchId!==undefined||dragCell(event.target))return;scheduleDrag.x=event.clientX;scheduleDrag.y=event.clientY;dragPreview(null);if(event.dataTransfer)event.dataTransfer.dropEffect='none';edgeScroll(event.clientY);});
  document.addEventListener('pointerdown',event=>{if(event.pointerType==='touch'&&event.isPrimary===false){clearDrag();}});
  document.addEventListener('touchstart',event=>{if(event.touches?.length>1){clearDrag();}},{passive:true});
  document.addEventListener('pointermove',event=>{
   const drag=scheduleDrag;if(!drag||drag.pointerId!==event.pointerId)return;
   drag.x=event.clientX;drag.y=event.clientY;
   if(!drag.active){if(Math.hypot(drag.x-drag.startX,drag.y-drag.startY)>8)clearDrag();return;}
-  event.preventDefault();dragPreview(dragCell(document.elementFromPoint?.(event.clientX,event.clientY)||event.target));edgeScroll(event.clientY);
+  event.preventDefault();moveDragGhost(drag);dragPreview(dragCell(document.elementFromPoint?.(event.clientX,event.clientY)||event.target));edgeScroll(event.clientY);
  },{passive:false});
- document.addEventListener('touchmove',event=>{if(scheduleDrag?.active&&scheduleDrag.pointerId!==undefined)event.preventDefault();},{passive:false});
+ document.addEventListener('touchmove',event=>{const drag=scheduleDrag;if(!drag)return;if(drag.touchId===undefined){if(drag.active&&drag.pointerId!==undefined)event.preventDefault();return;}if(event.touches?.length!==1){clearDrag();return;}const touch=[...event.touches].find(item=>item.identifier===drag.touchId);if(!touch){clearDrag();return;}drag.x=touch.clientX;drag.y=touch.clientY;if(!drag.active){if(Math.hypot(drag.x-drag.startX,drag.y-drag.startY)>8)clearDrag();return;}event.preventDefault();moveDragGhost(drag);dragPreview(dragCell(document.elementFromPoint?.(drag.x,drag.y)||event.target));edgeScroll(drag.y);},{passive:false});
+ document.addEventListener('touchend',event=>{const drag=scheduleDrag;if(drag?.touchId===undefined)return;const touch=[...(event.changedTouches||[])].find(item=>item.identifier===drag.touchId);if(!touch)return;if(event.touches?.length){clearDrag();return;}if(drag.active)event.preventDefault();finishDrag(dragCell(document.elementFromPoint?.(touch.clientX,touch.clientY)||event.target));},{passive:false});
+ document.addEventListener('touchcancel',()=>{if(scheduleDrag?.touchId!==undefined)clearDrag();});
  document.addEventListener('pointerup',event=>{if(scheduleDrag?.pointerId!==event.pointerId)return;const target=dragCell(document.elementFromPoint?.(event.clientX,event.clientY)||event.target);finishDrag(target);});
  document.addEventListener('pointercancel',event=>{if(scheduleDrag?.pointerId===undefined||scheduleDrag.pointerId!==event.pointerId)return;clearDrag();});
  window.addEventListener('blur',()=>{clearDrag();});
@@ -443,9 +446,9 @@ if(typeof document!=='undefined')(() => {
   for(const time of times){const row=el('tr'),reference=rows.find(match=>match.time===time),clock=el('th','matrix-time');clock.scope='row';clock.append(el('strong','',time),el('span','small','~ '+reference.endTime));row.append(clock);
    for(let court=1;court<=4;court++){const cell=el('td'),match=rows.find(item=>item.time===time&&item.court===court);if(!match){cell.className='matrix-empty';cell.textContent='—';}else{
     const open=button('',false,()=>openOfficialRecord(match,open),'official-match');open.dataset.officialMatch=match.id;open.setAttribute('aria-label',time+' '+court+'코트 '+match.sides.map(side=>side.team+side.number).join(' vs ')+' 실제 출전 기록');
-    for(const [index,side] of match.sides.entries()){if(index)open.append(el('span','official-vs','vs'));const line=el('span','official-team-line');line.append(el('strong','official-team-label',side.team+side.number));const pair=records[match.id]?.[side.team],planned=side.team==='C'?plan?.matches.find(game=>game.id===side.number):null;
-     if(side.team==='C'&&planned){const own=el('span','matrix-match official-c-plan');own.dataset.match=planned.id;own.setAttribute('aria-readonly','true');own.draggable=false;const label=el('span','matrix-pair-names');for(const [position,name] of planned.pair.entries()){if(position)label.append(el('span','matrix-pair-separator','×'));const member=el('span','matrix-player');member.append(el('span','matrix-player-name',displayName(name)));if(warnings.has(name)){const warning=el('span','matrix-run-warning','💦');warning.title=displayName(name)+'가 연속 '+warnings.get(name)+'경기 출전합니다.';warning.setAttribute('role','img');warning.setAttribute('aria-label',warning.title);member.append(warning);}label.append(member);}own.append(label);line.append(own);}
-     if(pair){const actual=el('span','official-observed',pair.map(observedName).join(' · '));line.append(actual);}open.append(line);
+    for(const [index,side] of [...match.sides].sort((a,b)=>a.team==='C'?-1:b.team==='C'?1:0).entries()){if(index)open.append(el('span','official-vs','vs'));const line=el('span','official-team-line');line.dataset.team=side.team;if(side.team!=='C')line.append(el('strong','official-team-label',side.team+side.number));const pair=records[match.id]?.[side.team],planned=side.team==='C'?plan?.matches.find(game=>game.id===side.number):null;
+     if(side.team==='C'&&(planned||pair)){const displayedPair=pair?pair.map(id=>id.slice(2)):planned.pair;const own=el('span','matrix-match official-c-plan');own.dataset.match=planned?.id??side.number;own.setAttribute('aria-readonly','true');own.draggable=false;const label=el('span','matrix-pair-names');for(const [position,name] of displayedPair.entries()){if(position)label.append(el('span','matrix-pair-separator','×'));const member=el('span','matrix-player');member.append(el('span','matrix-player-name',displayName(name)));if(!pair&&warnings.has(name)){const warning=el('span','matrix-run-warning','💦');warning.title=displayName(name)+'가 연속 '+warnings.get(name)+'경기 출전합니다.';warning.setAttribute('role','img');warning.setAttribute('aria-label',warning.title);member.append(warning);}label.append(member);}own.append(label);line.append(own);}
+     if(pair&&side.team!=='C'){const actual=el('span','official-observed');for(const id of pair){const member=el('span',side.team==='C'?'official-own-name':'official-opponent-name',observedName(id));member.title=observedName(id);actual.append(member);}line.append(actual);}open.append(line);
     }cell.append(open);
    }row.append(cell);}body.append(row);
   }table.append(body);$('matches').append(table);
@@ -491,7 +494,7 @@ if(typeof document!=='undefined')(() => {
     const cell=el('td'),match=matches.find(item=>item.court===court);cell.dataset.court=String(court);
     if(match){const choice=el('div','matrix-match');choice.tabIndex=0;choice.setAttribute('role','group');installScheduleDrag(choice,match);choice.setAttribute('aria-readonly',String(scheduleReadOnly));
      choice.dataset.match=match.id;choice.setAttribute('aria-label',time+' '+court+'코트 '+match.pair.map(displayName).join(' + ')+' vs '+match.team+'조');
-     const pairNames=el('span','matrix-pair-names');for(const name of match.pair){const player=el('span','matrix-player');player.append(el('span','matrix-player-name',displayName(name)));if(runWarnings.has(name)){const warning=el('span','matrix-run-warning','💦');warning.title=displayName(name)+'가 연속 '+runWarnings.get(name)+'경기 출전합니다.';warning.setAttribute('role','img');warning.setAttribute('aria-label',warning.title);player.append(warning);choice.setAttribute('aria-label',choice.getAttribute('aria-label')+'. '+warning.title);}pairNames.append(player);}if(!scheduleReadOnly){const handle=el('span','matrix-drag-handle'),icon=asset('schedule-grip.svg',13,13);handle.title='길게 누른 뒤 끌어서 페어 교환';handle.setAttribute('aria-hidden','true');icon.draggable=false;icon.setAttribute('draggable','false');handle.append(icon);choice.append(handle);}const pairInfo=el('span','matrix-pair-info'),meta=el('span','matrix-pair-meta');meta.append(el('span','matrix-opponent',match.team+'조'));pairInfo.append(pairNames,meta);choice.append(pairInfo);cell.append(choice);
+     const pairNames=el('span','matrix-pair-names');for(const name of match.pair){const player=el('span','matrix-player');player.append(el('span','matrix-player-name',displayName(name)));if(runWarnings.has(name)){const warning=el('span','matrix-run-warning','💦');warning.title=displayName(name)+'가 연속 '+runWarnings.get(name)+'경기 출전합니다.';warning.setAttribute('role','img');warning.setAttribute('aria-label',warning.title);player.append(warning);choice.setAttribute('aria-label',choice.getAttribute('aria-label')+'. '+warning.title);}pairNames.append(player);}const pairInfo=el('span','matrix-pair-info'),meta=el('span','matrix-pair-meta');meta.append(el('span','matrix-opponent',match.team+'조'));pairInfo.append(pairNames,meta);choice.append(pairInfo);cell.append(choice);
     }else{cell.className='matrix-empty';cell.textContent='—';}row.append(cell);
    }body.append(row);
   }table.append(body);$('matches').append(table);
