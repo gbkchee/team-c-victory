@@ -573,9 +573,10 @@ body[data-page="schedule"] main { max-width: 976px; padding: 0 24px 32px; }
 .schedule-dialog .schedule-scroll { overflow: visible; overscroll-behavior: auto; }
 .schedule-dialog-header { gap: 16px; }
 .schedule-dialog-header > div { min-width: 0; width: 100%; }
-.schedule-title-row { gap: 8px; }
-.schedule-title-row h2 { flex-shrink: 0; white-space: nowrap; }
-#schedule-close { flex-shrink: 0; width: 44px; height: 44px; min-height: 44px; padding: 0; font-size: 22px; line-height: 1; }
+.schedule-title-row { gap: 10px; align-items: center; }
+.schedule-title-row h2 { flex-shrink: 0; margin: 0; white-space: nowrap; }
+#schedule-close { position: relative; display: grid; place-items: center; flex-shrink: 0; min-width: 0; width: 24px; height: 28px; min-height: 28px; padding: 0; color: #002d40; line-height: 1; }
+#schedule-close::before { content: ""; position: absolute; width: 44px; height: 44px; background: transparent; }
 .schedule-dialog-footer { position: sticky; bottom: 0; z-index: 10; background: white; box-shadow: 0 -5px 16px #002d4008; }
 .official-team-line[data-team="C"] { padding: 5px; border-radius: 5px; background: #edf5f8; border: 0; }
 @media(max-width:700px) { body[data-page="schedule"] main { padding: 0 8px 20px; }.schedule-dialog { width: 100%; max-height: none; border-radius: 0; }.schedule-dialog-header { padding: 16px 8px; }.schedule-dialog-footer { padding: 12px 8px; } }
