@@ -542,6 +542,7 @@ body[data-page] .site-title { margin: 0; font-size: 24px; line-height: 1.25; let
 @media(max-width:520px) { body[data-page] .match-introduction { padding: 16px 16px 20px; }body[data-page] .site-title { font-size: 22px; }.team-avatars { --sprite: clamp(30px,9vw,34px); } }
 /* Each source crop includes the full chibi, including rackets and shoes. */
 .team-avatar { height: var(--sprite); background-image: url('assets/team-avatar-minimi-atlas.png'); background-size: calc(var(--sprite)*1774/400) calc(var(--sprite)*887/400); background-position: calc(var(--crop-x)*var(--sprite)/-400) calc(var(--crop-y)*var(--sprite)/-400); }.team-avatars { height: calc(var(--sprite) + 12px); }
+.team-avatar:nth-child(7) { background-image: url('assets/team-avatar-ballcap.png'); background-size: 120% 120%; background-position: center 88%; background-repeat: no-repeat; }
 body[data-page] .club-navigation { height: 52px; padding: 0 24px; }@media(max-width:520px) { body[data-page] .club-navigation { padding: 0 16px; } }
 
 body[data-page] .page-tabs { height: 61px; }body[data-page] .page-tab { font-size: 14px; }@media(max-width:520px) { body[data-page] .page-tab { font-size: 13px; } }
