@@ -309,13 +309,14 @@ if(typeof document!=='undefined')(() => {
  function syncScheduleDialog(plan){
   if(scheduleReadOnly)scheduleEmpty=!confirmed()&&!plans[0];const read=scheduleReadOnly,empty=scheduleEmpty,cloud=window.PLAYER_PROFILE_CLOUD;
   $('schedule-dialog').dataset.readonly=String(read);$('schedule-dialog-title').textContent=read?'우리 팀 출전표':'출전표 편집';
-  $('schedule-dialog-badge').textContent=read?(confirmed()?'C조 편성 확정본':'기본 출전표 · 추천 조합 1'):'미저장 초안';
-  $('schedule-dialog-subtitle').textContent=read?(confirmed()?'팀원이 확정한 최신 공유 출전표':(plans[0]?'아직 확정된 출전표가 없어 추천 조합 1의 기본 출전표를 보여드립니다.':'공식 대진을 먼저 표시합니다. C조 기본 출전표는 준비 중입니다.')):(plan?(plans.findIndex(item=>compositionKey(item)===compositionKey(plan))<0?'공유받은 페어 구성':'추천 조합 '+(plans.findIndex(item=>compositionKey(item)===compositionKey(plan))+1)):'출전표 준비')+' · 확정 전에는 팀 출전표에 반영되지 않아요';
+  $('schedule-dialog-badge').textContent=read?(confirmed()?'':'기본 출전표 · 추천 조합 1'):'미저장 초안';
+  $('schedule-dialog-subtitle').textContent=read?(confirmed()?'':(plans[0]?'아직 확정된 출전표가 없어 추천 조합 1의 기본 출전표를 보여드립니다.':'공식 대진을 먼저 표시합니다. C조 기본 출전표는 준비 중입니다.')):(plan?(plans.findIndex(item=>compositionKey(item)===compositionKey(plan))<0?'공유받은 페어 구성':'추천 조합 '+(plans.findIndex(item=>compositionKey(item)===compositionKey(plan))+1)):'출전표 준비')+' · 확정 전에는 팀 출전표에 반영되지 않아요';
+  for(const id of ['schedule-dialog-badge','schedule-dialog-subtitle'])$(id).hidden=!$(id).textContent;
   $('schedule-empty').hidden=!empty;$('schedule-empty').textContent=empty?(cloud?.status!=='ready'?'팀 공유 저장소 연결 상태를 확인하고 있습니다. 연결 후 최신 확정표를 확인하세요.':!cloud?.lineupReady?'팀 출전표를 불러오고 있습니다.':'기본 출전표를 계산하고 있습니다. 잠시 기다려 주세요.') :'';
   $('schedule-content').hidden=empty&&!read;$('schedule-footer').hidden=read;
   $('schedule-guide-icon').src='assets/'+(read?'schedule-users.svg':'schedule-move.svg');
   $('schedule-guide-title').textContent=read?'전체 공식 경기와 출전 기록을 함께 확인하세요':'드래그로 페어를 교환하세요';
-  $('schedule-guide-text').textContent=read?(confirmed()?'C조 편성은 읽기 전용입니다. 경기를 눌러 각 팀의 실제 출전 선수를 기록하세요.':'C조는 원본 추천 1의 예정 편성입니다. 경기를 눌러 실제 출전을 별도로 기록하세요. 기본 표는 자동 저장하지 않습니다.'):'모바일은 셀을 길게 누른 뒤 이동하세요. 같은 시간 중복 출전은 적용하지 않습니다.';
+  $('schedule-guide-text').textContent=read?'경기를 눌러 실제 출전 선수를 기록하세요':'모바일은 셀을 길게 누른 뒤 이동하세요. 같은 시간 중복 출전은 적용하지 않습니다.';
   $('schedule-cancel').hidden=read;$('schedule-confirm').hidden=read;$('schedule-confirm').disabled=$('confirm-lineup').disabled;
   $('schedule-footer-title').textContent='확정하면 팀 서버에 저장하고 이전 화면으로 돌아가요';
   $('schedule-footer-description').textContent='확정 전 편집은 초안이며, 취소하면 팀 출전표는 바뀌지 않아요.';
@@ -453,7 +454,8 @@ if(typeof document!=='undefined')(() => {
  function officialRecords(){return window.PLAYER_PROFILE_CLOUD?.opponentRecords||{};}
  function renderTournamentSchedule(plan){
   const cloud=window.PLAYER_PROFILE_CLOUD,records=officialRecords(),status=$('tournament-record-status');status.hidden=false;
-  status.textContent=cloud?.opponentRecordsError?recordConnectionMessage(cloud):cloud?.opponentRecordsReady?'경기를 눌러 실제 출전 선수를 기록하세요. 예정 편성은 경기 기록에 포함되지 않습니다.':'공유 경기 기록에 연결 중입니다. 예정 편성과 공식 대진을 먼저 표시합니다.';
+  status.textContent=cloud?.opponentRecordsError?recordConnectionMessage(cloud):cloud?.opponentRecordsReady?'':'공유 경기 기록에 연결 중입니다. 예정 편성과 공식 대진을 먼저 표시합니다.';
+  status.hidden=!status.textContent;
   $('retry-tournament-records').hidden=!cloud?.opponentRecordsError;
   const rows=data.tournamentSchedule.filter(match=>state.filter==='all'||match.sides.some(side=>side.team===state.filter)),times=[...new Set(rows.map(match=>match.time))].sort(),table=el('table','schedule-matrix tournament-matrix'),head=el('thead'),headRow=el('tr');for(const title of ['시간','1코트','2코트','3코트','4코트'])headRow.append(el('th','',title));head.append(headRow);table.append(head);const body=el('tbody'),warnings=new Map(pairing.consecutivePlayDetails(data,plan?.matches||[]).map(item=>[item.name,item.count]));
   for(const time of times){const row=el('tr'),reference=rows.find(match=>match.time===time),clock=el('th','matrix-time');clock.scope='row';clock.append(el('strong','',time),el('span','small','~ '+reference.endTime));row.append(clock);
