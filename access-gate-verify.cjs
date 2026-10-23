@@ -11,9 +11,9 @@ class Target {
  focus(){this.document.activeElement=this;}
  select(){}
 }
-function browser({motion=false,reduced=false,failScript='',secure=true,delayDigest=false,delayScripts=false}={}){
+function browser({motion=false,reduced=false,failScript='',secure=true,delayDigest=false,delayScripts=false,entryRequired=true}={}){
  const document=new Target(),window=new Target(),nodes=new Map(),frames=new Map(),timers=new Map(),media=new Target(),scripts=[];let sequence=0,entered=0,rejected=0,reloaded=false,release,timerNow=0;
- const classes=new Set(['entry-open']);document.body={classList:{remove:name=>classes.delete(name)}};
+ const classes=new Set(['entry-open']);document.body={dataset:{entryRequired:String(entryRequired)},classList:{remove:name=>classes.delete(name),add:name=>classes.add(name)}};
  for(const [,id] of html.matchAll(/\bid="([^"]+)"/g)){const node=new Target();node.document=document;nodes.set(id,node);}
  document.getElementById=id=>{assert.ok(nodes.has(id),'Element missing: '+id);return nodes.get(id);};
  document.createElement=()=>new Target();document.head={append(script){scripts.push(script);if(!delayScripts)queueMicrotask(()=>failScript&&script.src.startsWith(failScript)?script.onerror():script.onload());}};
@@ -30,6 +30,25 @@ function browser({motion=false,reduced=false,failScript='',secure=true,delayDige
   advance(now){const callbacks=[...frames.values()];frames.clear();for(const fn of callbacks)fn(now);},
   advanceTimers(ms){timerNow+=ms;for(const [id,timer] of [...timers])if(timer.due<=timerNow){timers.delete(id);timer.callback();}}};
 }
+test('default entry skips the preserved code screen and loads the linked board on every visit',async()=>{
+ assert.match(html,/<body data-entry-required="false">/);
+ assert.match(html,/<section id="access-gate"[^>]* hidden/);
+ for(let visit=0;visit<2;visit++){
+  const view=browser({entryRequired:false,secure:false,motion:true}),hash=view.window.location.hash;
+  assert.equal(view.nodes.get('access-gate').hidden,true);assert.equal(view.frames.size,0);
+  for(let i=0;i<10;i++)await Promise.resolve();
+  assert.equal(view.nodes.get('team-app').hidden,false);assert.equal(view.nodes.get('team-app').inert,false);
+  assert.equal(view.entered(),1);assert.equal(view.scripts.length,11);assert.equal(view.scripts.at(-1).type,'module');
+  assert.equal(view.window.location.hash,hash);assert.equal(view.document.activeElement,view.nodes.get('main-content'));
+ }
+});
+test('entry versions the tournament data so older cached rosters cannot remove match interactions',()=>{assert.match(source,/data\.js\?v=20261023-4/);});
+test('default entry keeps loading errors visible without showing the code screen',async()=>{
+ const view=browser({entryRequired:false,failScript:'data.js'});
+ for(let i=0;i<10;i++)await Promise.resolve();
+ assert.equal(view.nodes.get('access-gate').hidden,true);assert.equal(view.nodes.get('team-app').hidden,false);
+ assert.match(view.nodes.get('cloud-status').textContent,/새로고침/);
+});
 test('minimal entry keeps the court, six code slots, and entry button',()=>{
  const intro=html.slice(html.indexOf('<section id="access-gate"'),html.indexOf('<div id="team-app"'));
  assert.match(intro,/>코드 입력</);assert.match(intro,/>입장하기 /);

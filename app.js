@@ -76,11 +76,17 @@ if(typeof document!=='undefined')(() => {
   const player=navigation.params().get('player');
   if(state.page==='players'&&window.PLAYER_PROFILES.has(player))q.set('player',player);
   const entry={...navigation.state()};
+  if(state.page!=='schedule'){delete entry.teamcScheduleEntry;delete entry.teamcScheduleReturn;}
   if(!q.has('player')){delete entry.teamcPlayerEntry;delete entry.teamcRosterScroll;}
   navigation.write(q,{push,state:entry});
  }
  function navigatePage(page){
   if(state.page===page)return;
+  if(page==='schedule'){openSchedule(true,$('tab-schedule'));return;}
+  if(state.page==='schedule'){
+   const previousView=scheduleSession?.previousView;finishScheduleSession();if(previousView)state.view=previousView;
+   scheduleTrigger=null;scheduleReturn=null;
+  }
   // Leaving an editor must leave a roster entry behind, not a stale player detail.
   const previous=navigation.params();
   if(previous.has('player')){
@@ -237,10 +243,10 @@ if(typeof document!=='undefined')(() => {
  }
  function renderPage(){
   document.body.dataset.page=state.page;
-  $('site-header').hidden=state.page==='schedule'||document.body.classList.contains('player-detail-open');$('schedule-dialog').hidden=state.page!=='schedule';
+  $('site-header').hidden=(state.page==='schedule'&&state.schedule==='edit')||document.body.classList.contains('player-detail-open');$('schedule-dialog').hidden=state.page!=='schedule';
   document.querySelector('.brand img').src=state.page==='players'?'assets/roster-club-emblem.svg':state.page==='strategy'?'assets/pair-main-diamond.svg':'assets/club-emblem.svg';
   const brandImage=document.querySelector('.brand img');brandImage.width=state.page==='strategy'?12:28;brandImage.height=state.page==='strategy'?12:28;const menuImage=$('menu-toggle').querySelector('img');menuImage.src=state.page==='analysis'?'assets/analysis-ellipsis.svg':state.page==='strategy'?'assets/pair-main-menu.svg':'assets/ellipsis.svg';menuImage.width=state.page==='analysis'?44:state.page==='strategy'?22:24;menuImage.height=menuImage.width;
-  closeMenu();for(const tab of tabs){const selected=tab.dataset.page===state.page;tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;$(tab.getAttribute('aria-controls')).hidden=!selected;}$('share').hidden=state.page==='players';
+  closeMenu();for(const tab of tabs){const selected=tab.dataset.page===state.page&&(state.page!=='schedule'||state.schedule==='shared');tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;$(tab.getAttribute('aria-controls')).hidden=tab.dataset.page==='schedule'?state.page!=='schedule':!selected;}$('share').hidden=state.page==='players';
  }
  function populate(select,team,value,other,excluded=[]){
   select.replaceChildren(new Option(team?'선택하세요':'조를 먼저 선택하세요',''));select.disabled=!team;
@@ -288,7 +294,7 @@ if(typeof document!=='undefined')(() => {
   state.origin=state.page;state.page='schedule';state.schedule=shared?'shared':'edit';state.view=shared||editShared?'confirmed':'draft';
   beginScheduleSession(shared,previousView);renderPage();renderStrategy();
   const entry={...navigation.state(),teamcScheduleEntry:true,teamcScheduleReturn:returnTo};
-  writeHash(true);navigation.write(navigation.params(),{state:entry});window.scrollTo(0,0);$('schedule-close').focus();
+  writeHash(true);navigation.write(navigation.params(),{state:entry});window.scrollTo(0,0);(shared?$('tab-schedule'):$('schedule-close')).focus();
  }
  function closeSchedule(committed=false){
   if(savingLineup)return;if(scheduleSession)scheduleSession.committed=committed;
@@ -297,26 +303,137 @@ if(typeof document!=='undefined')(() => {
  }
  function finishScheduleSession(){
   const session=scheduleSession;if(!session)return;scheduleSession=null;
-  if(officialRecordEditor)$('official-record-dialog').close();clearDrag();
+  if(officialRecordEditor)$('official-record-dialog').close();if($('cheer-dialog').open)$('cheer-dialog').close();clearDrag();
   if(!session.committed&&session.requestKey===requestKey){confirmedDraft=session.confirmedDraft;editedPlans.clear();for(const [key,edit] of session.edits)editedPlans.set(key,edit);}
   scheduleReadOnly=false;scheduleEmpty=false;
  }
  for(const id of ['schedule-close','schedule-cancel'])$(id).addEventListener('click',()=>closeSchedule(false));
- for(const id of ['open-team-schedule','open-team-schedule-bottom'])$(id).addEventListener('click',()=>openSchedule(true,$(id)));
+ for(const id of ['open-team-schedule-bottom'])$(id).addEventListener('click',()=>openSchedule(true,$(id)));
  $('open-schedule-management').addEventListener('click',()=>openSchedule(false,$('open-schedule-management'),Boolean(confirmed())));
  $('open-shared-composition').addEventListener('click',()=>openSchedule(false,$('open-shared-composition')));
  $('schedule-confirm').addEventListener('click',()=>$('confirm-lineup').click());
+ // Short Korean paraphrases of the player statements reviewed with the team.
+ const cheerSources={
+  federer:'https://home.dartmouth.edu/news/2024/06/2024-commencement-address-roger-federer',
+  nadal:'https://www.atptour.com/en/news/nadal-honoured-university-of-madrid-march-2026',
+  djokovic:'https://www.atptour.com/en/news/15-love-novak-djokovic-feature',
+  alcarazSmile:'https://www.rolandgarros.com/en-us/article/rg2023-alcaraz-musetti-fourth-round-report',
+  alcarazNerves:'https://www.atptour.com/en/news/alcaraz-indian-wells-2023',
+  gauff:'https://www.asapsports.com/show_interview.php?id=190280',
+  osakaFight:'https://ausopen.com/articles/news/osaka-kvitova-win-openers-brisbane',
+  osakaTrust:'https://www.wtatennis.com/news/4320705/grand-slam-champs-raducanu-osaka-set-second-round-showdown-in-washington',
+  kingPressure:'https://www.billiejeanking.com/tennis/',
+  kingAdapt:'https://www.billiejeanking.com/battle-of-the-sexes/',
+  zheng:'https://www.wtatennis.com/news/3494780/still-chasing-her-major-breakthrough-zheng-qinwen-fights-to-stay-focused',
+  rybakina:'https://www.wtatennis.com/news/2667774/wimbledon-quarterfinal-preview-halep-anisimova-take-slam-rivalry-to-grass',
+  kudermetova:'https://www.wtatennis.com/news/4121520/kudermetova-sisters-both-notch-upsets-to-book-quarterfinal-spots-in-seoul',
+  serena:'https://www.thenationalnews.com/sport/the-fall-and-rise-of-maturing-serena-williams-1.632294',
+  barty:'https://www.usopen.org/en_US/news/articles/2019-08-26/2019-08-26_2019-08-26_ashleigh_barty_bounces_back_to_rally_past_zarina_diyas.html',
+  serenaLearn:'https://www.tennis.com/news/articles/serena-s-best-quotes-from-her-ted-talk'
+ };
+ const tennisCheers=[
+  ['🎾','놓친 건 한 포인트일 뿐. 다음 포인트로 가자.','로저 페더러','federer'],
+  ['(ง •̀_•́)ง','상대도 자신을 의심한다. 나만 흔들리는 게 아니다.','로저 페더러','federer'],
+  ['🔥','최고의 컨디션이 아니어도 이길 방법은 찾을 수 있다.','로저 페더러','federer'],
+  ['🌱','인내와 자기 자신을 믿는 힘도 연습해서 키우는 재능이다.','로저 페더러','federer'],
+  ['🔥','실수는 받아들이고, 계속 나아지면 된다.','라파엘 나달','nadal'],
+  ['💪','힘든 순간에도 긍정적으로 노력하자. 변화는 거기서 시작된다.','라파엘 나달','nadal'],
+  ['🎾','큰 변화보다 매일 조금씩 나아지는 것이 중요하다.','라파엘 나달','nadal'],
+  ['✨','내 꿈과 희망을 다른 사람이 빼앗게 두지 말자.','노박 조코비치','djokovic'],
+  ['٩(ˊᗜˋ*)و','웃고 즐기자. 그게 내 테니스의 열쇠다.','카를로스 알카라스','alcarazSmile'],
+  ['🔥','긴장하는 건 당연하다. 중요한 건 그 긴장을 다루는 것이다.','카를로스 알카라스','alcarazNerves'],
+  ['💛','다른 누군가가 되려 하지 말고, 최고의 내가 되자.','코코 고프','gauff'],
+  ['💪','잘 안 풀리는 날 어떻게 버티는지가 챔피언을 만든다.','코코 고프','gauff'],
+  ['🎾','나를 믿고, 매 포인트 끝까지 싸우자.','오사카 나오미','osakaFight'],
+  ['🌷','나를 더 믿되, 스스로를 너무 압박하지는 말자.','오사카 나오미','osakaTrust'],
+  ['👑','압박감은 특권이다.','빌리 진 킹','kingPressure'],
+  ['🔄','챔피언은 상황에 맞춰 바꿀 줄 안다.','빌리 진 킹','kingAdapt'],
+  ['🎯','지금 이 순간, 한 포인트씩, 공 하나씩 집중하자.','정친원','zheng'],
+  ['🎾','한 포인트씩 풀어가며 내 서브에 집중하자.','엘레나 리바키나','rybakina'],
+  ['୧(๑•̀ᗝ•́)૭','경기 중에는 나 자신을 더 응원하자. 더 긍정적으로!','폴리나 쿠데르메토바','kudermetova'],
+  ['🔥','챔피언을 보여주는 건 승리 횟수보다 넘어지고 다시 일어나는 힘이다.','세리나 윌리엄스','serena'],
+  ['🤝','테니스도 팀 스포츠다. 성공은 함께 만들어간다.','로저 페더러','federer'],
+  ['💪','쉬워 보이는 플레이 뒤에는 보이지 않는 노력이 있다.','로저 페더러','federer'],
+  ['🎯','끝난 포인트는 내려놓고, 다음 포인트에 온전히 집중하자.','로저 페더러','federer'],
+  ['💛','서로에게 친절하게, 코트에서는 즐겁게.','로저 페더러','federer'],
+  ['🔥','좋아하는 마음과 헌신이 꾸준히 나아갈 힘이 된다.','노박 조코비치','djokovic'],
+  ['🎾','가진 것을 지켜야 한다는 생각으로 스스로를 압박하지 말자.','노박 조코비치','djokovic'],
+  ['(ง •̀_•́)ง','결과를 모두 통제할 수는 없어도, 내 태도는 내가 정할 수 있다.','코코 고프','gauff'],
+  ['💪','중요한 순간일수록, 내가 할 줄 아는 샷을 믿고 치자.','코코 고프','gauff'],
+  ['🌱','출발이 좋지 않아도, 인내하며 내 패턴을 되찾을 수 있다.','애슐리 바티','barty'],
+  ['✨','패배에서 배우되, 과거에 머물지 말고 현재를 살자.','세리나 윌리엄스','serenaLearn']
+ ];
+ const cheerOrder=tennisCheers.map((_,index)=>index);
+ for(let index=cheerOrder.length-1;index>0;index--){const other=Math.floor(Math.random()*(index+1));[cheerOrder[index],cheerOrder[other]]=[cheerOrder[other],cheerOrder[index]];}
+ const cheerMotion=window.matchMedia('(prefers-reduced-motion: reduce)');
+ let cheerIndex=0,cheerTimer=null,cheerPaused=cheerMotion.matches,cheerHovered=false,cheerFocused=false,cheerTransition=null;
+ function finishCheerTransition(){
+  if(!cheerTransition)return;
+  const transition=cheerTransition;cheerTransition=null;
+  for(const animation of transition.animations)animation.cancel();transition.outgoing.remove();$('cheer-viewport').style.height='';
+ }
+ function showCheer(step=0){
+  finishCheerTransition();
+  const message=$('cheer-message'),viewport=$('cheer-viewport');let outgoing=null;
+  if(step&&!cheerMotion.matches&&!$('schedule-cheer').hidden&&typeof message.animate==='function'){
+   outgoing=message.cloneNode(true);outgoing.removeAttribute('id');for(const node of outgoing.querySelectorAll('[id]'))node.removeAttribute('id');
+   outgoing.className+=' cheer-outgoing';outgoing.setAttribute('aria-hidden','true');outgoing.inert=true;
+  }
+  cheerIndex=(cheerIndex+step+cheerOrder.length)%cheerOrder.length;
+  const [emoji,text,player,source]=tennisCheers[cheerOrder[cheerIndex]],author=$('cheer-author');
+  $('cheer-emoji').textContent=emoji;$('cheer-text').textContent=text;author.textContent='['+player+']';
+  if(outgoing){
+   viewport.append(outgoing);viewport.style.height=Math.max(message.getBoundingClientRect().height,outgoing.getBoundingClientRect().height)+'px';
+   const timing={duration:450,easing:'cubic-bezier(.22,1,.36,1)',fill:'both'},transition={outgoing,animations:[
+    outgoing.animate([{transform:'translateY(0)',opacity:1},{transform:'translateY(-110%)',opacity:0}],timing),
+    message.animate([{transform:'translateY(110%)',opacity:0},{transform:'translateY(0)',opacity:1}],timing)
+   ]};cheerTransition=transition;
+   void Promise.allSettled(transition.animations.map(animation=>animation.finished)).then(()=>{if(cheerTransition===transition)finishCheerTransition();});
+  }
+ }
+ function syncCheerRotation(){
+  const stopped=cheerPaused||cheerHovered||cheerFocused||document.hidden||state.page!=='schedule'||!scheduleReadOnly||Boolean(officialRecordEditor)||$('cheer-dialog').open;
+  $('cheer-pause').textContent=cheerPaused?'▶':'Ⅱ';$('cheer-pause').setAttribute('aria-label',cheerPaused?'응원 문구 자동 넘기기 재생':'응원 문구 자동 넘기기 일시정지');
+  $('cheer-pause').setAttribute('aria-pressed',String(cheerPaused));
+  if(stopped){clearTimeout(cheerTimer);cheerTimer=null;finishCheerTransition();return;}
+  if(cheerTimer===null)cheerTimer=setTimeout(()=>{cheerTimer=null;showCheer(1);syncCheerRotation();},5000);
+ }
+ showCheer();
+ $('cheer-pause').addEventListener('click',()=>{cheerPaused=!cheerPaused;syncCheerRotation();});
+ $('schedule-cheer').addEventListener('mouseenter',()=>{cheerHovered=true;syncCheerRotation();});
+ $('schedule-cheer').addEventListener('mouseleave',()=>{cheerHovered=false;syncCheerRotation();});
+ $('schedule-cheer').addEventListener('focusin',()=>{cheerFocused=true;syncCheerRotation();});
+ $('schedule-cheer').addEventListener('focusout',event=>{cheerFocused=$('schedule-cheer').contains(event.relatedTarget);syncCheerRotation();});
+ document.addEventListener('visibilitychange',syncCheerRotation);
+ window.addEventListener('pagehide',()=>{clearTimeout(cheerTimer);cheerTimer=null;finishCheerTransition();});
+ window.addEventListener('pageshow',syncCheerRotation);
+ cheerMotion.addEventListener?.('change',()=>{if(cheerMotion.matches)cheerPaused=true;syncCheerRotation();});
+ function openCheerDialog(){
+  if($('cheer-dialog').open)return;
+  $('cheer-list').replaceChildren(...tennisCheers.map(([emoji,text,player,source])=>{
+   const item=el('li'),quote=el('span','',emoji+' '+text),attribution=el('span','cheer-attribution'),link=el('a','','['+player+']');
+   link.href=cheerSources[source];link.target='_blank';link.rel='noopener noreferrer';link.title='선수 발언 원문 출처 보기';
+   attribution.append(el('span','',' - '),link);item.append(quote,attribution);return item;
+  }));
+  $('cheer-dialog').showModal();syncCheerRotation();$('cheer-close').focus();
+ }
+ $('cheer-open').addEventListener('click',openCheerDialog);
+ $('schedule-cheer').addEventListener('click',event=>{if(event.target===$('schedule-cheer'))openCheerDialog();});
+ $('cheer-close').addEventListener('click',()=>$('cheer-dialog').close());
+ $('cheer-dialog').addEventListener('close',()=>{if(state.page==='schedule'&&scheduleReadOnly)$('cheer-open').focus({preventScroll:true});syncCheerRotation();});
  function syncScheduleDialog(plan){
   if(scheduleReadOnly)scheduleEmpty=!confirmed()&&!plans[0];const read=scheduleReadOnly,empty=scheduleEmpty,cloud=window.PLAYER_PROFILE_CLOUD;
-  $('schedule-dialog').dataset.readonly=String(read);$('schedule-dialog-title').textContent=read?'우리 팀 출전표':'출전표 편집';
+  $('schedule-close').hidden=read;$('schedule-dialog').setAttribute('role',read?'tabpanel':'region');$('schedule-dialog').setAttribute('aria-labelledby',read?'tab-schedule':'schedule-dialog-title');
+  $('schedule-header').hidden=false;$('schedule-analysis-hint').hidden=true;$('schedule-guide').hidden=read;$('schedule-cheer').hidden=!read;syncCheerRotation();
+  $('schedule-dialog').dataset.readonly=String(read);$('schedule-dialog-title').textContent=read?'최강 C조 대진표 🔥':'출전표 편집';
   $('schedule-dialog-badge').textContent=read?(confirmed()?'':'기본 출전표 · 추천 조합 1'):'미저장 초안';
   $('schedule-dialog-subtitle').textContent=read?(confirmed()?'':(plans[0]?'아직 확정된 출전표가 없어 추천 조합 1의 기본 출전표를 보여드립니다.':'공식 대진을 먼저 표시합니다. C조 기본 출전표는 준비 중입니다.')):(plan?(plans.findIndex(item=>compositionKey(item)===compositionKey(plan))<0?'공유받은 페어 구성':'추천 조합 '+(plans.findIndex(item=>compositionKey(item)===compositionKey(plan))+1)):'출전표 준비')+' · 확정 전에는 팀 출전표에 반영되지 않아요';
   for(const id of ['schedule-dialog-badge','schedule-dialog-subtitle'])$(id).hidden=!$(id).textContent;
   $('schedule-empty').hidden=!empty;$('schedule-empty').textContent=empty?(cloud?.status!=='ready'?'팀 공유 저장소 연결 상태를 확인하고 있습니다. 연결 후 최신 확정표를 확인하세요.':!cloud?.lineupReady?'팀 출전표를 불러오고 있습니다.':'기본 출전표를 계산하고 있습니다. 잠시 기다려 주세요.') :'';
   $('schedule-content').hidden=empty&&!read;$('schedule-footer').hidden=read;
   $('schedule-guide-icon').src='assets/'+(read?'schedule-users.svg':'schedule-move.svg');
-  $('schedule-guide-title').textContent=read?'전체 공식 경기와 출전 기록을 함께 확인하세요':'드래그로 페어를 교환하세요';
-  $('schedule-guide-text').textContent=read?'경기를 눌러 실제 출전 선수를 기록하세요':'모바일은 셀을 길게 누른 뒤 이동하세요. 같은 시간 중복 출전은 적용하지 않습니다.';
+  $('schedule-guide-title').textContent=read?'전체 공식 경기와 대진표를 확인하세요':'드래그로 페어를 교환하세요';
+  $('schedule-guide-text').textContent=read?'경기를 눌러 대진을 입력하고, C조 경기의 상대 AI 분석을 확인하세요.':'모바일은 셀을 길게 누른 뒤 이동하세요. 같은 시간 중복 출전은 적용하지 않습니다.';
   $('schedule-cancel').hidden=read;$('schedule-confirm').hidden=read;$('schedule-confirm').disabled=$('confirm-lineup').disabled;
   $('schedule-footer-title').textContent='확정하면 팀 서버에 저장하고 이전 화면으로 돌아가요';
   $('schedule-footer-description').textContent='확정 전 편집은 초안이며, 취소하면 팀 출전표는 바뀌지 않아요.';
@@ -464,40 +581,90 @@ if(typeof document!=='undefined')(() => {
     for(const [index,side] of [...match.sides].sort((a,b)=>a.team==='C'?-1:b.team==='C'?1:0).entries()){if(index)open.append(el('span','official-vs','vs'));const line=el('span','official-team-line');line.dataset.team=side.team;if(side.team!=='C')line.append(el('strong','official-team-label',side.team+side.number));const pair=records[match.id]?.[side.team],planned=side.team==='C'?plan?.matches.find(game=>game.id===side.number):null;
      if(side.team==='C'&&(planned||pair)){const displayedPair=pair?pair.map(id=>id.slice(2)):planned.pair;const own=el('span','matrix-match official-c-plan');own.dataset.match=planned?.id??side.number;own.setAttribute('aria-readonly','true');own.draggable=false;const label=el('span','matrix-pair-names');for(const [position,name] of displayedPair.entries()){if(position)label.append(el('span','matrix-pair-separator','×'));const member=el('span','matrix-player');member.append(el('span','matrix-player-name',displayName(name)));if(!pair&&warnings.has(name)){const warning=el('span','matrix-run-warning','💦');warning.title=displayName(name)+'가 연속 '+warnings.get(name)+'경기 출전합니다.';warning.setAttribute('role','img');warning.setAttribute('aria-label',warning.title);member.append(warning);}label.append(member);}own.append(label);line.append(own);}
      if(pair&&side.team!=='C'){const actual=el('span','official-observed');for(const id of pair){const member=el('span',side.team==='C'?'official-own-name':'official-opponent-name',observedName(id));member.title=observedName(id);actual.append(member);}line.append(actual);}open.append(line);
-    }cell.append(open);
+    }cell.append(open);cell.className='official-match-cell';cell.addEventListener('click',event=>{if(event.target===cell)openOfficialRecord(match,open);});
    }row.append(cell);}body.append(row);
   }table.append(body);$('matches').append(table);
  }
  function openOfficialRecord(match,trigger){
-  const cloud=window.PLAYER_PROFILE_CLOUD;officialRecordEditor={match,trigger,revisions:{...cloud?.opponentRecordRevisions},selections:Object.fromEntries(match.sides.map(side=>[side.team,[...(officialRecords()[match.id]?.[side.team]||['',''])]])),messages:{},saving:new Set()};renderOfficialRecord();$('official-record-dialog').showModal();$('official-record-close').focus();
+  const cloud=window.PLAYER_PROFILE_CLOUD;officialRecordEditor={match,trigger,revisions:{...cloud?.opponentRecordRevisions},selections:Object.fromEntries(match.sides.map(side=>[side.team,[...(officialRecords()[match.id]?.[side.team]||['',''])]])),messages:{},saving:new Set(),analyses:{}};renderOfficialRecord();$('official-record-dialog').showModal();syncCheerRotation();$('official-record-close').focus();
  }
  function renderOfficialRecord(){
   const editor=officialRecordEditor;if(!editor)return;const cloud=window.PLAYER_PROFILE_CLOUD,match=editor.match,records=officialRecords();$('official-record-title').textContent=match.time+' · '+match.court+'코트 · '+match.sides.map(side=>side.team+side.number).join(' vs ');
+  $('official-record-description').textContent=match.sides.some(side=>side.team==='C')?'상대 선수를 선택해 대진을 저장하고 AI 분석을 확인하세요.':'실제 출전 선수를 선택해 대진을 저장하세요.';
   $('official-record-connection').textContent=recordConnectionMessage(cloud);$('official-record-retry').hidden=!cloud?.opponentRecordsError;
-  $('official-record-body').replaceChildren(...match.sides.map(side=>{const team=side.team,section=el('section','record-team');section.dataset.team=team;section.append(el('h3','',team+'조 실제 출전'),el('p','record-limit',team==='B'?'선수당 최대 6경기 · 같은 페어 재출전·러브끼리 금지':'선수당 최대 5경기 · 같은 페어 재출전·러브끼리 금지'));
+  $('official-record-body').replaceChildren(...match.sides.filter(side=>side.team!=='C').map(side=>{const team=side.team,section=el('section','record-team');section.dataset.team=team;section.append(el('h3','',team+'조 실제 출전'),el('p','record-limit',team==='B'?'선수당 최대 6경기 · 같은 페어 재출전·러브끼리 금지':'선수당 최대 5경기 · 같은 페어 재출전·러브끼리 금지'));
    const saved=records[match.id]?.[team];section.append(el('p','record-saved',saved?'저장됨 · '+saved.map(observedName).join(' · '):'미입력 · 예정 선수는 기록으로 간주하지 않습니다.'));
-   const fields=el('div','record-fields'),selection=editor.selections[team];for(let index=0;index<2;index++){const label=el('label','',team+'조 선수 '+(index+1)),select=el('select');select.id='record-'+team+'-'+index;select.append(new Option('선택하세요',''));for(const name of names(team)){const id=team+':'+name,other=selection[1-index],option=new Option(displayName(name)+' · '+tiers[data.teams[team][name].tier],id);option.disabled=id===other||Boolean(other)&&!model.isLegalPair([id,other].map(player=>({name:player,tier:data.teams[team][player.slice(2)]?.tier})));select.append(option);}select.value=selection[index];select.disabled=editor.saving.has(team);select.addEventListener('change',()=>{editor.selections[team][index]=select.value;renderOfficialRecord();$('record-'+team+'-'+index)?.focus();});label.append(select);fields.append(label);}section.append(fields);
-   const revision=cloud?.opponentRecordRevisions?.[team]||0,stale=(editor.revisions[team]||0)!==revision&&!editor.saving.has(team),unready=!cloud?.opponentRecordsReady||Boolean(cloud?.opponentRecordsError),actions=el('div','record-actions'),save=button(team+'조 기록 저장',false,()=>saveOfficialRecord(team,false)),clear=button(team+'조 기록 삭제',false,()=>saveOfficialRecord(team,true));save.disabled=unready||stale||editor.saving.has(team)||!selection.every(Boolean);clear.disabled=unready||stale||editor.saving.has(team)||!saved;actions.append(save,clear);section.append(actions);section.append(el('p','record-team-status',editor.messages[team]||(stale?'다른 기기에서 이 팀 기록을 변경했습니다. 닫고 다시 열어 최신 기록을 확인하세요.':unready?recordConnectionMessage(cloud):'')));
+   const fields=el('div','record-fields'),selection=editor.selections[team];for(let index=0;index<2;index++){const label=el('label','',team+'조 선수 '+(index+1)),select=el('select');select.id='record-'+team+'-'+index;select.append(new Option('선택하세요',''));for(const name of names(team)){const id=team+':'+name,other=selection[1-index],option=new Option(displayName(name)+' · '+tiers[data.teams[team][name].tier],id);option.disabled=id===other||Boolean(other)&&!model.isLegalPair([id,other].map(player=>({name:player,tier:data.teams[team][player.slice(2)]?.tier})));select.append(option);}select.value=selection[index];select.disabled=editor.saving.has(team);select.addEventListener('change',()=>{editor.selections[team][index]=select.value;clearRecordAnalysis(editor,team);renderOfficialRecord();$('record-'+team+'-'+index)?.focus();});label.append(select);fields.append(label);}section.append(fields);
+   const revision=cloud?.opponentRecordRevisions?.[team]||0,stale=(editor.revisions[team]||0)!==revision&&!editor.saving.has(team),unready=!cloud?.opponentRecordsReady||Boolean(cloud?.opponentRecordsError),actions=el('div','record-actions'),save=button(team+'조 기록 저장',false,()=>saveOfficialRecord(team,false));save.disabled=unready||stale||editor.saving.has(team)||!selection.every(Boolean);const input=recordAnalysisInput(editor,team);let analysis=editor.analyses[team];
+   if(analysis&&analysis.inputKey!==input?.key){clearRecordAnalysis(editor,team);analysis=null;}
+   actions.append(save);if(match.sides.some(side=>side.team==='C')){
+   const analyze=button(analysis?.status==='loading'?'AI 분석 중':'상대 분석 보기',false,()=>requestRecordAnalysis(team));analyze.id='record-analyze-'+team;analyze.setAttribute('aria-controls','record-analysis-'+team);analyze.disabled=!input||analysis?.status==='loading'||Boolean(cloud?.pendingCount);
+   actions.append(analyze);}
+   section.append(actions);section.append(el('p','record-team-status',editor.messages[team]||(stale?'다른 기기에서 이 팀 기록을 변경했습니다. 닫고 다시 열어 최신 기록을 확인하세요.':unready?recordConnectionMessage(cloud):'')));
    if(!saved&&cloud?.opponentRecordsReady&&!cloud?.opponentRecordsError&&window.TOURNAMENT_MODEL){try{const prediction=window.TOURNAMENT_MODEL.candidates(data,records,match.id,team),candidates=el('div','record-candidates');candidates.append(el('strong','','남은 페어 후보 '+prediction.count+'개'),el('p','','입력된 경기 기록 기준 · 기록 '+prediction.knownCount+'/20경기 · 미입력 '+prediction.unknownCount+'경기'));
     if(prediction.showPairs){const list=el('ul','record-candidate-list');for(const pair of prediction.pairs)list.append(el('li','',pair.map(observedName).join(' × ')));candidates.append(list);if(!prediction.count)candidates.append(el('p','','조건을 만족하는 후보가 없습니다. 출전 기록을 확인해 주세요.'));}
     else candidates.append(el('p','','후보가 5개 이하일 때 목록을 표시합니다. 미입력 경기 기록을 추가해 주세요.'));section.append(candidates);
    }catch{section.append(el('p','record-team-status','경기 기록을 확인한 뒤 후보를 다시 계산해 주세요.'));}}
-   return section;}));
+   const result=el('div','record-analysis');result.id='record-analysis-'+team;result.hidden=!analysis;result.setAttribute('aria-busy',String(analysis?.status==='loading'));
+   if(analysis){const status=el('p','record-analysis-status',analysis.message);status.setAttribute('role','status');result.append(status);
+    if(analysis.result)appendAnalysisResult(result,team,editor.selections[team].map(id=>id.slice(2)),analysis.result,analysis.status==='ready');
+   }
+   section.append(result);return section;}));
+ }
+ function recordAnalysisInput(editor,team){
+  if(!editor.match.sides.some(side=>side.team==='C'))return null;
+  return matchupAnalysisInput(team,(editor.selections[team]||[]).map(id=>id.slice(2)));
+ }
+ function clearRecordAnalysis(editor,team){
+  const analysis=editor.analyses[team];if(!analysis)return;clearTimeout(analysis.timer);analysis.unsubscribe?.();delete editor.analyses[team];
+ }
+ async function requestRecordAnalysis(team){
+  const editor=officialRecordEditor,cloud=window.PLAYER_PROFILE_CLOUD,input=editor&&recordAnalysisInput(editor,team);
+  if(!input||editor.analyses[team]?.status==='loading'||cloud?.pendingCount)return;
+  clearRecordAnalysis(editor,team);
+  const analysis={inputKey:input.key,status:'loading',message:'AI가 선택한 선수의 관찰 기록을 분석하고 있습니다.'};editor.analyses[team]=analysis;
+  const current=()=>officialRecordEditor===editor&&editor.analyses[team]===analysis&&analysis.status==='loading'&&recordAnalysisInput(editor,team)?.key===input.key;
+  function finish(status,message,result){
+   if(!current())return;clearTimeout(analysis.timer);analysis.unsubscribe?.();analysis.unsubscribe=null;
+   Object.assign(analysis,{status,message,result});renderOfficialRecord();
+  }
+  function fail(message){
+   if(!current())return;
+   const opponents=editor.selections[team].map(id=>({name:observedName(id),tier:data.teams[team][id.slice(2)].tier,profile:window.PLAYER_PROFILES.get(team,id.slice(2))}));
+   finish('error',message+' 기본 관찰 요약을 표시합니다.',model.analyzeOpponentPair(opponents));
+  }
+  renderOfficialRecord();
+  if(!canAnalyzeWithAI()){fail('AI에 연결되지 않았습니다. 연결 후 다시 시도해 주세요.');return;}
+  analysis.timer=setTimeout(()=>fail('분석 시간이 오래 걸렸습니다. 다시 시도해 주세요.'),90000);
+  try{
+   const {key,...request}=input,response=await cloud.analyzeMatchup(request);if(!current())return;
+   const accept=record=>{
+    if(record.status==='ready')finish('ready',response.cached?'저장된 AI 분석을 불러왔습니다.':'AI 분석을 생성했습니다.',record.result);
+    else if(record.status==='error')fail(record.message||'AI 분석에 실패했습니다. 다시 시도해 주세요.');
+   };
+   if(response.status==='ready'||response.status==='error')accept(response);
+   else{analysis.message='같은 분석을 생성하고 있습니다. 완료되면 표시됩니다.';renderOfficialRecord();analysis.unsubscribe=cloud.subscribeAnalysis(response.analysisKey,accept,()=>fail('분석을 불러오지 못했습니다. 다시 시도해 주세요.'));if(!current()){analysis.unsubscribe?.();analysis.unsubscribe=null;}}
+  }catch(error){fail(error.message||'AI 분석에 실패했습니다. 다시 시도해 주세요.');}
  }
  async function saveOfficialRecord(team,clear){
   const editor=officialRecordEditor,cloud=window.PLAYER_PROFILE_CLOUD;if(!editor||editor.saving.has(team))return;editor.saving.add(team);editor.messages[team]='저장 중입니다.';renderOfficialRecord();
-  try{const result=await cloud.saveOpponentRecord(editor.match.id,team,clear?null:editor.selections[team],editor.revisions[team]||0);editor.revisions[team]=result.revision;editor.messages[team]=clear?'기록을 삭제했습니다.':'실제 출전 선수를 저장했습니다.';if(clear)editor.selections[team]=['',''];}
+  try{const result=await cloud.saveOpponentRecord(editor.match.id,team,clear?null:editor.selections[team],editor.revisions[team]||0);editor.revisions[team]=result.revision;editor.messages[team]=clear?'기록을 삭제했습니다.':'실제 출전 선수를 저장했습니다.';if(clear){editor.selections[team]=['',''];clearRecordAnalysis(editor,team);}}
   catch(error){editor.messages[team]=error.message||'기록을 저장하지 못했습니다.';}finally{editor.saving.delete(team);if(officialRecordEditor===editor)renderOfficialRecord();renderSchedule(activePlan());}
  }
  $('official-record-close').addEventListener('click',()=>$('official-record-dialog').close());
- $('official-record-dialog').addEventListener('close',()=>{const editor=officialRecordEditor;officialRecordEditor=null;const target=[...$('matches').querySelectorAll('.official-match')].find(node=>node.dataset.officialMatch===editor?.match.id);if(target)target.focus();else $('schedule-close').focus();});
+ $('official-record-dialog').addEventListener('close',()=>{const editor=officialRecordEditor;if(editor)for(const team of Object.keys(editor.analyses))clearRecordAnalysis(editor,team);officialRecordEditor=null;syncCheerRotation();const target=[...$('matches').querySelectorAll('.official-match')].find(node=>node.dataset.officialMatch===editor?.match.id);if(target)target.focus();else $('schedule-close').focus();});
  $('official-record-retry').addEventListener('click',()=>window.PLAYER_PROFILE_CLOUD?.retryOpponentRecords?.());
  $('retry-tournament-records').addEventListener('click',()=>window.PLAYER_PROFILE_CLOUD?.retryOpponentRecords?.());
  window.addEventListener('opponentrecordschange',()=>{if(scheduleReadOnly)renderSchedule(activePlan());if(officialRecordEditor)renderOfficialRecord();});
  function renderSchedule(plan){
   $('schedule-drag-status').textContent='';
   clearDrag();$('matches').replaceChildren();
-  $('tournament-record-status').hidden=true;$('retry-tournament-records').hidden=true;if(scheduleReadOnly&&data.tournamentSchedule&&window.TOURNAMENT_MODEL){renderTournamentSchedule(plan);return;}
+  $('tournament-record-status').hidden=true;$('retry-tournament-records').hidden=true;
+  if(scheduleReadOnly){
+   if(data.tournamentSchedule&&window.TOURNAMENT_MODEL)renderTournamentSchedule(plan);
+   else{$('tournament-record-status').hidden=false;$('tournament-record-status').textContent='전체 경기 정보를 불러오지 못했습니다. 새로고침해 주세요.';}
+   return;
+  }
   if(!plan)return;
   const runWarnings=new Map(pairing.consecutivePlayDetails(data,plan.matches).map(item=>[item.name,item.count]));
   const table=el('table','schedule-matrix');table.append(el('caption','sr-only',plan.title+' 시간대별 코트 출전표'));
@@ -517,9 +684,10 @@ if(typeof document!=='undefined')(() => {
  $('discard-lineup-edits').addEventListener('click',()=>{if(view()==='confirmed')confirmedDraft=null;else editedPlans.delete(draftKey());confirmationMessage='변경 초안을 취소했습니다.';renderStrategy();});
 
 
- function analysisInput(){
-  if(!legalNames(state.team,[state.p1,state.p2]))return null;
-  const opponentPlayerIds=[state.p1,state.p2].map(name=>state.team+':'+name).sort();
+ function analysisInput(){return matchupAnalysisInput(state.team,[state.p1,state.p2]);}
+ function matchupAnalysisInput(team,pair){
+  if(team==='C'||!legalNames(team,pair))return null;
+  const opponentPlayerIds=pair.map(name=>team+':'+name).sort();
   const players=opponentPlayerIds.map(id=>{const split=id.indexOf(':'),team=id.slice(0,split),name=id.slice(split+1);return {id,tier:data.teams[team][name].tier,profile:window.PLAYER_PROFILES.get(team,name)};});
   const expectedProfileHash=definitions.analysisVersion(players);
   return {opponentPlayerIds,expectedProfileHash,key:definitions.fingerprint({opponentPlayerIds,expectedProfileHash})};
@@ -556,10 +724,13 @@ if(typeof document!=='undefined')(() => {
   if(input&&aiAvailable&&cloud.pendingCount>0&&!loading)status.textContent='관찰 기록을 저장하고 있습니다. 저장이 끝나면 분석할 수 있어요.';
   if(!input||!active||loading)return;
   container.hidden=false;
-  const opponents=[state.p1,state.p2].map(name=>({name:displayName(name),tier:data.teams[state.team][name].tier,profile:window.PLAYER_PROFILES.get(state.team,name)}));
-  const basic=model.analyzeOpponentPair(opponents),result=done?active.result:basic;
+  appendAnalysisResult(container,state.team,[state.p1,state.p2],active.result,done);
+ }
+ function appendAnalysisResult(container,team,pair,analysisResult,done){
+  const opponents=pair.map(name=>({name:displayName(name),tier:data.teams[team][name].tier,profile:window.PLAYER_PROFILES.get(team,name)}));
+  const result=analysisResult||model.analyzeOpponentPair(opponents);
   const heading=el('div','observation-heading');heading.append(el('h2','',done?'AI 분석 · 완료':'기본 관찰 요약'),el('p','muted small',done?'관찰 기록 기반 제안 · 실제 경기에서 확인해 주세요.':'입력한 기록에 맞춘 복식 참고 자료'));container.append(heading);
-  const overview=observationSection('상대 페어 한눈에 보기','관찰 기록 · '+state.team+'조');
+  const overview=observationSection('상대 페어 한눈에 보기','관찰 기록 · '+team+'조');
   for(const player of opponents){
    const card=el('div','opponent-observation'),identity=el('div','opponent-observation-heading'),tier=player.tier;
    identity.append(el('strong','',player.name),el('span','',tierLabels[tier]+' '+tiers[tier]));card.append(identity);
@@ -598,8 +769,8 @@ if(typeof document!=='undefined')(() => {
   render();
   if(leaving){const restore=sessionReturn||returnTo;if(restore)window.scrollTo(0,restore.scroll||0);if(scheduleTrigger?.isConnected)scheduleTrigger.focus({preventScroll:true});else if(scheduleTrigger?.classList.contains('pair-option-select'))[...$('pair-options').querySelectorAll('.pair-option')].find(card=>!card.hidden)?.querySelector('.pair-option-select')?.focus({preventScroll:true});scheduleTrigger=null;scheduleReturn=null;}
  });
- window.addEventListener('playerprofileschange',()=>{confirmationMessage='';if(selectedPlan?.profileVersion!==cVersion())state.sharedPairs=null;render();});
- window.addEventListener('playerprofilecloudstatuschange',()=>{renderStrategy();renderAnalysis();});
+ window.addEventListener('playerprofileschange',()=>{confirmationMessage='';if(selectedPlan?.profileVersion!==cVersion())state.sharedPairs=null;render();if(officialRecordEditor)renderOfficialRecord();});
+ window.addEventListener('playerprofilecloudstatuschange',()=>{renderStrategy();renderAnalysis();if(officialRecordEditor)renderOfficialRecord();});
   window.addEventListener('teamlineupchange',render);
  $('share').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(navigation.href());$('share-status').textContent='현재 선택 링크를 복사했습니다.';$('share-fallback').hidden=true;}catch{$('share-fallback').hidden=false;$('share-url').value=navigation.href();$('share-url').focus();$('share-url').select();$('share-status').textContent='아래 링크를 복사해 공유하세요.';}});
  readHash();calculate();if(state.page==='schedule'){scheduleReturn=navigation.state()?.teamcScheduleReturn||null;beginScheduleSession(state.schedule==='shared');}render();

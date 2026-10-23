@@ -67,7 +67,7 @@ function firestoreFixture(){
  };
  return {entries,api,broadcast};
 }
-function browser(store,{saved={},hash='',siteKey='fixture-public-site-key',mobile=false,fragmentDelay=0,enter=true,deferWorkers=false}={}){
+function browser(store,{saved={},hash='',siteKey='fixture-public-site-key',mobile=false,fragmentDelay=0,deferWorkers=false}={}){
  const document=documentFixture(),window=new EventTarget(),storage=new Map(Object.entries(saved)),timers=new Map(),workerRequests=[],storageFailures=new Set();let clock=0,sequence=0;
  let locationHash=hash;
  const location={get hash(){return locationHash;},set hash(value){changeFragment(value,false);},href:'https://gbkchee.github.io/team-c-victory/'+hash,replace:value=>changeFragment(value,true)};
@@ -113,7 +113,6 @@ function browser(store,{saved={},hash='',siteKey='fixture-public-site-key',mobil
  document.head={append:script=>queueMicrotask(()=>script.onload())};
  const entryHash=crypto.createHash('sha256').update('testcv').digest('hex');
  vm.runInContext(read('access-gate.js').replace(/const codeHash='[^']*'/,"const codeHash='"+entryHash+"'"),context,{filename:'access-gate.js'});
- if(enter){[...'testcv'].forEach((value,index)=>{document.getElementById('access-code-'+index).value=value;});document.getElementById('access-form').dispatchEvent({type:'submit',preventDefault(){}});}
  window.GEMINI_CONFIG={...window.GEMINI_CONFIG,appCheckSiteKey:siteKey};
  vm.runInContext(read('firebase-cloud.js').replace(/^import .*;\n/gm,'').replace(/\bimport\(/g,'fixtureImport('),context,{filename:'firebase-cloud.js'});
  const flush=async()=>{for(let i=0;i<2500;i++)await Promise.resolve();};
@@ -162,13 +161,9 @@ function pointerEvent(button,type,detail={}){button.dispatchEvent({type,button:0
 function touchEvent(button,type,touches=[{clientX:0,clientY:0}]){
  const event={type,touches,defaultPrevented:false,preventDefault(){this.defaultPrevented=true;}};button.dispatchEvent(event);return event;
 }
-test('직접 선수 링크도 답변 확인 뒤에 열리고 원래 선택을 유지한다',async()=>{
+test('직접 선수 링크는 코드 입력 없이 열리고 원래 선택을 유지한다',async()=>{
  for(const mobile of [false,true]){
-  const view=browser(firestoreFixture(),{hash:'#page=players&player=C%3A우디',mobile,enter:false});await view.flush();
-  assert.equal(view.$('access-gate').hidden,false);assert.equal(view.document.body.classList.contains('entry-open'),true);
-  assert.notEqual(view.$('ratings-panel').open,true);assert.equal(view.document.activeElement,view.$('access-gate'));
-  [...'testcv'].forEach((value,index)=>{view.$('access-code-'+index).value=value;});
-  await Promise.all(view.$('access-form').dispatchEvent({type:'submit',preventDefault(){}}));await view.flush();
+  const view=browser(firestoreFixture(),{hash:'#page=players&player=C%3A우디',mobile});await view.flush();
   assert.equal(view.$('access-gate').hidden,true);assert.equal(view.document.body.classList.contains('entry-open'),false);
   assert.equal(view.$('team-app').inert,false);assert.equal(new URLSearchParams(view.location.hash.slice(1)).get('player'),'C:우디');
   assert.equal(mobile?!view.$('player-detail-page').hidden:view.$('ratings-panel').open,true);
@@ -801,8 +796,8 @@ test('추천 출전표 페이지의 드래그·취소는 세션 변경만 되돌
  visibleCard(one).querySelector('.pair-option-select').click();applySwap(one,swap);await Promise.all(one.$('schedule-confirm').click());await one.flush();assert.equal(one.$('schedule-dialog').hidden,true);assert.deepEqual(store.entries.get('teamLineups/C').matches,clone(swap.result.matches));
 });
 test('상단 팀 출전표는 비어 있을 때 정직하게 안내하고 저장 뒤 읽기 전용으로 열며 이전 탐색을 복원한다',async()=>{
- const store=firestoreFixture(),one=browser(store,{hash:'#page=strategy'});await one.flush();await one.advance();const top=one.$('open-team-schedule');assert.equal(top.textContent,'우리팀_출전표_최종_🔥');assert.equal(top.parentNode.parentNode.className,'welcome-copy');top.click();assert.equal(one.$('schedule-empty').hidden,true);assert.equal(one.$('schedule-dialog-badge').textContent,'기본 출전표 · 추천 조합 1');assert.deepEqual(matrixPairs(one),expectedPairs(one.window.fixtureRecommendations[0]));one.$('schedule-close').click();assert.equal(one.document.activeElement,top);
- visibleCard(one).querySelector('.pair-option-select').click();await Promise.all(one.$('schedule-confirm').click());await one.flush();one.$('view-draft').click();const draft=matrixPairs(one),hash=one.location.hash;top.click();assert.equal(one.$('schedule-dialog').dataset.readonly,'true');assert.equal(one.$('schedule-dialog-title').textContent,'우리 팀 출전표');assert.equal(one.$('schedule-dialog-badge').hidden,true);assert.equal(one.$('schedule-dialog-subtitle').hidden,true);assert.equal(one.$('schedule-guide-title').textContent,'전체 공식 경기와 출전 기록을 함께 확인하세요');assert.equal(one.$('schedule-guide-text').textContent,'경기를 눌러 실제 출전 선수를 기록하세요');assert.equal(one.$('tournament-record-status').hidden,true);assert.equal(one.$('tournament-record-status').textContent,'');assert.equal(one.$('schedule-confirm').hidden,true);assert.equal(one.$('schedule-edit-shared'),null);assert.ok(one.$('matches').querySelectorAll('.matrix-match').every(node=>node.getAttribute('aria-readonly')==='true'&&!node.draggable));one.clickText('filters','A조');one.$('schedule-close').click();assert.equal(one.$('view-draft').getAttribute('aria-pressed'),'true');assert.equal(new URLSearchParams(one.location.hash.slice(1)).get('view'),new URLSearchParams(hash.slice(1)).get('view'));one.clickText('filters','전체');assert.deepEqual(matrixPairs(one),draft);
+ const store=firestoreFixture(),one=browser(store,{hash:'#page=strategy'});await one.flush();await one.advance();const top=one.$('tab-schedule');assert.equal(top.textContent,'대진표');assert.equal(top.parentNode.className,'page-tabs');top.click();assert.equal(one.$('schedule-empty').hidden,true);assert.equal(one.$('schedule-dialog-badge').textContent,'기본 출전표 · 추천 조합 1');assert.deepEqual(matrixPairs(one),expectedPairs(one.window.fixtureRecommendations[0]));one.$('schedule-close').click();assert.equal(one.document.activeElement,top);
+ visibleCard(one).querySelector('.pair-option-select').click();await Promise.all(one.$('schedule-confirm').click());await one.flush();one.$('view-draft').click();const draft=matrixPairs(one),hash=one.location.hash;top.click();assert.equal(one.$('schedule-dialog').dataset.readonly,'true');assert.equal(one.$('schedule-dialog-title').textContent,'최강 C조 대진표 🔥');assert.equal(one.$('schedule-analysis-hint').hidden,true);assert.equal(one.$('schedule-header').hidden,false);assert.equal(one.$('schedule-analysis-hint').textContent,'우리조 경기를 눌러 상대 페어 AI 분석을 확인하세요!');assert.equal(one.$('schedule-dialog-badge').hidden,true);assert.equal(one.$('schedule-dialog-subtitle').hidden,true);assert.equal(one.$('schedule-guide').hidden,true);assert.equal(one.$('schedule-cheer').hidden,false);assert.equal(one.$('schedule-guide-title').textContent,'전체 공식 경기와 대진표를 확인하세요');assert.equal(one.$('schedule-guide-text').textContent,'경기를 눌러 대진을 입력하고, C조 경기의 상대 AI 분석을 확인하세요.');assert.equal(one.$('tournament-record-status').hidden,true);assert.equal(one.$('tournament-record-status').textContent,'');assert.equal(one.$('schedule-confirm').hidden,true);assert.equal(one.$('schedule-edit-shared'),null);assert.ok(one.$('matches').querySelectorAll('.matrix-match').every(node=>node.getAttribute('aria-readonly')==='true'&&!node.draggable));one.clickText('filters','A조');one.$('schedule-close').click();assert.equal(one.$('view-draft').getAttribute('aria-pressed'),'true');assert.equal(new URLSearchParams(one.location.hash.slice(1)).get('view'),new URLSearchParams(hash.slice(1)).get('view'));one.clickText('filters','전체');assert.deepEqual(matrixPairs(one),draft);
 });
 test('출전표 페이지의 드래그는 화면 끝에서 페이지를 스크롤한다',async()=>{
  const one=browser(firestoreFixture(),{hash:'#page=strategy',mobile:true});await one.flush();await one.advance();const plan=one.window.fixtureRecommendations[0],swap=findSwap(one,plan);visibleCard(one).querySelector('.pair-option-select').click();const source=scheduleCell(one,swap.first.id),target=scheduleCell(one,swap.second.id);let pageScroll=0;one.window.innerHeight=700;one.$('schedule-scroll').scrollBy=()=>assert.fail('Schedule must use page scrolling');one.window.scrollBy=()=>pageScroll++;one.document.elementFromPoint=()=>target;source.dispatchEvent({type:'dragstart',dataTransfer:{setData(){}},preventDefault(){}});target.dispatchEvent({type:'dragover',clientX:150,clientY:690,dataTransfer:{},preventDefault(){}});await one.advance(50);assert.ok(pageScroll>=2);source.dispatchEvent({type:'dragend'});one.$('schedule-close').click();
@@ -811,7 +806,7 @@ test('출전표 페이지의 드래그는 화면 끝에서 페이지를 스크�
 test('미확정 팀 출전표는 편집·선택과 무관하게 원본 추천 1을 쓰고 실시간 확정본을 우선한다',async()=>{
  const store=firestoreFixture(),one=browser(store,{hash:'#page=strategy'});await one.flush();await one.advance();const raw=clone(one.window.fixtureRecommendations[0]),second=clone(one.window.fixtureRecommendations[1]),swap=findSwap(one,raw,{otherTime:true});visibleCard(one).querySelector('.pair-option-select').click();nativeDrag(one,swap.first.id,swap.second.id);assert.deepEqual(matrixPairs(one),expectedPairs(swap.result));one.$('schedule-close').click();assert.deepEqual(matrixPairs(one),expectedPairs(raw));
  // A pre-existing manual draft remains separate from the raw recommendation fallback.
- nativeDrag(one,swap.first.id,swap.second.id);assert.deepEqual(matrixPairs(one),expectedPairs(swap.result));one.$('open-team-schedule').click();assert.deepEqual(matrixPairs(one),expectedPairs(raw));assert.match(one.$('schedule-dialog-badge').textContent,/기본 출전표/);assert.equal(one.$('schedule-shared-note'),null);assert.equal(one.$('schedule-footer').hidden,true);assert.equal(store.entries.has('teamLineups/C'),false);assert.equal(one.$('matches').querySelectorAll('.official-match').length,40);assert.equal(one.$('match-editor'),null);assert.equal(one.$('match-opponent1'),null);const before=matrixPairs(one);scheduleCell(one,raw.matches[0].id).click();assert.deepEqual(matrixPairs(one),before);
+ nativeDrag(one,swap.first.id,swap.second.id);assert.deepEqual(matrixPairs(one),expectedPairs(swap.result));one.$('tab-schedule').click();assert.deepEqual(matrixPairs(one),expectedPairs(raw));assert.match(one.$('schedule-dialog-badge').textContent,/기본 출전표/);assert.equal(one.$('schedule-shared-note'),null);assert.equal(one.$('schedule-footer').hidden,true);assert.equal(store.entries.has('teamLineups/C'),false);assert.equal(one.$('matches').querySelectorAll('.official-match').length,40);assert.equal(one.$('match-editor'),null);assert.equal(one.$('match-opponent1'),null);const before=matrixPairs(one);scheduleCell(one,raw.matches[0].id).click();assert.deepEqual(matrixPairs(one),before);
  store.entries.set('teamLineups/C',{...second,revision:1});store.broadcast();await one.flush();assert.equal(one.$('schedule-dialog-badge').textContent,'');assert.equal(one.$('schedule-dialog-badge').hidden,true);assert.equal(one.$('schedule-dialog-subtitle').hidden,true);assert.deepEqual(matrixPairs(one),expectedPairs(second));assert.equal(one.$('schedule-footer').hidden,true);one.$('schedule-close').click();assert.deepEqual(matrixPairs(one),expectedPairs(swap.result));
 });
 
@@ -821,20 +816,20 @@ test('일부 고정 GUI는 별도 지정 카드와 안내를 표시하고 추가
  one.select('fixed-player1','기른지');one.select('fixed-player2','냉면');assert.equal(one.$('add-fixed-pair').disabled,true);assert.match(one.$('fixed-pair-status').textContent,/이미 지정/);one.select('fixed-player2','숭');assert.equal(one.$('add-fixed-pair').disabled,false);one.$('add-fixed-pair').click();await one.advance();assert.equal(one.$('fixed-pairs-list').querySelectorAll('.fixed-pair-row').length,2);one.clickText('operation-modes',one.window.PAIRING_MODEL.modeLabels.free);await one.advance();assert.equal(editor.hidden,true);assert.equal(guide.hidden,true);assert.equal(one.$('mode-player-count').textContent,'C조 · '+Object.keys(one.window.BOARD_DATA.teams.C).length+'명');one.clickText('operation-modes',one.window.PAIRING_MODEL.modeLabels.partial);await one.advance();assert.equal(one.$('fixed-pairs-list').querySelectorAll('.fixed-pair-row').length,2);one.$('fixed-pairs-list').querySelector('.fixed-pair-remove').click();await one.advance();assert.equal(one.$('fixed-pairs-list').querySelectorAll('.fixed-pair-row').length,1);assert.equal(one.document.activeElement,one.$('fixed-player1'));
 });
 
-test('공식 공유표는 40경기와 실제 양팀 기록을 별도로 저장·삭제하고 C조 예정 편성을 추정하지 않는다',async()=>{
- const store=firestoreFixture(),one=browser(store,{hash:'#page=strategy'});await one.flush();await one.advance();one.$('open-team-schedule').click();let matches=one.$('matches').querySelectorAll('.official-match');assert.equal(matches.length,40);assert.match(one.$('matches').textContent,/16:30/);assert.equal(one.$('matches').querySelectorAll('.matrix-match').length,20);assert.equal(Object.keys(one.window.PLAYER_PROFILE_CLOUD.opponentRecords).length,0);
- const official=one.window.BOARD_DATA.tournamentSchedule.find(match=>match.sides.every(side=>side.team!=='C'));matches.find(node=>node.dataset.officialMatch===official.id).click();assert.equal(one.$('official-record-dialog').open,true);const sides=official.sides.map(side=>side.team);assert.equal(one.$('official-record-body').querySelectorAll('.record-team').length,2);assert.equal(one.$('official-record-body').querySelectorAll('.record-candidate-list').length,0);assert.match(one.$('official-record-body').textContent,/기록 0\/20경기/);
+test('다른 팀끼리 경기는 기록 저장만 표시하고 상대 분석·삭제 버튼은 표시하지 않는다',async()=>{
+ const store=firestoreFixture(),one=browser(store,{hash:'#page=strategy'});await one.flush();await one.advance();one.$('tab-schedule').click();let matches=one.$('matches').querySelectorAll('.official-match');assert.equal(matches.length,40);assert.match(one.$('matches').textContent,/16:30/);assert.equal(one.$('matches').querySelectorAll('.matrix-match').length,20);assert.equal(Object.keys(one.window.PLAYER_PROFILE_CLOUD.opponentRecords).length,0);
+ const official=one.window.BOARD_DATA.tournamentSchedule.find(match=>match.sides.every(side=>side.team!=='C'));matches.find(node=>node.dataset.officialMatch===official.id).click();assert.equal(one.$('official-record-dialog').open,true);const sides=official.sides.map(side=>side.team);assert.equal(one.$('official-record-body').querySelectorAll('.record-team').length,2);assert.equal(one.$('official-record-body').querySelectorAll('.record-actions').every(actions=>actions.children.length===1),true);assert.doesNotMatch(one.$('official-record-description').textContent,/분석/);assert.equal(one.$('official-record-body').querySelectorAll('.record-candidate-list').length,0);assert.match(one.$('official-record-body').textContent,/기록 0\/20경기/);
  for(const team of sides){const roster=Object.keys(one.window.BOARD_DATA.teams[team]),pair=roster.filter(name=>one.window.BOARD_DATA.teams[team][name].tier!=='love').slice(0,2);one.select('record-'+team+'-0',team+':'+pair[0]);one.select('record-'+team+'-1',team+':'+pair[1]);await Promise.all(one.$('official-record-body').querySelectorAll('button').find(node=>node.textContent===team+'조 기록 저장').click());await one.flush();assert.deepEqual(clone(one.window.PLAYER_PROFILE_CLOUD.opponentRecords[official.id][team]).sort(),pair.map(name=>team+':'+name).sort());}
- assert.equal(one.$('official-record-body').querySelectorAll('.record-candidates').length,0);assert.equal(store.entries.has('teamLineups/C'),false);const team=sides[0];await Promise.all(one.$('official-record-body').querySelectorAll('button').find(node=>node.textContent===team+'조 기록 삭제').click());await one.flush();assert.equal(one.window.PLAYER_PROFILE_CLOUD.opponentRecords[official.id]?.[team],undefined);one.$('official-record-close').click();assert.equal(one.$('official-record-dialog').open,false);assert.equal(one.document.activeElement.dataset.officialMatch,official.id);one.clickText('filters','A조');assert.equal(one.$('matches').querySelectorAll('.official-match').length,20);
+ assert.equal(one.$('official-record-body').querySelectorAll('.record-candidates').length,0);assert.equal(store.entries.has('teamLineups/C'),false);for(const actions of one.$('official-record-body').querySelectorAll('.record-actions')){assert.equal(actions.children.length,1);assert.match(actions.children[0].textContent,/조 기록 저장/);assert.doesNotMatch(actions.textContent,/분석|삭제/);}one.$('official-record-close').click();assert.equal(one.$('official-record-dialog').open,false);assert.equal(one.document.activeElement.dataset.officialMatch,official.id);one.clickText('filters','A조');assert.equal(one.$('matches').querySelectorAll('.official-match').length,20);
 });
 
 test('기록 후보는 실제 개수 5개 이하일 때만 나오고 원격 변경·연결 오류는 저장을 막는다',async()=>{
- const one=browser(firestoreFixture(),{hash:'#page=strategy'});await one.flush();await one.advance();const cloud=one.window.PLAYER_PROFILE_CLOUD,model=one.window.TOURNAMENT_MODEL,original=model.candidates;one.$('open-team-schedule').click();const match=one.window.BOARD_DATA.tournamentSchedule[0],team=match.sides[0].team,roster=Object.keys(one.window.BOARD_DATA.teams[team]),pair=roster.slice(0,2).map(name=>team+':'+name);model.candidates=()=>({count:5,pairs:Array.from({length:5},()=>pair),showPairs:true,knownCount:15,unknownCount:5});one.$('matches').querySelectorAll('.official-match').find(node=>node.dataset.officialMatch===match.id).click();assert.equal(one.$('official-record-body').querySelectorAll('.record-candidate-list')[0].querySelectorAll('li').length,5);assert.match(one.$('official-record-body').textContent,/기록 15\/20경기/);model.candidates=()=>({count:6,pairs:[],showPairs:false,knownCount:14,unknownCount:6});one.window.dispatchEvent({type:'opponentrecordschange'});assert.equal(one.$('official-record-body').querySelectorAll('.record-candidate-list').length,0);
+ const one=browser(firestoreFixture(),{hash:'#page=strategy'});await one.flush();await one.advance();const cloud=one.window.PLAYER_PROFILE_CLOUD,model=one.window.TOURNAMENT_MODEL,original=model.candidates;one.$('tab-schedule').click();const match=one.window.BOARD_DATA.tournamentSchedule[0],team=match.sides[0].team,roster=Object.keys(one.window.BOARD_DATA.teams[team]),pair=roster.slice(0,2).map(name=>team+':'+name);model.candidates=()=>({count:5,pairs:Array.from({length:5},()=>pair),showPairs:true,knownCount:15,unknownCount:5});one.$('matches').querySelectorAll('.official-match').find(node=>node.dataset.officialMatch===match.id).click();assert.equal(one.$('official-record-body').querySelectorAll('.record-candidate-list')[0].querySelectorAll('li').length,5);assert.match(one.$('official-record-body').textContent,/기록 15\/20경기/);model.candidates=()=>({count:6,pairs:[],showPairs:false,knownCount:14,unknownCount:6});one.window.dispatchEvent({type:'opponentrecordschange'});assert.equal(one.$('official-record-body').querySelectorAll('.record-candidate-list').length,0);
  one.select('record-'+team+'-0',pair[0]);one.select('record-'+team+'-1',pair[1]);cloud.opponentRecordRevisions[team]++;one.window.dispatchEvent({type:'opponentrecordschange'});const save=one.$('official-record-body').querySelectorAll('button').find(node=>node.textContent===team+'조 기록 저장');assert.equal(save.disabled,true);assert.match(one.$('official-record-body').textContent,/다른 기기/);cloud.opponentRecordsError='permission-denied';one.window.dispatchEvent({type:'opponentrecordschange'});assert.equal(one.$('retry-tournament-records').hidden,false);assert.equal(one.$('official-record-retry').hidden,false);assert.match(one.$('official-record-connection').textContent,/접근 권한/);let retries=0;cloud.retryOpponentRecords=()=>retries++;one.$('official-record-retry').click();assert.equal(retries,1);assert.equal(one.$('matches').querySelectorAll('.official-match').length,40);model.candidates=original;
 });
 
 test('추천 계산 전에도 공식40경기와 실제기록은 열리고 C조 편성은 준비 후 갱신된다',async()=>{
- const one=browser(firestoreFixture(),{hash:'#page=strategy',deferWorkers:true});await one.flush();await one.advance();one.$('open-team-schedule').click();assert.equal(one.$('matches').querySelectorAll('.official-match').length,40);assert.equal(one.$('matches').querySelectorAll('.matrix-match').length,0);assert.equal(one.$('schedule-content').hidden,false);assert.match(one.$('schedule-dialog-subtitle').textContent,/준비 중/);one.$('matches').querySelector('.official-match').click();assert.equal(one.$('official-record-dialog').open,true);one.$('official-record-close').click();one.workerRequests.at(-1).reply();await one.flush();assert.equal(one.$('matches').querySelectorAll('.matrix-match').length,20);
+ const one=browser(firestoreFixture(),{hash:'#page=strategy',deferWorkers:true});await one.flush();await one.advance();one.$('tab-schedule').click();assert.equal(one.$('matches').querySelectorAll('.official-match').length,40);assert.equal(one.$('matches').querySelectorAll('.matrix-match').length,0);assert.equal(one.$('schedule-content').hidden,false);assert.match(one.$('schedule-dialog-subtitle').textContent,/준비 중/);one.$('matches').querySelector('.official-match').click();assert.equal(one.$('official-record-dialog').open,true);one.$('official-record-close').click();one.workerRequests.at(-1).reply();await one.flush();assert.equal(one.$('matches').querySelectorAll('.matrix-match').length,20);
 });
 
 test('셀 전체 터치는 선택을 막고 부유 카드로 이동하며 잘못된 놓기·스크롤·취소를 구분한다',async()=>{
@@ -842,18 +837,18 @@ test('셀 전체 터치는 선택을 막고 부유 카드로 이동하며 잘못
  const point=(x=100,y=200)=>({identifier:31,clientX:x,clientY:y}),start=()=>source.dispatchEvent({type:'touchstart',touches:[point()]});start();one.document.dispatchEvent({type:'touchmove',touches:[point(100,220)],preventDefault(){assert.fail('Early swipe must scroll');}});await one.advance(350);assert.equal(one.document.querySelector('.schedule-drag-ghost'),null);assert.deepEqual(matrixPairs(one),before);
  start();await one.advance(350);assert.ok(one.document.querySelector('.schedule-drag-ghost'));assert.equal(source.classList.contains('drag-source'),true);one.document.dispatchEvent({type:'pointercancel',pointerId:31,pointerType:'touch'});assert.ok(one.document.querySelector('.schedule-drag-ghost'));one.document.elementFromPoint=()=>target;let prevented=false;one.document.dispatchEvent({type:'touchmove',touches:[point(140,240)],preventDefault(){prevented=true;}});assert.equal(prevented,true);assert.match(one.document.querySelector('.schedule-drag-ghost').getAttribute('style'),/left:140px/);assert.equal(target.classList.contains('drop-invalid'),true);one.document.dispatchEvent({type:'touchend',touches:[],changedTouches:[point(140,240)],preventDefault(){}});assert.deepEqual(matrixPairs(one),before);assert.match(one.$('schedule-drag-status').textContent,/동시간 중복/);assert.equal(source.draggable,true);assert.equal(one.document.querySelector('.schedule-drag-ghost'),null);
  start();await one.advance(350);one.document.dispatchEvent({type:'touchstart',touches:[point(),{identifier:32}]});assert.equal(one.document.querySelector('.schedule-drag-ghost'),null);assert.deepEqual(matrixPairs(one),before);
- one.$('schedule-close').click();one.$('open-team-schedule').click();assert.equal(one.$('matches').querySelectorAll('.matrix-drag-handle').length,0);assert.equal(one.$('matches').querySelectorAll('.official-planned-label').length,0);assert.equal(one.$('matches').querySelectorAll('.official-unrecorded').length,0);assert.ok(!one.$('matches').textContent.includes('실제 출전 미입력'));assert.ok(!one.$('matches').textContent.includes('예정 편성'));for(const cell of one.$('matches').querySelectorAll('.official-match')){const sides=cell.querySelectorAll('.official-team-line');if(sides.some(side=>side.dataset.team==='C')){assert.equal(sides[0].dataset.team,'C');assert.equal(sides[0].querySelector('.official-team-label'),null);}}
+ one.$('schedule-close').click();one.$('tab-schedule').click();assert.equal(one.$('matches').querySelectorAll('.matrix-drag-handle').length,0);assert.equal(one.$('matches').querySelectorAll('.official-planned-label').length,0);assert.equal(one.$('matches').querySelectorAll('.official-unrecorded').length,0);assert.ok(!one.$('matches').textContent.includes('실제 출전 미입력'));assert.ok(!one.$('matches').textContent.includes('예정 편성'));for(const cell of one.$('matches').querySelectorAll('.official-match')){const sides=cell.querySelectorAll('.official-team-line');if(sides.some(side=>side.dataset.team==='C')){assert.equal(sides[0].dataset.team,'C');assert.equal(sides[0].querySelector('.official-team-label'),null);}}
 });
 
 test('공유 C셀은 실제 한 페어를 우선하고 읽기 전용 하단은 숨기며 초안 확정 버튼은 유지한다',async()=>{
- const one=browser(firestoreFixture(),{hash:'#page=strategy'});await one.flush();await one.advance();const plan=clone(one.window.fixtureRecommendations[0]);one.$('open-team-schedule').click();const official=one.window.BOARD_DATA.tournamentSchedule.find(match=>match.sides.some(side=>side.team==='C')),number=official.sides.find(side=>side.team==='C').number,planned=plan.matches.find(match=>match.id===number).pair,cloud=one.window.PLAYER_PROFILE_CLOUD;for(const pair of [planned,Object.keys(one.window.BOARD_DATA.teams.C).filter(name=>!planned.includes(name)).slice(0,2)]){cloud.opponentRecords[official.id]={C:pair.map(name=>'C:'+name)};one.window.dispatchEvent({type:'opponentrecordschange'});const cell=one.$('matches').querySelectorAll('.official-match').find(node=>node.dataset.officialMatch===official.id),own=cell.querySelectorAll('.official-team-line')[0];assert.equal(own.dataset.team,'C');assert.deepEqual(own.querySelectorAll('.matrix-player-name').map(node=>node.textContent),pair);assert.equal(own.querySelectorAll('.official-own-name').length,0);assert.equal(own.querySelectorAll('.official-team-label').length,0);assert.equal(own.querySelectorAll('.matrix-run-warning').length,0);}assert.deepEqual(clone(one.window.fixtureRecommendations[0]),plan);assert.equal(one.$('schedule-footer').hidden,true);assert.equal(one.$('schedule-readonly-close'),null);assert.equal(one.document.querySelector('.schedule-footer-note'),null);one.$('schedule-close').click();visibleCard(one).querySelector('.pair-option-select').click();assert.equal(one.$('schedule-footer').hidden,false);assert.equal(one.$('schedule-confirm').hidden,false);assert.equal(one.$('schedule-cancel').hidden,false);
+ const one=browser(firestoreFixture(),{hash:'#page=strategy'});await one.flush();await one.advance();const plan=clone(one.window.fixtureRecommendations[0]);one.$('tab-schedule').click();const official=one.window.BOARD_DATA.tournamentSchedule.find(match=>match.sides.some(side=>side.team==='C')),number=official.sides.find(side=>side.team==='C').number,planned=plan.matches.find(match=>match.id===number).pair,cloud=one.window.PLAYER_PROFILE_CLOUD;for(const pair of [planned,Object.keys(one.window.BOARD_DATA.teams.C).filter(name=>!planned.includes(name)).slice(0,2)]){cloud.opponentRecords[official.id]={C:pair.map(name=>'C:'+name)};one.window.dispatchEvent({type:'opponentrecordschange'});const cell=one.$('matches').querySelectorAll('.official-match').find(node=>node.dataset.officialMatch===official.id),own=cell.querySelectorAll('.official-team-line')[0];assert.equal(own.dataset.team,'C');assert.deepEqual(own.querySelectorAll('.matrix-player-name').map(node=>node.textContent),pair);assert.equal(own.querySelectorAll('.official-own-name').length,0);assert.equal(own.querySelectorAll('.official-team-label').length,0);assert.equal(own.querySelectorAll('.matrix-run-warning').length,0);}assert.deepEqual(clone(one.window.fixtureRecommendations[0]),plan);assert.equal(one.$('schedule-footer').hidden,true);assert.equal(one.$('schedule-readonly-close'),null);assert.equal(one.document.querySelector('.schedule-footer-note'),null);one.$('schedule-close').click();visibleCard(one).querySelector('.pair-option-select').click();assert.equal(one.$('schedule-footer').hidden,false);assert.equal(one.$('schedule-confirm').hidden,false);assert.equal(one.$('schedule-cancel').hidden,false);
 });
 
 test('출전표 전용 주소와 브라우저 뒤로가기는 초안을 취소하고 추천 탐색·필터·스크롤을 복원한다',async()=>{
  const store=firestoreFixture(),one=browser(store,{hash:'#page=strategy',mobile:true});await one.flush();await one.advance();
  visibleCard(one).querySelector('.recommendation-next').click();const heading=visibleCard(one).querySelector('h3').textContent;one.clickText('filters','D조');one.window.scrollY=480;
- const originHash=one.location.hash;one.$('open-team-schedule').click();
- assert.equal(new URLSearchParams(one.location.hash.slice(1)).get('page'),'schedule');assert.equal(new URLSearchParams(one.location.hash.slice(1)).get('schedule'),'shared');assert.equal(one.$('schedule-dialog').tagName,'SECTION');assert.equal(one.$('site-header').hidden,true);assert.equal(one.$('page-strategy').hidden,true);
+ const originHash=one.location.hash;one.$('tab-schedule').click();
+ assert.equal(new URLSearchParams(one.location.hash.slice(1)).get('page'),'schedule');assert.equal(new URLSearchParams(one.location.hash.slice(1)).get('schedule'),'shared');assert.equal(one.$('schedule-dialog').tagName,'SECTION');assert.equal(one.$('site-header').hidden,false);assert.equal(one.$('page-strategy').hidden,true);
  one.clickText('filters','A조');one.history.back();await one.advance(0);
  assert.equal(one.location.hash,originHash);assert.equal(one.$('schedule-dialog').hidden,true);assert.equal(one.$('site-header').hidden,false);assert.equal(visibleCard(one).querySelector('h3').textContent,heading);assert.equal(one.window.scrollY,480);assert.equal(new URLSearchParams(one.location.hash.slice(1)).get('filter'),'D');
  one.history.forward();await one.advance(0);assert.equal(one.$('schedule-dialog').hidden,false);assert.equal(one.$('schedule-dialog').dataset.readonly,'true');one.$('schedule-close').click();await one.advance(0);
@@ -882,4 +877,125 @@ test('출전표 편집 직접 주소에서 원격 프로필 변경 후 교환한
  assert.deepEqual(matrixPairs(one),expectedPairs(plan));applySwap(one,swap);assert.deepEqual(matrixPairs(one),expectedPairs(swap.result));
  one.$('schedule-close').click();await one.advance(0);assert.equal(one.$('page-strategy').hidden,false);
  visibleCard(one).querySelector('.pair-option-select').click();assert.deepEqual(matrixPairs(one),expectedPairs(plan));assert.equal(store.entries.has('teamLineups/C'),false);
+});
+
+function openRecordAnalysisFixture(one){
+ one.$('tab-schedule').click();const match=one.window.BOARD_DATA.tournamentSchedule.find(item=>item.sides.some(side=>side.team==='C')&&item.sides.some(side=>side.team==='A'));
+ one.$('matches').querySelectorAll('.official-match').find(node=>node.dataset.officialMatch===match.id).click();
+ one.select('record-A-0','A:펩시');one.select('record-A-1','A:동글');return match;
+}
+test('출전표에서 C조 입력 없이 상대 AI 분석을 아래 표시하고 저장 전에도 생성·캐시 재사용한다',async()=>{
+ for(const mobile of [false,true]){
+  const store=firestoreFixture(),one=browser(store,{hash:'#page=strategy',mobile});await one.flush();await one.advance();
+  const match=openRecordAnalysisFixture(one);assert.equal(one.$('record-C-0'),null);assert.equal(one.$('official-record-body').querySelectorAll('.record-team').length,1);
+  assert.equal(one.$('record-analysis-A').hidden,true);assert.equal(store.api.generations,undefined);
+  const action=one.$('record-analyze-A');assert.equal(action.textContent,'상대 분석 보기');assert.equal(action.disabled,false);
+  assert.equal(action.parentNode.children[0].textContent,'A조 기록 저장');
+  await Promise.all(action.click());await one.flush();
+  const result=one.$('record-analysis-A');assert.equal(result.hidden,false);for(const text of ['AI 분석 · 완료','Gemini 연결 결과','주의할 점','대응방안','공략할 상황','펩시','동글'])assert.ok(result.textContent.includes(text),text);
+  assert.equal(store.api.generations,1);assert.equal(one.window.PLAYER_PROFILE_CLOUD.opponentRecords[match.id],undefined);assert.equal(store.entries.has('teamLineups/C'),false);
+  await Promise.all(one.$('record-analyze-A').click());await one.flush();assert.equal(store.api.generations,1);assert.match(one.$('record-analysis-A').textContent,/저장된 AI 분석/);
+  one.$('official-record-close').click();assert.equal(one.$('official-record-dialog').open,false);
+ }
+});
+test('출전표 분석은 선수 변경·창 닫기·시간 초과 후 늦은 결과를 버리고 재시도한다',async()=>{
+ const one=browser(firestoreFixture(),{hash:'#page=strategy'});await one.flush();await one.advance();const match=openRecordAnalysisFixture(one),cloud=one.window.PLAYER_PROFILE_CLOUD;
+ const result={summary:'이전 선수 분석',cautions:[],responses:[],tactics:[]};let complete;
+ cloud.analyzeMatchup=()=>new Promise(resolve=>{complete=resolve;});
+ let pending=Promise.all(one.$('record-analyze-A').click());assert.equal(one.$('record-analyze-A').disabled,true);assert.match(one.$('record-analysis-A').textContent,/분석하고/);
+ one.select('record-A-1','');complete({status:'ready',result});await pending;assert.equal(one.$('record-analysis-A').hidden,true);assert.equal(one.$('record-analyze-A').disabled,true);
+ one.select('record-A-1','A:동글');pending=Promise.all(one.$('record-analyze-A').click());one.$('official-record-close').click();complete({status:'ready',result});await pending;
+ one.$('matches').querySelectorAll('.official-match').find(node=>node.dataset.officialMatch===match.id).click();one.select('record-A-0','A:펩시');one.select('record-A-1','A:동글');assert.equal(one.$('record-analysis-A').hidden,true);
+ pending=Promise.all(one.$('record-analyze-A').click());await one.advance(90001);assert.match(one.$('record-analysis-A').textContent,/시간이 오래/);assert.equal(one.$('record-analyze-A').disabled,false);
+ complete({status:'ready',result});await pending;assert.ok(!one.$('record-analysis-A').textContent.includes(result.summary));
+ cloud.analyzeMatchup=async()=>({status:'ready',result:{...result,summary:'새 분석 성공'}});await Promise.all(one.$('record-analyze-A').click());assert.match(one.$('record-analysis-A').textContent,/새 분석 성공/);
+});
+test('출전표 분석은 공동 생성 구독을 정리하고 연결 실패를 알린 뒤 다시 생성한다',async()=>{
+ const one=browser(firestoreFixture(),{hash:'#page=strategy'});await one.flush();await one.advance();openRecordAnalysisFixture(one);const cloud=one.window.PLAYER_PROFILE_CLOUD;let accept,unsubscribed=0;
+ cloud.analyzeMatchup=async()=>({status:'pending',analysisKey:'shared'});cloud.subscribeAnalysis=(key,callback)=>{assert.equal(key,'shared');accept=callback;return ()=>unsubscribed++;};
+ await Promise.all(one.$('record-analyze-A').click());assert.equal(one.$('record-analyze-A').disabled,true);
+ accept({status:'ready',result:{summary:'공동 분석',cautions:[],responses:[],tactics:[]}});assert.equal(unsubscribed,1);assert.match(one.$('record-analysis-A').textContent,/공동 분석/);
+ await Promise.all(one.$('record-analyze-A').click());one.select('record-A-1','');assert.equal(unsubscribed,2);accept({status:'ready',result:{summary:'낡은 결과',cautions:[],responses:[],tactics:[]}});assert.equal(one.$('record-analysis-A').hidden,true);
+ one.select('record-A-1','A:동글');cloud.analyzeMatchup=async()=>{throw new Error('AI 연결 실패');};await Promise.all(one.$('record-analyze-A').click());assert.match(one.$('record-analysis-A').textContent,/AI 연결 실패/);assert.match(one.$('record-analysis-A').textContent,/기본 관찰 요약/);assert.equal(one.$('record-analyze-A').disabled,false);
+});
+
+test('최종 출전표는 경기 칸 여백도 기록·분석 창을 열고 C조 이동은 제공하지 않는다',async()=>{
+ for(const mobile of [false,true]){
+  const one=browser(firestoreFixture(),{hash:'#page=strategy',mobile});await one.flush();await one.advance();one.$('tab-schedule').click();
+  const button=one.$('matches').querySelectorAll('.official-match').find(node=>node.querySelector('.official-c-plan')),cell=button.parentNode,id=button.dataset.officialMatch;
+  assert.equal(one.$('schedule-dialog').dataset.readonly,'true');assert.equal(button.querySelector('.official-c-plan').draggable,false);
+  cell.dispatchEvent({type:'click',target:cell});assert.equal(one.$('official-record-dialog').open,true);
+  assert.equal(one.$('record-C-0'),null);assert.equal(one.$('official-record-body').querySelectorAll('.record-team').length,1);
+  assert.equal(one.$('official-record-body').querySelectorAll('button').some(node=>node.textContent==='상대 분석 보기'),true);
+  one.$('official-record-close').click();assert.equal(one.document.activeElement.dataset.officialMatch,id);
+ }
+});
+
+test('공유 페어와 확정 보기 주소로 직접 연 최종 출전표도 PC에서 모든 경기 창을 연다',async()=>{
+ const pairs=[['기른지','냉면'],['기른지','만두'],['기른지','숭'],['기른지','쏘오리'],['기른지','한치'],['꿉','냉면'],['꿉','만두'],['꿉','숭'],['꿉','쏘오리'],['꿉','우디'],['냉면','만두'],['냉면','우디'],['냉면','한치'],['만두','숭'],['만두','한치'],['숭','쏘오리'],['숭','우디'],['쏘오리','우디'],['쏘오리','한치'],['우디','한치']];
+ const hash='#page=schedule&mode=free&variant=3&view=confirmed&filter=all&schedule=shared&origin=strategy&pairs='+encodeURIComponent(JSON.stringify(pairs));
+ const one=browser(firestoreFixture(),{hash,mobile:false});await one.flush();await one.advance();
+ assert.equal(one.$('schedule-dialog').dataset.readonly,'true');assert.equal(one.$('matches').querySelectorAll('.official-match').length,40);
+ for(const button of one.$('matches').querySelectorAll('.official-match')){
+  button.click();assert.equal(one.$('official-record-dialog').open,true,button.dataset.officialMatch);
+  assert.equal(one.$('official-record-body').querySelectorAll('.record-team').some(node=>node.dataset.team==='C'),false);
+  one.$('official-record-close').click();assert.equal(one.document.activeElement.dataset.officialMatch,button.dataset.officialMatch);
+ }
+});
+
+test('전체 대진이 없는 오래된 데이터는 클릭 불가능한 20경기 표 대신 복구 안내를 표시한다',async()=>{
+ for(const missing of ['data','model']){
+  const one=browser(firestoreFixture(),{hash:'#page=strategy'});await one.flush();await one.advance();
+  if(missing==='data')delete one.window.BOARD_DATA.tournamentSchedule;else delete one.window.TOURNAMENT_MODEL;
+  one.$('tab-schedule').click();
+  assert.equal(one.$('matches').querySelectorAll('.matrix-match').length,0);
+  assert.equal(one.$('tournament-record-status').hidden,false);assert.match(one.$('tournament-record-status').textContent,/전체 경기 정보를 불러오지 못했습니다/);
+ }
+});
+
+test('대진표 응원 배너는 검토한 30개 문구를 선수 이름·출처와 함께 순환한다',async()=>{
+ const one=browser(firestoreFixture(),{hash:'#page=schedule&schedule=shared'});await one.flush();await one.advance();
+ assert.equal(one.$('schedule-cheer').hidden,false);assert.equal(one.$('schedule-guide').hidden,true);assert.equal(one.$('schedule-dialog-title').textContent,'최강 C조 대진표 🔥');
+ const seen=new Set();for(let index=0;index<30;index++){
+  seen.add(one.$('cheer-text').textContent+' - '+one.$('cheer-author').textContent.slice(1,-1));
+  assert.ok(one.$('cheer-emoji').textContent);assert.match(one.document.querySelector('.cheer-attribution').textContent.trim(),/^-\s*\[.+\]$/);
+  await one.advance(5000);
+ }
+ assert.equal(seen.size,30);assert.ok([...seen].some(text=>text==='압박감은 특권이다. - 빌리 진 킹'));
+ assert.ok([...seen].some(text=>text==='테니스도 팀 스포츠다. 성공은 함께 만들어간다. - 로저 페더러'));assert.ok([...seen].some(text=>text==='패배에서 배우되, 과거에 머물지 말고 현재를 살자. - 세리나 윌리엄스'));
+ assert.equal(one.$('cheer-prev'),null);assert.equal(one.$('cheer-next'),null);assert.equal(one.$('cheer-face'),null);
+});
+test('응원 배너는 자동으로 넘기되 일시정지·화면 숨김·경기 창에서는 멈춘다',async()=>{
+ const one=browser(firestoreFixture(),{hash:'#page=schedule&schedule=shared'});await one.flush();await one.advance();
+ let text=one.$('cheer-text').textContent;await one.advance(5000);assert.notEqual(one.$('cheer-text').textContent,text);
+ one.$('cheer-pause').click();text=one.$('cheer-text').textContent;await one.advance(20000);assert.equal(one.$('cheer-text').textContent,text);assert.equal(one.$('cheer-pause').getAttribute('aria-pressed'),'true');
+ one.$('cheer-pause').click();one.document.hidden=true;one.document.dispatchEvent({type:'visibilitychange'});await one.advance(5000);assert.equal(one.$('cheer-text').textContent,text);
+ one.document.hidden=false;one.document.dispatchEvent({type:'visibilitychange'});await one.advance(5000);assert.notEqual(one.$('cheer-text').textContent,text);
+ one.$('matches').querySelector('.official-match').click();text=one.$('cheer-text').textContent;await one.advance(20000);assert.equal(one.$('cheer-text').textContent,text);
+ one.$('official-record-close').click();await one.advance(5000);assert.notEqual(one.$('cheer-text').textContent,text);
+ one.$('schedule-close').click();await one.advance(0);assert.equal(one.$('schedule-cheer').hidden,true);text=one.$('cheer-text').textContent;await one.advance(5000);assert.equal(one.$('cheer-text').textContent,text);
+});
+
+test('대진표는 첫 탭이며 네 탭 사이를 이동해도 공유 대진과 편집 모드를 혼동하지 않는다',async()=>{
+ const one=browser(firestoreFixture(),{hash:'#page=players'});await one.flush();await one.advance();
+ assert.deepEqual(one.document.querySelectorAll('.page-tab').map(tab=>tab.textContent),['대진표','선수정보','상대 페어 분석','페어 조합']);assert.equal(one.$('open-team-schedule'),null);
+ for(const page of ['schedule','players','analysis','schedule','strategy','schedule']){
+  one.$('tab-'+page).click();await one.advance(0);assert.equal(one.document.body.dataset.page,page);assert.equal(one.$('site-header').hidden,false);assert.equal(one.$('tab-'+page).getAttribute('aria-selected'),'true');
+  if(page==='schedule'){assert.equal(one.$('schedule-dialog').hidden,false);assert.equal(one.$('schedule-dialog').dataset.readonly,'true');assert.equal(one.$('matches').querySelectorAll('.official-match').length,40);assert.equal(one.$('schedule-footer').hidden,true);}
+ }
+ one.$('tab-strategy').click();await one.advance();visibleCard(one).querySelector('.pair-option-select').click();assert.equal(one.$('site-header').hidden,true);assert.equal(one.$('schedule-dialog').dataset.readonly,'false');assert.equal(one.$('schedule-footer').hidden,false);
+ one.$('schedule-close').click();await one.advance(0);one.$('tab-schedule').click();assert.equal(one.$('site-header').hidden,false);assert.equal(one.$('schedule-dialog').dataset.readonly,'true');
+});
+test('배너는 5초 뒤 전환하고 클릭하면 전체 명언 30개 팝업을 열며 닫을 때 초점을 돌려준다',async()=>{
+ const store=firestoreFixture(),one=browser(store,{hash:'#page=schedule&schedule=shared'});await one.flush();
+ const before=one.$('cheer-text').textContent;await one.advance(4999);assert.equal(one.$('cheer-text').textContent,before);await one.advance(1);assert.notEqual(one.$('cheer-text').textContent,before);
+ one.$('cheer-open').click();assert.equal(one.$('cheer-dialog').open,true);assert.equal(one.$('cheer-dialog-title').textContent,'멘탈 잡아!!!!!!!!!!!!!!!');assert.equal(one.$('cheer-dialog-description'),null);assert.equal(one.document.activeElement,one.$('cheer-close'));
+ const items=one.$('cheer-list').querySelectorAll('li');assert.equal(items.length,30);assert.equal(new Set(items.map(item=>item.textContent)).size,30);
+ for(const item of items){const link=item.querySelector('a');assert.match(link.href,/^https:\/\//);assert.match(link.textContent,/^\[.+\]$/);assert.equal(link.target,'_blank');assert.equal(link.rel,'noopener noreferrer');}
+ const current=one.$('cheer-text').textContent;await one.advance(10000);assert.equal(one.$('cheer-text').textContent,current);assert.equal(store.entries.has('geminiAiUsage/team'),false);
+ one.$('cheer-close').click();assert.equal(one.$('cheer-dialog').open,false);assert.equal(one.document.activeElement,one.$('cheer-open'));
+});
+test('전체 명언 팝업이 열린 상태로 뒤로 가면 팝업도 닫고 이전 탭을 복원한다',async()=>{
+ const one=browser(firestoreFixture(),{hash:'#page=players'});await one.flush();await one.advance();one.$('tab-schedule').click();one.$('cheer-open').click();assert.equal(one.$('cheer-dialog').open,true);
+ one.history.back();await one.advance(0);assert.equal(one.$('cheer-dialog').open,false);assert.equal(one.$('page-players').hidden,false);assert.equal(one.$('tab-players').getAttribute('aria-selected'),'true');
 });

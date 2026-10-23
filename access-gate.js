@@ -1,8 +1,10 @@
 'use strict';
 // Shared-answer entry screen. The static host and Firestore rules remain separate access boundaries.
 (() => {
+ // Set data-entry-required="true" on <body> to restore the preserved code screen.
+ const entryRequired=document.body.dataset.entryRequired==='true';
  const codeHash='e501dfe730fbd9a4ab4712fc78456302f08b2f8e7043bd077f251bf9b621824f';
- const scripts=['data.js','validation.js','profile-model.js?v=20261012-4','ratings.js?v=20261015-1','pairing-model.js?v=20261022-19','tournament-model.js?v=20261022-20','tactics-data.js','gemini-config.js?v=20261008-6Leej-Qt','gemini-analysis.js','app.js?v=20261022-26'];
+ const scripts=['data.js?v=20261023-4','validation.js','profile-model.js?v=20261012-4','ratings.js?v=20261015-1','pairing-model.js?v=20261022-19','tournament-model.js?v=20261022-20','tactics-data.js','gemini-config.js?v=20261008-6Leej-Qt','gemini-analysis.js','app.js?v=20261023-15'];
  const $=id=>document.getElementById(id),gate=$('access-gate'),form=$('access-form'),button=$('access-submit'),app=$('team-app'),status=$('access-status'),inputs=Array.from({length:6},(_,i)=>$('access-code-'+i));
  let busy=false,accepted=false,loadFailed=false;
  function message(text,error=false){status.textContent=text;status.dataset.error=String(error);}
@@ -13,6 +15,19 @@
    const script=document.createElement('script');script.async=false;script.src=src;if(type)script.type=type;
    script.onload=resolve;script.onerror=()=>reject(new Error('App script failed to load'));document.head.append(script);
   });
+ }
+ async function enterApp(){
+   // Download together; async=false keeps classic scripts in dependency order.
+   try{await Promise.all(scripts.map(src=>loadScript(src)));}
+   catch{
+   loadFailed=true;button.textContent='다시 시도';message('화면을 불러오지 못했습니다. 다시 시도해 주세요.',true);
+   if(!entryRequired){app.hidden=false;app.inert=false;app.removeAttribute('aria-hidden');$('cloud-status').textContent='화면을 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요.';}
+   return;
+  }
+   accepted=true;app.hidden=false;app.inert=false;app.removeAttribute('aria-hidden');gate.hidden=true;document.body.classList.remove('entry-open');
+   window.dispatchEvent(new CustomEvent('teamentryready'));
+   const target=$('ratings-panel').open||!$('player-detail-page').hidden?$('rating-player-info'):$('main-content');target.focus({preventScroll:true});
+   void loadScript('firebase-cloud.js?v=20261022-19','module').catch(()=>{$('cloud-status').textContent='공유 저장소를 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요.';});
  }
  inputs.forEach((input,index)=>{
   input.addEventListener('input',()=>{clearError();if(input.value&&index<5)focus(index+1);});
@@ -37,13 +52,7 @@
    for(const input of inputs)input.value='';
    if(hash!==codeHash){for(const input of inputs)input.setAttribute('aria-invalid','true');message('음… 다시 생각해 보세요.',true);window.dispatchEvent(new CustomEvent('teamentryinvalid'));return;}
    message('팀 전략보드를 불러오고 있습니다.');
-   // Download together; async=false keeps classic scripts in dependency order.
-   try{await Promise.all(scripts.map(src=>loadScript(src)));}
-   catch{loadFailed=true;button.textContent='다시 시도';message('화면을 불러오지 못했습니다. 다시 시도해 주세요.',true);return;}
-   accepted=true;app.hidden=false;app.inert=false;app.removeAttribute('aria-hidden');gate.hidden=true;document.body.classList.remove('entry-open');
-   window.dispatchEvent(new CustomEvent('teamentryready'));
-   const target=$('ratings-panel').open||!$('player-detail-page').hidden?$('rating-player-info'):$('main-content');target.focus({preventScroll:true});
-   void loadScript('firebase-cloud.js?v=20261022-19','module').catch(()=>{$('cloud-status').textContent='공유 저장소를 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요.';});
+   await enterApp();
   }catch{message('코드를 확인하지 못했습니다. 다시 시도해 주세요.',true);}
   finally{busy=false;button.disabled=accepted;for(const input of inputs)input.disabled=accepted||loadFailed;if(!gate.hidden&&!loadFailed)focus(0);}
  });
@@ -54,7 +63,11 @@
   if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
   else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
  });
- gate.focus({preventScroll:true});
+ if(entryRequired){
+  gate.hidden=false;document.body.classList.add('entry-open');gate.focus({preventScroll:true});
+ }else{
+  gate.hidden=true;document.body.classList.remove('entry-open');void enterApp();
+ }
 })();
 
 (() => {
