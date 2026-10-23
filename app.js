@@ -56,7 +56,10 @@ if(typeof document!=='undefined')(() => {
  }
  function compositionKey(value){const pairs=canonicalPairs(value);return pairs?definitions.fingerprint(pairs):'';}
  function readHash(){
-  const q=navigation.params();let fixed=[],sharedPairs=null;
+  const route=navigation.params(),sharedRoute=route.get('page')==='schedule'&&route.get('schedule')!=='edit';
+  const q=new URLSearchParams(sharedRoute?(navigation.state()?.teamcScheduleContext||route.toString()):route.toString());
+  for(const [key,value] of route)q.set(key,value);
+  let fixed=[],sharedPairs=null;
   try{const parsed=JSON.parse(q.get('fixed')||'[]');if(Array.isArray(parsed)&&parsed.length<=20&&parsed.every(item=>pairing.legalPair(data,item)))fixed=parsed;}catch{}
   try{sharedPairs=canonicalPairs(JSON.parse(q.get('pairs')||'null'));}catch{}
   const legacyVariant=q.has('strategy')?(q.get('strategy')==='win'?2:Math.min(4,Number(q.get('variant')||0))):Number(q.get('variant')||0);
@@ -68,7 +71,7 @@ if(typeof document!=='undefined')(() => {
   [state.p1,state.p2]=cleanPair(state.team,state.p1,state.p2);
  }
  function writeHash(push=false){
-  const q=new URLSearchParams({page:state.page,mode:state.mode,variant:String(state.variant),view:state.view,filter:state.filter});
+  let q=new URLSearchParams({page:state.page,mode:state.mode,variant:String(state.variant),view:state.view,filter:state.filter});
   if(state.page==='schedule'){q.set('schedule',state.schedule);q.set('origin',state.origin);}
   if(state.mode==='partial')q.set('fixed',JSON.stringify(state.fixedPairs));
   const shared=pendingSharedPairs||canonicalPairs(selectedPlan)||state.sharedPairs;if(shared)q.set('pairs',JSON.stringify(shared));
@@ -78,6 +81,11 @@ if(typeof document!=='undefined')(() => {
   const entry={...navigation.state()};
   if(state.page!=='schedule'){delete entry.teamcScheduleEntry;delete entry.teamcScheduleReturn;}
   if(!q.has('player')){delete entry.teamcPlayerEntry;delete entry.teamcRosterScroll;}
+  if(state.page==='schedule'&&state.schedule==='shared'){
+   // Browser history preserves editing context; shared links only describe the shared view.
+   entry.teamcScheduleContext=q.toString();q=new URLSearchParams({page:'schedule'});
+   if(state.filter!=='all')q.set('filter',state.filter);
+  }else delete entry.teamcScheduleContext;
   navigation.write(q,{push,state:entry});
  }
  function navigatePage(page){
@@ -293,8 +301,9 @@ if(typeof document!=='undefined')(() => {
   scheduleReturn=returnTo;scheduleTrigger=trigger;const previousView=state.view;
   state.origin=state.page;state.page='schedule';state.schedule=shared?'shared':'edit';state.view=shared||editShared?'confirmed':'draft';
   beginScheduleSession(shared,previousView);renderPage();renderStrategy();
+  writeHash(true);
   const entry={...navigation.state(),teamcScheduleEntry:true,teamcScheduleReturn:returnTo};
-  writeHash(true);navigation.write(navigation.params(),{state:entry});window.scrollTo(0,0);(shared?$('tab-schedule'):$('schedule-close')).focus();
+  navigation.write(navigation.params(),{state:entry});window.scrollTo(0,0);(shared?$('tab-schedule'):$('schedule-close')).focus();
  }
  function closeSchedule(committed=false){
   if(savingLineup)return;if(scheduleSession)scheduleSession.committed=committed;

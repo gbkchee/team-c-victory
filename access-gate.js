@@ -4,7 +4,7 @@
  // Set data-entry-required="true" on <body> to restore the preserved code screen.
  const entryRequired=document.body.dataset.entryRequired==='true';
  const codeHash='e501dfe730fbd9a4ab4712fc78456302f08b2f8e7043bd077f251bf9b621824f';
- const scripts=['data.js?v=20261023-4','validation.js','profile-model.js?v=20261012-4','ratings.js?v=20261015-1','pairing-model.js?v=20261022-19','tournament-model.js?v=20261022-20','tactics-data.js','gemini-config.js?v=20261008-6Leej-Qt','gemini-analysis.js','app.js?v=20261023-19'];
+ const scripts=['data.js?v=20261023-4','validation.js','profile-model.js?v=20261012-4','ratings.js?v=20261015-1','pairing-model.js?v=20261022-19','tournament-model.js?v=20261022-20','tactics-data.js','gemini-config.js?v=20261008-6Leej-Qt','gemini-analysis.js','app.js?v=20261023-20'];
  const $=id=>document.getElementById(id),gate=$('access-gate'),form=$('access-form'),button=$('access-submit'),app=$('team-app'),status=$('access-status'),inputs=Array.from({length:6},(_,i)=>$('access-code-'+i));
  let busy=false,accepted=false,loadFailed=false;
  function message(text,error=false){status.textContent=text;status.dataset.error=String(error);}

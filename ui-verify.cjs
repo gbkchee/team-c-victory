@@ -67,11 +67,11 @@ function firestoreFixture(){
  };
  return {entries,api,broadcast};
 }
-function browser(store,{saved={},hash='#page=players',siteKey='fixture-public-site-key',mobile=false,fragmentDelay=0,deferWorkers=false}={}){
+function browser(store,{saved={},hash='#page=players',siteKey='fixture-public-site-key',mobile=false,fragmentDelay=0,deferWorkers=false,historyState=null}={}){
  const document=documentFixture(),window=new EventTarget(),storage=new Map(Object.entries(saved)),timers=new Map(),workerRequests=[],storageFailures=new Set();let clock=0,sequence=0;
  let locationHash=hash;
  const location={get hash(){return locationHash;},set hash(value){changeFragment(value,false);},href:'https://gbkchee.github.io/team-c-victory/'+hash,replace:value=>changeFragment(value,true)};
- const historyEntries=[{state:null,hash}],mobileMedia=new EventTarget();let historyIndex=0;mobileMedia.matches=mobile;
+ const historyEntries=[{state:clone(historyState),hash}],mobileMedia=new EventTarget();let historyIndex=0;mobileMedia.matches=mobile;
  const setLocation=value=>{locationHash=value;location.href='https://gbkchee.github.io/team-c-victory/'+value;};
  function changeFragment(value,replace){
   if(history.rejectFragments)throw Object.assign(new Error('Fragment updates restricted'),{name:'SecurityError'});
@@ -848,7 +848,7 @@ test('출전표 전용 주소와 브라우저 뒤로가기는 초안을 취소�
  const store=firestoreFixture(),one=browser(store,{hash:'#page=strategy',mobile:true});await one.flush();await one.advance();
  visibleCard(one).querySelector('.recommendation-next').click();const heading=visibleCard(one).querySelector('h3').textContent;one.clickText('filters','D조');one.window.scrollY=480;
  const originHash=one.location.hash;one.$('tab-schedule').click();
- assert.equal(new URLSearchParams(one.location.hash.slice(1)).get('page'),'schedule');assert.equal(new URLSearchParams(one.location.hash.slice(1)).get('schedule'),'shared');assert.equal(one.$('schedule-dialog').tagName,'SECTION');assert.equal(one.$('site-header').hidden,false);assert.equal(one.$('page-strategy').hidden,true);
+ assert.equal(new URLSearchParams(one.location.hash.slice(1)).get('page'),'schedule');assert.equal(new URLSearchParams(one.location.hash.slice(1)).has('schedule'),false);assert.equal(one.$('schedule-dialog').tagName,'SECTION');assert.equal(one.$('site-header').hidden,false);assert.equal(one.$('page-strategy').hidden,true);
  one.clickText('filters','A조');one.history.back();await one.advance(0);
  assert.equal(one.location.hash,originHash);assert.equal(one.$('schedule-dialog').hidden,true);assert.equal(one.$('site-header').hidden,false);assert.equal(visibleCard(one).querySelector('h3').textContent,heading);assert.equal(one.window.scrollY,480);assert.equal(new URLSearchParams(one.location.hash.slice(1)).get('filter'),'D');
  one.history.forward();await one.advance(0);assert.equal(one.$('schedule-dialog').hidden,false);assert.equal(one.$('schedule-dialog').dataset.readonly,'true');one.$('schedule-close').click();await one.advance(0);
@@ -859,7 +859,7 @@ test('출전표 전용 주소와 브라우저 뒤로가기는 초안을 취소�
 test('공유 출전표 주소를 바로 열거나 새로고침하면 공식 40경기와 원본 추천 1을 표시한다',async()=>{
  const one=browser(firestoreFixture(),{hash:'#page=schedule&schedule=shared&origin=analysis',mobile:true});await one.flush();await one.advance();
  assert.equal(new URLSearchParams(one.location.hash.slice(1)).get('page'),'schedule');assert.equal(one.$('schedule-dialog').hidden,false);assert.equal(one.$('schedule-dialog').dataset.readonly,'true');assert.equal(one.$('matches').querySelectorAll('.official-match').length,40);assert.deepEqual(matrixPairs(one),expectedPairs(one.window.fixtureRecommendations[0]));assert.equal(one.$('schedule-footer').hidden,true);
- const reload=browser(firestoreFixture(),{hash:one.location.hash,mobile:true});await reload.flush();await reload.advance();assert.equal(reload.$('schedule-dialog').hidden,false);assert.equal(reload.$('matches').querySelectorAll('.official-match').length,40);reload.$('schedule-close').click();await reload.advance(0);assert.equal(reload.$('page-analysis').hidden,false);
+ const reload=browser(firestoreFixture(),{hash:one.location.hash,mobile:true,historyState:one.history.state});await reload.flush();await reload.advance();assert.equal(reload.$('schedule-dialog').hidden,false);assert.equal(reload.$('matches').querySelectorAll('.official-match').length,40);reload.$('schedule-close').click();await reload.advance(0);assert.equal(reload.$('page-analysis').hidden,false);
 });
 
 test('출전표 저장 실패는 편집 페이지와 교환 초안을 유지하고 재시도 성공 시 이전 페이지로 돌아간다',async()=>{
@@ -1010,4 +1010,21 @@ test('일반 첫 접속은 대진표를 열고 페이지·선수를 지정한 �
  for(const page of ['players','analysis','strategy']){
   const linked=browser(firestoreFixture(),{hash:'#page='+page});await linked.flush();await linked.advance();assert.equal(linked.document.body.dataset.page,page);assert.equal(linked.$('tab-'+page).getAttribute('aria-selected'),'true');
  }
+});
+
+test('공유 대진표는 짧은 주소로 공유하고 선택한 페어 구성은 편집 주소와 뒤로가기에 보존한다',async()=>{
+ const store=firestoreFixture(),one=browser(store,{hash:'#page=strategy'});await one.flush();await one.advance();
+ visibleCard(one).querySelector('.pair-option-select').click();assert.ok(new URLSearchParams(one.location.hash.slice(1)).has('pairs'));const editHash=one.location.hash;
+ one.$('schedule-close').click();await one.advance(0);const strategyHash=one.location.hash;
+ one.$('tab-schedule').click();assert.equal(one.location.hash,'#page=schedule');assert.ok(new URLSearchParams(one.history.state.teamcScheduleContext).has('pairs'));
+ await Promise.all(one.$('share').click());assert.equal(one.window.copiedLink,'https://gbkchee.github.io/team-c-victory/#page=schedule');
+ one.clickText('filters','A조');assert.equal(one.location.hash,'#page=schedule&filter=A');
+ one.history.back();await one.advance(0);assert.equal(one.location.hash,strategyHash);
+ one.history.forward();await one.advance(0);assert.equal(one.location.hash,'#page=schedule&filter=A');assert.equal(one.$('schedule-dialog').dataset.readonly,'true');
+ one.$('tab-strategy').click();await one.advance();visibleCard(one).querySelector('.pair-option-select').click();assert.equal(new URLSearchParams(one.location.hash.slice(1)).get('pairs'),new URLSearchParams(editHash.slice(1)).get('pairs'));
+});
+test('새 브라우저의 짧은 대진표 링크는 서버 최신 확정표를 불러오고 필터를 유지한다',async()=>{
+ const store=firestoreFixture(),one=browser(store,{hash:'#page=strategy'});await one.flush();await one.advance();const plan=clone(one.window.fixtureRecommendations[1]);store.entries.set('teamLineups/C',{...plan,revision:1});store.broadcast();await one.flush();
+ const other=browser(store,{hash:'#page=schedule&filter=D'});await other.flush();await other.advance();assert.equal(other.location.hash,'#page=schedule&filter=D');assert.equal(other.$('schedule-dialog').dataset.readonly,'true');assert.equal(other.$('schedule-dialog-badge').hidden,true);
+ const expected=Object.fromEntries(plan.matches.filter(match=>match.team==='D').map(match=>[match.id,match.pair.join(' ')]));assert.deepEqual(matrixPairs(other),expected);
 });
