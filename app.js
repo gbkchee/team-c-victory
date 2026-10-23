@@ -60,7 +60,7 @@ if(typeof document!=='undefined')(() => {
   try{const parsed=JSON.parse(q.get('fixed')||'[]');if(Array.isArray(parsed)&&parsed.length<=20&&parsed.every(item=>pairing.legalPair(data,item)))fixed=parsed;}catch{}
   try{sharedPairs=canonicalPairs(JSON.parse(q.get('pairs')||'null'));}catch{}
   const legacyVariant=q.has('strategy')?(q.get('strategy')==='win'?2:Math.min(4,Number(q.get('variant')||0))):Number(q.get('variant')||0);
-  state={page:['players','strategy','analysis','schedule'].includes(q.get('page'))?q.get('page'):'players',
+  state={page:['players','strategy','analysis','schedule'].includes(q.get('page'))?q.get('page'):(q.has('player')?'players':'schedule'),
    schedule:q.get('schedule')==='edit'?'edit':'shared',origin:['players','strategy','analysis'].includes(q.get('origin'))?q.get('origin'):'strategy',
    mode:['free','partial'].includes(q.get('mode'))?q.get('mode'):'free',fixedPairs:fixed,variant:Math.max(0,Math.min(4,legacyVariant)||0),sharedPairs,
    view:['draft','confirmed'].includes(q.get('view'))?q.get('view'):'auto',filter:['A','B','D'].includes(q.get('filter'))?q.get('filter'):'all',team:['A','B','D'].includes(q.get('team'))?q.get('team'):'',

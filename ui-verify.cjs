@@ -67,7 +67,7 @@ function firestoreFixture(){
  };
  return {entries,api,broadcast};
 }
-function browser(store,{saved={},hash='',siteKey='fixture-public-site-key',mobile=false,fragmentDelay=0,deferWorkers=false}={}){
+function browser(store,{saved={},hash='#page=players',siteKey='fixture-public-site-key',mobile=false,fragmentDelay=0,deferWorkers=false}={}){
  const document=documentFixture(),window=new EventTarget(),storage=new Map(Object.entries(saved)),timers=new Map(),workerRequests=[],storageFailures=new Set();let clock=0,sequence=0;
  let locationHash=hash;
  const location={get hash(){return locationHash;},set hash(value){changeFragment(value,false);},href:'https://gbkchee.github.io/team-c-victory/'+hash,replace:value=>changeFragment(value,true)};
@@ -998,4 +998,16 @@ test('배너는 5초 뒤 전환하고 클릭하면 전체 명언 30개 팝업을
 test('전체 명언 팝업이 열린 상태로 뒤로 가면 팝업도 닫고 이전 탭을 복원한다',async()=>{
  const one=browser(firestoreFixture(),{hash:'#page=players'});await one.flush();await one.advance();one.$('tab-schedule').click();one.$('cheer-open').click();assert.equal(one.$('cheer-dialog').open,true);
  one.history.back();await one.advance(0);assert.equal(one.$('cheer-dialog').open,false);assert.equal(one.$('page-players').hidden,false);assert.equal(one.$('tab-players').getAttribute('aria-selected'),'true');
+});
+
+test('일반 첫 접속은 대진표를 열고 페이지·선수를 지정한 직접 링크는 선택을 보존한다',async()=>{
+ for(const mobile of [false,true]){
+  const first=browser(firestoreFixture(),{hash:'',mobile});await first.flush();await first.advance();
+  assert.equal(first.document.body.dataset.page,'schedule');assert.equal(first.$('tab-schedule').getAttribute('aria-selected'),'true');assert.equal(first.$('schedule-dialog').hidden,false);assert.equal(first.$('schedule-dialog').dataset.readonly,'true');assert.equal(first.$('matches').querySelectorAll('.official-match').length,40);
+  const player=browser(firestoreFixture(),{hash:'#player=C%3A우디',mobile});await player.flush();await player.advance();
+  assert.equal(player.document.body.dataset.page,'players');assert.equal(player.$('tab-players').getAttribute('aria-selected'),'true');assert.equal(mobile?!player.$('player-detail-page').hidden:player.$('ratings-panel').open,true);
+ }
+ for(const page of ['players','analysis','strategy']){
+  const linked=browser(firestoreFixture(),{hash:'#page='+page});await linked.flush();await linked.advance();assert.equal(linked.document.body.dataset.page,page);assert.equal(linked.$('tab-'+page).getAttribute('aria-selected'),'true');
+ }
 });
